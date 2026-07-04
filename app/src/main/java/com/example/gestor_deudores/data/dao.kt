@@ -19,6 +19,11 @@ interface DeudorDao{
     @Query("SELECT * From deudores ORDER BY nombre ASC")
     fun obtenerDeudores(): Flow<List<Deudor>>
 
+    // FUNCIONALIDAD FASE 1: Buscador de perfil de deudor
+    // Busca coincidencias tanto en el nombre como en el apellido
+    @Query("SELECT * FROM deudores WHERE nombre LIKE '%' || :busqueda || '%' OR apellido LIKE '%' || :busqueda || '%'")
+    fun buscarDeudores(busqueda: String): Flow<List<Deudor>>
+
     @Delete
     suspend fun eliminarDeudor(deudor: Deudor)
 
@@ -42,4 +47,9 @@ interface DeudaDao {
     // LA MÁS IMPORTANTE: Obtener las deudas de UNA sola persona
     @Query("SELECT * FROM Tabla_Deuda WHERE idDeudor = :idDelDeudor")
     fun obtenerDeudasPorDeudor(idDelDeudor: Int): Flow<List<Deuda>>
+
+    // FUNCIONALIDAD FASE 2: Suma de deudas
+    // Calcula automáticamente cuánto te debe en total una persona (sumando solo lo que no está cancelado)
+    @Query("SELECT SUM(montoRestante) FROM tabla_deuda WHERE idDeudor = :idDelDeudor AND estado != 'Cancelado'")
+    fun obtenerSumaDeudasPorDeudor(idDelDeudor: Int): Flow<Double?>
 }
