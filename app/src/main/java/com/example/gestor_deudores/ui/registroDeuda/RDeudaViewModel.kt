@@ -5,6 +5,7 @@ import com.example.gestor_deudores.data.DeudaDao
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
 data class R_DeudaEstado(
     val idDeudor: Int = 0,
@@ -22,7 +23,9 @@ class RDeudaViewModel(private val deudaDao: DeudaDao): ViewModel(){
     private val _uiEstado= MutableStateFlow(R_DeudaEstado())
     val uiEstado: StateFlow<R_DeudaEstado> =  _uiEstado.asStateFlow()
 
-    
+    fun onMontoChange(nuevoMonto: String) {
+        _uiEstado.update { it.copy(monto = nuevoMonto, error = null) }
+    }
 
 
 }
