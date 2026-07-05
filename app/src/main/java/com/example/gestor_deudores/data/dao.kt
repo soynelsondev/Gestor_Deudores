@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface DeudorDao{
     @Insert
-    suspend fun agregarDeudor(deudor: Deudor)
+    suspend fun agregarDeudor(deudor: Deudor): Long
 
     @Update
     suspend fun actualizarDeudor(deudor: Deudor)
