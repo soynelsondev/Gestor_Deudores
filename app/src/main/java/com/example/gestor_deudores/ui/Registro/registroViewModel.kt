@@ -18,7 +18,7 @@ data class RegistroDeudorUiState(
     val cedula: String = "",
     val error: String? = null,
     // Usamos esto para guardar el ID recién creado y pasarlo a la otra pantalla
-    val nuevoDeudorId: Int? = null
+    val nuevoDeudorId: Int = 0
 )
 
 
@@ -47,6 +47,9 @@ class RegistroDeudorViewModel(private val deudorDao: DeudorDao) : ViewModel() {
 
     fun onCedulaChange(nuevaCedula: String) {
         _uiState.update { it.copy(cedula = nuevaCedula, error = null) }
+    }
+    fun resetNuevoDeudorId() {
+        _uiState.update { it.copy(nuevoDeudorId = 0) }
     }
 
     // ==========================================

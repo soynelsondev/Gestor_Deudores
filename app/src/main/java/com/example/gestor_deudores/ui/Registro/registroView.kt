@@ -30,6 +30,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -47,7 +48,20 @@ import com.example.gestor_deudores.ui.theme.fondo
 
 
 @Composable
-fun Principal(viewModel: RegistroDeudorViewModel){
+fun Principal(viewModel: RegistroDeudorViewModel,onNavegarADeuda: (Int) -> Unit){
+
+    val estado by viewModel.uiState.collectAsState()
+    LaunchedEffect(estado.nuevoDeudorId) {
+        if (estado.nuevoDeudorId > 0) {
+            // Pasamos el ID hacia afuera (hacia el NavHost)
+            onNavegarADeuda(estado.nuevoDeudorId)
+
+            // IMPORTANTE: Dile a tu ViewModel que limpie el ID (vuelva a 0)
+            // para que no se quede pegado navegando en bucle si la pantalla se recrea.
+            viewModel.resetNuevoDeudorId()
+        }
+    }
+
 
     Scaffold (topBar = {toolbar()}){ innerPadding ->
         Column (modifier = Modifier.fillMaxSize().padding(innerPadding) .background(fondo))
@@ -90,7 +104,7 @@ fun datos_personales(viewModel: RegistroDeudorViewModel){
 
            textReutilizable(estado.nombre, textoFondo = "Nombre", KeyboardType.Text, alEscribir = { viewModel.onNombreChange(it)})
             textReutilizable(estado.apellido, textoFondo = "Apellido", KeyboardType.Text, alEscribir = { viewModel.onApellidoChange(it)})
-            textReutilizable(estado.telefono, textoFondo = "Telefono", KeyboardType.Phone,"", Icons.Default.Phone,alEscribir = {viewModel.onTelefonoChange(it)})
+            textReutilizable(estado.telefono, textoFondo = "Telefono", KeyboardType.Phone,icono= Icons.Default.Phone,alEscribir = {viewModel.onTelefonoChange(it)})
             textReutilizable(estado.cedula, textoFondo = "Cedula", KeyboardType.Number,"V-", alEscribir = {viewModel.onCedulaChange(it)})
         }
 
