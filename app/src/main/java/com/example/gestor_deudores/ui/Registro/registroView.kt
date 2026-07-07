@@ -75,6 +75,7 @@ fun Principal(viewModel: RegistroDeudorViewModel,onNavegarADeuda: (Int) -> Unit)
     Scaffold (topBar = {toolbar()}){ innerPadding ->
         Column (modifier = Modifier.fillMaxSize().padding(innerPadding) .background(fondo))
         {
+            AvatarUsuario()
             datos_personales(viewModel)
             btnAceptar { viewModel.guardarUsuario() }
         }
@@ -96,13 +97,13 @@ fun toolbar(){
 fun AvatarUsuario() {
     // Este Box externo hace que el círculo se centre automáticamente en la pantalla
     Box(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth() .padding(top = 10.dp),
         contentAlignment = Alignment.Center
     ) {
         // Este Box es el círculo de fondo
         Box(
             modifier = Modifier
-                .size(100.dp) // Tamaño del círculo
+                .size(110.dp) // Tamaño del círculo
                 .clip(CircleShape)
                 .background(Color(0xFFE0F2F1)), // Aquí cambias el color del fondo circular
             contentAlignment = Alignment.Center
@@ -111,7 +112,7 @@ fun AvatarUsuario() {
             Icon(
                 imageVector = Icons.Default.Person,
                 contentDescription = "Avatar estándar",
-                modifier = Modifier.size(90.dp), // Tamaño del vector interior
+                modifier = Modifier.size(110.dp), // Tamaño del vector interior
                 tint = estados // Aquí cambias el color de la silueta (o usas 'estados')
             )
         }
@@ -131,7 +132,7 @@ fun datos_personales(viewModel: RegistroDeudorViewModel){
     ) {
         Column(modifier = Modifier.fillMaxWidth() .padding(12.dp)) {
 
-            AvatarUsuario()
+           // AvatarUsuario()
             Text(
                 text = "Datos Personales",
                 fontSize =30.sp,
@@ -180,7 +181,7 @@ fun datos_personales(viewModel: RegistroDeudorViewModel){
 
             // 4. Cédula: Solo números
             Row(modifier = Modifier.fillMaxWidth()) {
-                Box(modifier = Modifier.fillMaxWidth(0.55f)) {
+                Box(modifier = Modifier.fillMaxWidth(0.70f)) {
                     textReutilizable(
                         textoActual = estado.cedula,
                         textoFondo = "Cedula",
