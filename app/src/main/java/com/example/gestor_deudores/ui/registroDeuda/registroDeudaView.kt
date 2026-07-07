@@ -161,12 +161,29 @@ fun datos_prestamo(viewModel: RDeudaViewModel) {
             textReutilizable(
                 textoActual = estado.monto,
                 textoFondo = "Monto Inicial",
-                tipoTeclado = KeyboardType.Decimal, // Teclado numérico con punto decimal
+                tipoTeclado = KeyboardType.Decimal,
                 alEscribir = { entrada ->
-                    // Reemplaza puntos por comas y valida que solo exista una coma decimal
-                    val procesado = entrada.replace('.', ',')
-                    if (procesado.count { it == ',' } <= 1) {
-                        viewModel.onMontoChange(procesado)
+                    // 1. Quitamos los puntos existentes para trabajar con el número puro
+                    val textoLimpio = entrada.replace(".", "")
+
+                    // 2. Verificamos que máximo exista una coma y que lo demás sean números
+                    if (textoLimpio.count { it == ',' } <= 1 && textoLimpio.replace(",", "").all { it.isDigit() }) {
+
+                        // 3. Separamos los enteros de los decimales
+                        val partes = textoLimpio.split(",")
+                        val parteEntera = partes[0]
+                        val parteDecimal = if (partes.size > 1) "," + partes[1] else ""
+
+                        // 4. Agrupamos la parte entera de 3 en 3 (de atrás para adelante)
+                        val enterosFormateados = parteEntera
+                            .reversed()
+                            .chunked(3)
+                            .joinToString(".")
+                            .reversed()
+
+                        // 5. Unimos todo y lo enviamos al estado
+                        val resultadoFinal = enterosFormateados + parteDecimal
+                        viewModel.onMontoChange(resultadoFinal)
                     }
                 }
             )

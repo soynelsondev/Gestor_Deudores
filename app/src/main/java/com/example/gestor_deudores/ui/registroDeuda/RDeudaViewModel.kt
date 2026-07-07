@@ -54,6 +54,15 @@ class RDeudaViewModel(private val deudaDao: DeudaDao): ViewModel(){
     fun GuardarDeuda(){
         val estado = _uiState.value
 
+        val montoLimpio = estado.monto.replace(".", "").replace(",", ".")
+
+        // Ahora sí lo convertimos a número seguro
+        val monto_Double = montoLimpio.toDoubleOrNull()
+
+        if (monto_Double == null || monto_Double <= 0.0) {
+            _uiState.update { it.copy(error = "Ingresa un monto válido mayor a cero") }
+            return
+        }
         // A. Validaciones críticas
         if (estado.idDeudor == 0) {
             _uiState.update { it.copy(error = "Error crítico: Cliente no identificado") }
