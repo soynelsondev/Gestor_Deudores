@@ -211,7 +211,7 @@ fun btnAceptar(
         colors = ButtonDefaults.buttonColors(containerColor = estados))
     {
         Text(
-            "CONTINUAR ", color = Color.White, fontSize = 25.sp)
+            "CONTINUAR", color = Color.White, fontSize = 25.sp)
     }
 
 }
