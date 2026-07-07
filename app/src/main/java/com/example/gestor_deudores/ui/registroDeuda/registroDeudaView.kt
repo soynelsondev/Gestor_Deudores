@@ -106,21 +106,25 @@ fun datos_prestamo(viewModel: RDeudaViewModel) {
     var mostrarCalendario by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState()
 
-    // SI LA VARIABLE ES TRUE, DIBUJAMOS EL CALENDARIO EN PANTALLA
     if (mostrarCalendario) {
         DatePickerDialog(
             onDismissRequest = { mostrarCalendario = false },
             confirmButton = {
-                TextButton(onClick = {
-                    mostrarCalendario = false
-                    // Transformamos los milisegundos a fecha normal (ej. 24/05/2026)
-                    val fechaSeleccionada = datePickerState.selectedDateMillis?.let { millis ->
-                        val formateador = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
-                        formateador.format(Date(millis))
-                    } ?: ""
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            // Configuramos UTC para evitar que el calendario reste días
+                            val formateador = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+                            formateador.timeZone = java.util.TimeZone.getTimeZone("UTC")
 
-                    viewModel.onFechaChange(fechaSeleccionada)
-                }) {
+                            val fechaLista = formateador.format(Date(millis))
+                            viewModel.onFechaChange(fechaLista)
+                        }
+                        mostrarCalendario = false
+                    },
+                    // ¡TRUCO!: El botón "Aceptar" se bloquea hasta que el usuario toque un día
+                    enabled = datePickerState.selectedDateMillis != null
+                ) {
                     Text("Aceptar", color = estados)
                 }
             },
@@ -296,7 +300,7 @@ fun textReutilizable(
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = estados,
             unfocusedBorderColor = fondo2,
-            unfocusedTextColor = fondo2,
+            unfocusedTextColor = Color.Black,
             unfocusedContainerColor = Color.Transparent,
             focusedContainerColor = Color.Transparent
         )

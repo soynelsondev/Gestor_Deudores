@@ -123,12 +123,12 @@ fun datos_personales(viewModel: RegistroDeudorViewModel){
     val estado by viewModel.uiState.collectAsState()
 
     Card(modifier = Modifier.fillMaxWidth()
-        .padding(16.dp) ,
+        .padding(16.dp,vertical=25.dp) ,
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(6.dp),
         colors = CardDefaults.cardColors(fondo)
     ) {
-        Column(modifier = Modifier.fillMaxSize() .padding(12.dp)) {
+        Column(modifier = Modifier.fillMaxWidth() .padding(12.dp)) {
 
             AvatarUsuario()
             Text(
@@ -139,15 +139,56 @@ fun datos_personales(viewModel: RegistroDeudorViewModel){
                 modifier = Modifier.padding(vertical = 10.dp)
             )
 
-            // Filtro estricto: Solo letras (ni números ni operadores)
-            val onlyLettersFilter = { text: String -> text.filter { it.isLetter() || it.isWhitespace() } }
-            // Filtro estricto: Solo dígitos (bloquea puntos, comas y signos)
-            val onlyNumbersFilter = { text: String -> text.filter { it.isDigit() } }
 
-           textReutilizable(estado.nombre, textoFondo = "Nombre", KeyboardType.Text, alEscribir = { viewModel.onNombreChange(it)})
-            textReutilizable(estado.apellido, textoFondo = "Apellido", KeyboardType.Text, alEscribir = { viewModel.onApellidoChange(it)})
-            textReutilizable(estado.telefono, textoFondo = "Telefono", KeyboardType.Phone,icono= Icons.Default.Phone,alEscribir = {viewModel.onTelefonoChange(it)})
-            textReutilizable(estado.cedula, textoFondo = "Cedula", KeyboardType.Number,"V-", alEscribir = {viewModel.onCedulaChange(it)})
+
+            textReutilizable(
+                textoActual = estado.nombre,
+                textoFondo = "Nombre",
+                tipoTeclado = KeyboardType.Text,
+                alEscribir = { entrada ->
+                    if (entrada.all { it.isLetter() || it.isWhitespace() }) {
+                        viewModel.onNombreChange(entrada)
+                    }
+                }
+            )
+
+            // 2. Apellido: Igual que el nombre
+            textReutilizable(
+                textoActual = estado.apellido,
+                textoFondo = "Apellido",
+                tipoTeclado = KeyboardType.Text,
+                alEscribir = { entrada ->
+                    if (entrada.all { it.isLetter() || it.isWhitespace() }) {
+                        viewModel.onApellidoChange(entrada)
+                    }
+                }
+            )
+
+            // 3. Teléfono: Bloqueo total. Solo pasa si TODOS son números (bloquea puntos y comas)
+            textReutilizable(
+                textoActual = estado.telefono,
+                textoFondo = "Telefono",
+                tipoTeclado = KeyboardType.Phone,
+                icono = Icons.Default.Phone,
+                alEscribir = { entrada ->
+                    if (entrada.all { it.isDigit() }) {
+                        viewModel.onTelefonoChange(entrada)
+                    }
+                }
+            )
+
+            // 4. Cédula: Solo números
+            textReutilizable(
+                textoActual = estado.cedula,
+                textoFondo = "Cedula",
+                tipoTeclado = KeyboardType.Number,
+                textoPrefijo = "V-",
+                alEscribir = { entrada ->
+                    if (entrada.all { it.isDigit() }) {
+                        viewModel.onCedulaChange(entrada)
+                    }
+                }
+            )
         }
 
     }
@@ -198,7 +239,7 @@ fun textReutilizable(textoActual: String,
          colors = OutlinedTextFieldDefaults.colors(
              focusedBorderColor = estados,
              unfocusedBorderColor = fondo2,
-             unfocusedTextColor = fondo2,
+             unfocusedTextColor = Color.Black,
              unfocusedContainerColor = Color.Transparent,
              focusedContainerColor = Color.Transparent
          )
