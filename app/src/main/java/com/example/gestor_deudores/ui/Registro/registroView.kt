@@ -6,6 +6,7 @@ import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -84,7 +85,7 @@ fun Principal(viewModel: RegistroDeudorViewModel,onNavegarADeuda: (Int) -> Unit)
 @Composable
 fun toolbar(){
     CenterAlignedTopAppBar( // <-- CAMBIADO PARA CENTRAR EL TÍTULO
-        title = { Text("NUEVO DEUDOR", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp) },
+        title = { Text("NUEVO DEUDOR", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 24.sp) },
         colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = estados)
     )
 
@@ -178,17 +179,21 @@ fun datos_personales(viewModel: RegistroDeudorViewModel){
             )
 
             // 4. Cédula: Solo números
-            textReutilizable(
-                textoActual = estado.cedula,
-                textoFondo = "Cedula",
-                tipoTeclado = KeyboardType.Number,
-                textoPrefijo = "V-",
-                alEscribir = { entrada ->
-                    if (entrada.all { it.isDigit() }) {
-                        viewModel.onCedulaChange(entrada)
-                    }
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Box(modifier = Modifier.fillMaxWidth(0.55f)) {
+                    textReutilizable(
+                        textoActual = estado.cedula,
+                        textoFondo = "Cedula",
+                        tipoTeclado = KeyboardType.Number,
+                        textoPrefijo = "V-",
+                        alEscribir = { entrada ->
+                            if (entrada.all { it.isDigit() }) {
+                                viewModel.onCedulaChange(entrada)
+                            }
+                        }
+                    )
                 }
-            )
+            }
         }
 
     }

@@ -91,7 +91,7 @@ fun Principal(viewModel: RDeudaViewModel, onNavegarAtras: () -> Unit){
 @Composable
 fun toolbar2(){
     CenterAlignedTopAppBar( // <-- CAMBIADO PARA CENTRAR EL TÍTULO
-        title = { Text("NUEVO DEUDOR", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp) },
+        title = { Text("NUEVO DEUDOR", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 24.sp) },
         colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = estados)
     )
 
