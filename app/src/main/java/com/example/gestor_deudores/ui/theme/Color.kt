@@ -12,7 +12,7 @@ val Pink40 = Color(0xFF7D5260)
 
 
 //colores de la app
-val fondo = Color(0xFFFFDDD2)
+val fondo = Color(0xFFFCF3F1)
 val fondo2 = Color(0xFF83C5BE)
 val componentes = Color(0xFFE29578)
 val fondo_claro = Color(0xFFEDF6F9)

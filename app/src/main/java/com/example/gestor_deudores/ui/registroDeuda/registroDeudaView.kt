@@ -77,7 +77,7 @@ fun Principal(viewModel: RDeudaViewModel, onNavegarAtras: () -> Unit){
             onNavegarAtras() // Cerramos la pantalla y volvemos
         }
     }
-    Scaffold (topBar = { toolbar() }){ innerPadding ->
+    Scaffold (topBar = { toolbar2() }){ innerPadding ->
         Column (modifier = Modifier.fillMaxSize().padding(innerPadding) .background(fondo))
         {
             datos_prestamo(viewModel)
@@ -88,10 +88,10 @@ fun Principal(viewModel: RDeudaViewModel, onNavegarAtras: () -> Unit){
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun toolbar(){
+fun toolbar2(){
     TopAppBar(
-        title = {Text("Registrar Deuda", color = Color.White)},
-        colors = TopAppBarDefaults.topAppBarColors(fondo)
+        title = {Text("REGISTRAR DEUDA", color = Color.White,fontWeight = FontWeight.Bold)},
+        colors = TopAppBarDefaults.topAppBarColors(estados)
     )
 
 }
@@ -136,7 +136,7 @@ fun datos_prestamo(viewModel: RDeudaViewModel) {
 
     Card(
         modifier = Modifier.fillMaxWidth()
-            .padding(16.dp),
+            .padding(16.dp, vertical = 25.dp),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(6.dp),
         colors = CardDefaults.cardColors(fondo)
@@ -148,7 +148,8 @@ fun datos_prestamo(viewModel: RDeudaViewModel) {
                 text = "DETALLES DEL PRESTAMO",
                 fontSize = 25.sp,
                 fontWeight = FontWeight.Bold,
-                color = estados
+                color = estados,
+                modifier = Modifier.padding(vertical = 10.dp)
             )
 
             // 1. MONTO INICIAL ($ a la izquierda)
@@ -162,7 +163,7 @@ fun datos_prestamo(viewModel: RDeudaViewModel) {
             textReutilizable(
                 textoActual = estado.tipoDeuda,
                 textoFondo = "Tipo de Préstamo",
-                iconoDerecho = Icons.Default.ArrowDropDown,
+
                 alEscribir = { viewModel.onTipoDeudaChange(it) }
             )
 
@@ -189,14 +190,14 @@ fun datos_prestamo(viewModel: RDeudaViewModel) {
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = estados,
-                modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
+                modifier = Modifier.padding(start = 8.dp, bottom = 12.dp, top = 12.dp)
             )
 
             val opcionesRol = listOf("CLIENTE", "FAMILIAR", "OTRO")
 
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .fillMaxWidth() .padding(bottom = 10.dp)
                     .height(45.dp) // Altura del selector
                     .clip(RoundedCornerShape(50))
                     .background(fondo2),
@@ -220,7 +221,7 @@ fun datos_prestamo(viewModel: RDeudaViewModel) {
                             // Texto blanco si está seleccionado, de lo contrario color oscuro
                             color = if (seleccionado) Color.White else estados,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp,
+                            fontSize = 15.sp,
                             textAlign = TextAlign.Center
                         )
                     }
@@ -281,9 +282,9 @@ fun textReutilizable(
             .fillMaxWidth()
             .padding(horizontal = 7.dp, vertical = 7.dp),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = Color.Gray,
-            unfocusedBorderColor = estados,
-            unfocusedTextColor = estados,
+            focusedBorderColor = estados,
+            unfocusedBorderColor = fondo2,
+            unfocusedTextColor = fondo2,
             unfocusedContainerColor = Color.Transparent,
             focusedContainerColor = Color.Transparent
         )

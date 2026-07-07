@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gestor_deudores.ui.theme.estados
 import com.example.gestor_deudores.ui.theme.fondo
+import com.example.gestor_deudores.ui.theme.fondo2
 
 
 @Composable
@@ -82,8 +83,8 @@ fun Principal(viewModel: RegistroDeudorViewModel,onNavegarADeuda: (Int) -> Unit)
 @Composable
 fun toolbar(){
     TopAppBar(
-        title = {Text("Nuevo Deudor", color = Color.White)},
-        colors = TopAppBarDefaults.topAppBarColors(fondo)
+        title = {Text("NUEVO DEUDOR", color = Color.White,fontWeight = FontWeight.Bold, fontSize = 18.sp)},
+        colors = TopAppBarDefaults.topAppBarColors(estados)
     )
 
 }
@@ -120,8 +121,8 @@ fun datos_personales(viewModel: RegistroDeudorViewModel){
 
     val estado by viewModel.uiState.collectAsState()
 
-    Card(modifier = Modifier.fillMaxWidth() .height(450.dp)
-        .padding(16.dp),
+    Card(modifier = Modifier.fillMaxWidth() .height(600.dp)
+        .padding(16.dp) ,
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(6.dp),
         colors = CardDefaults.cardColors(fondo)
@@ -131,9 +132,10 @@ fun datos_personales(viewModel: RegistroDeudorViewModel){
             AvatarUsuario()
             Text(
                 text = "Datos Personales",
-                fontSize =35.sp,
+                fontSize =30.sp,
                 fontWeight = FontWeight.Bold,
-                color = estados
+                color = estados,
+                modifier = Modifier.padding(vertical = 10.dp)
             )
 
            textReutilizable(estado.nombre, textoFondo = "Nombre", KeyboardType.Text, alEscribir = { viewModel.onNombreChange(it)})
@@ -188,9 +190,9 @@ fun textReutilizable(textoActual: String,
          shape = RoundedCornerShape(18.dp) ,
          modifier = Modifier.fillMaxWidth() . padding(horizontal = 7.dp, vertical = 7.dp),
          colors = OutlinedTextFieldDefaults.colors(
-             focusedBorderColor = Color.Gray,
-             unfocusedBorderColor = estados,
-             unfocusedTextColor = estados,
+             focusedBorderColor = estados,
+             unfocusedBorderColor = fondo2,
+             unfocusedTextColor = fondo2,
              unfocusedContainerColor = Color.Transparent,
              focusedContainerColor = Color.Transparent
          )
