@@ -23,6 +23,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -89,9 +90,9 @@ fun Principal(viewModel: RDeudaViewModel, onNavegarAtras: () -> Unit){
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun toolbar2(){
-    TopAppBar(
-        title = {Text("REGISTRAR DEUDA", color = Color.White,fontWeight = FontWeight.Bold)},
-        colors = TopAppBarDefaults.topAppBarColors(estados)
+    CenterAlignedTopAppBar( // <-- CAMBIADO PARA CENTRAR EL TÍTULO
+        title = { Text("NUEVO DEUDOR", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp) },
+        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = estados)
     )
 
 }
@@ -157,7 +158,13 @@ fun datos_prestamo(viewModel: RDeudaViewModel) {
                 textoActual = estado.monto,
                 textoFondo = "Monto Inicial",
                 tipoTeclado = KeyboardType.Decimal, // Teclado numérico con punto decimal
-                alEscribir = { viewModel.onMontoChange(it) }
+                alEscribir = { entrada ->
+                    // Reemplaza puntos por comas y valida que solo exista una coma decimal
+                    val procesado = entrada.replace('.', ',')
+                    if (procesado.count { it == ',' } <= 1) {
+                        viewModel.onMontoChange(procesado)
+                    }
+                }
             )
 
             textReutilizable(
@@ -167,15 +174,18 @@ fun datos_prestamo(viewModel: RDeudaViewModel) {
                 alEscribir = { viewModel.onTipoDeudaChange(it) }
             )
 
-            textReutilizable(
-                textoActual = estado.fecha,
-                textoFondo = "Fecha",
-                iconoDerecho = Icons.Default.DateRange,
-                onIconoDerechoClick = {
-                    mostrarCalendario = true
-                },
-                alEscribir = { viewModel.onFechaChange(it) }
-            )
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Box(modifier = Modifier.fillMaxWidth(0.65f)) { // <-- CAJA REDUCIDA PARA EVITAR UNIFORMIDAD
+                    textReutilizable(
+                        textoActual = estado.fecha,
+                        textoFondo = "Fecha",
+                        iconoDerecho = Icons.Default.DateRange,
+                        readOnly = true, // <-- PROTEGE EL INPUT DE ESCRITURA MANUAL Y LETRAS
+                        onIconoDerechoClick = { mostrarCalendario = true },
+                        alEscribir = {}
+                    )
+                }
+            }
 
             // 4. DESCRIPCIÓN
             textReutilizable(
@@ -246,12 +256,14 @@ fun textReutilizable(
     textoPrefijo: String? = null,
     iconoIzquierdo: ImageVector? = null, // El logo normal de la izquierda
     iconoDerecho: ImageVector? = null,   // NUEVO: El logo de la derecha (Calendario/Notas)
+    readOnly: Boolean = false, // <-- NUEVO PARÁMETRO PARA CONTROLAR LA EDICIÓN
     onIconoDerechoClick: (() -> Unit)? = null, // NUEVO: Acción al tocar el icono derecho
     alEscribir: (String) -> Unit
 ) {
     OutlinedTextField(
         value = textoActual,
         onValueChange = alEscribir,
+        readOnly = readOnly, // <-- SE ASIGNA AL OUTLINEDTEXTFIELD
         placeholder = {
             Text(text = textoFondo, fontSize = 18.sp)
         },

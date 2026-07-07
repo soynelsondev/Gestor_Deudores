@@ -22,6 +22,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CheckboxDefaults.colors
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -82,9 +83,9 @@ fun Principal(viewModel: RegistroDeudorViewModel,onNavegarADeuda: (Int) -> Unit)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun toolbar(){
-    TopAppBar(
-        title = {Text("NUEVO DEUDOR", color = Color.White,fontWeight = FontWeight.Bold, fontSize = 18.sp)},
-        colors = TopAppBarDefaults.topAppBarColors(estados)
+    CenterAlignedTopAppBar( // <-- CAMBIADO PARA CENTRAR EL TÍTULO
+        title = { Text("NUEVO DEUDOR", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp) },
+        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = estados)
     )
 
 }
@@ -121,7 +122,7 @@ fun datos_personales(viewModel: RegistroDeudorViewModel){
 
     val estado by viewModel.uiState.collectAsState()
 
-    Card(modifier = Modifier.fillMaxWidth() .height(600.dp)
+    Card(modifier = Modifier.fillMaxWidth()
         .padding(16.dp) ,
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(6.dp),
@@ -137,6 +138,11 @@ fun datos_personales(viewModel: RegistroDeudorViewModel){
                 color = estados,
                 modifier = Modifier.padding(vertical = 10.dp)
             )
+
+            // Filtro estricto: Solo letras (ni números ni operadores)
+            val onlyLettersFilter = { text: String -> text.filter { it.isLetter() || it.isWhitespace() } }
+            // Filtro estricto: Solo dígitos (bloquea puntos, comas y signos)
+            val onlyNumbersFilter = { text: String -> text.filter { it.isDigit() } }
 
            textReutilizable(estado.nombre, textoFondo = "Nombre", KeyboardType.Text, alEscribir = { viewModel.onNombreChange(it)})
             textReutilizable(estado.apellido, textoFondo = "Apellido", KeyboardType.Text, alEscribir = { viewModel.onApellidoChange(it)})
