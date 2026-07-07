@@ -4,15 +4,19 @@ package com.example.gestor_deudores.ui.Registro
 import android.R
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -33,7 +37,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.Placeholder
@@ -82,6 +88,32 @@ fun toolbar(){
 
 }
 
+@Preview(showBackground = true)
+@Composable
+fun AvatarUsuario() {
+    // Este Box externo hace que el círculo se centre automáticamente en la pantalla
+    Box(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = Alignment.Center
+    ) {
+        // Este Box es el círculo de fondo
+        Box(
+            modifier = Modifier
+                .size(100.dp) // Tamaño del círculo
+                .clip(CircleShape)
+                .background(Color(0xFFE0F2F1)), // Aquí cambias el color del fondo circular
+            contentAlignment = Alignment.Center
+        ) {
+            // El vector nativo de Android Studio
+            Icon(
+                imageVector = Icons.Default.Person,
+                contentDescription = "Avatar estándar",
+                modifier = Modifier.size(90.dp), // Tamaño del vector interior
+                tint = estados // Aquí cambias el color de la silueta (o usas 'estados')
+            )
+        }
+    }
+}
 
 @Composable
 fun datos_personales(viewModel: RegistroDeudorViewModel){
@@ -95,6 +127,8 @@ fun datos_personales(viewModel: RegistroDeudorViewModel){
         colors = CardDefaults.cardColors(fondo)
     ) {
         Column(modifier = Modifier.fillMaxSize() .padding(12.dp)) {
+
+            AvatarUsuario()
             Text(
                 text = "Datos Personales",
                 fontSize =35.sp,
