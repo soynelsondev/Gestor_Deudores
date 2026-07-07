@@ -15,7 +15,7 @@ data class R_DeudaEstado(
     val monto : String = "",
     val tipoDeuda: String = "",
     val fecha: String = "",
-    val rol: String = "Cliente",
+    val rol: String = "CLIENTE",
     val descripcion: String = "",
     val error: String? = null,
     val guardadoExitoso: Boolean = false

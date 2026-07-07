@@ -23,6 +23,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -30,11 +32,17 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,10 +62,21 @@ import com.example.gestor_deudores.ui.Registro.toolbar
 import com.example.gestor_deudores.ui.theme.estados
 import com.example.gestor_deudores.ui.theme.fondo
 import com.example.gestor_deudores.ui.theme.fondo2
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 
 @Composable
-fun Principal(viewModel: RDeudaViewModel){
+fun Principal(viewModel: RDeudaViewModel, onNavegarAtras: () -> Unit){
+    val estado by viewModel.uiEstado.collectAsState()
+
+    LaunchedEffect(estado.guardadoExitoso) {
+        if (estado.guardadoExitoso) {
+            viewModel.reiniciarEstadoGuardado()
+            onNavegarAtras() // Cerramos la pantalla y volvemos
+        }
+    }
     Scaffold (topBar = { toolbar() }){ innerPadding ->
         Column (modifier = Modifier.fillMaxSize().padding(innerPadding) .background(fondo))
         {
@@ -71,7 +90,7 @@ fun Principal(viewModel: RDeudaViewModel){
 @Composable
 fun toolbar(){
     TopAppBar(
-        title = {Text("Nuevo Deudor", color = Color.White)},
+        title = {Text("Registrar Deuda", color = Color.White)},
         colors = TopAppBarDefaults.topAppBarColors(fondo)
     )
 
@@ -82,20 +101,52 @@ fun toolbar(){
 fun datos_prestamo(viewModel: RDeudaViewModel) {
 
     val estado by viewModel.uiEstado.collectAsState()
+    // Variables para controlar el popup del calendario
+    var mostrarCalendario by remember { mutableStateOf(false) }
+    val datePickerState = rememberDatePickerState()
+
+    // SI LA VARIABLE ES TRUE, DIBUJAMOS EL CALENDARIO EN PANTALLA
+    if (mostrarCalendario) {
+        DatePickerDialog(
+            onDismissRequest = { mostrarCalendario = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    mostrarCalendario = false
+                    // Transformamos los milisegundos a fecha normal (ej. 24/05/2026)
+                    val fechaSeleccionada = datePickerState.selectedDateMillis?.let { millis ->
+                        val formateador = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+                        formateador.format(Date(millis))
+                    } ?: ""
+
+                    viewModel.onFechaChange(fechaSeleccionada)
+                }) {
+                    Text("Aceptar", color = estados)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { mostrarCalendario = false }) {
+                    Text("Cancelar", color = Color.Gray)
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+
 
     Card(
-        modifier = Modifier.fillMaxWidth().height(450.dp)
+        modifier = Modifier.fillMaxWidth()
             .padding(16.dp),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(6.dp),
         colors = CardDefaults.cardColors(fondo)
     ) {
-        Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
 
 
             Text(
                 text = "DETALLES DEL PRESTAMO",
-                fontSize = 30.sp,
+                fontSize = 25.sp,
                 fontWeight = FontWeight.Bold,
                 color = estados
             )
@@ -120,8 +171,7 @@ fun datos_prestamo(viewModel: RDeudaViewModel) {
                 textoFondo = "Fecha",
                 iconoDerecho = Icons.Default.DateRange,
                 onIconoDerechoClick = {
-                    // Lógica para el DatePickerDialog
-                    println("Clic en el calendario")
+                    mostrarCalendario = true
                 },
                 alEscribir = { viewModel.onFechaChange(it) }
             )
