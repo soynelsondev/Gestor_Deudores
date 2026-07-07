@@ -69,4 +69,7 @@ dependencies {
     // 3. El compilador (KSP) que genera el código por detrás cuando compilas
     ksp("androidx.room:room-compiler:$room_version")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
+    // Librería de navegación para Jetpack Compose
+    implementation("androidx.navigation:navigation-compose:2.7.7")
+
 }
