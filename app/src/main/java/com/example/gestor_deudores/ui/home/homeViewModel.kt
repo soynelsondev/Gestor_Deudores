@@ -2,7 +2,9 @@ package com.example.gestor_deudores.ui.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.gestor_deudores.data.Deuda
 import com.example.gestor_deudores.data.DeudaDao
+import com.example.gestor_deudores.data.Deudor
 import com.example.gestor_deudores.data.DeudorDao
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -15,6 +17,7 @@ enum class Pestaña{
     PENDIENTES,
     HISTORIAL
 }
+
 
 
 class HomeViewModel(private val dao: DeudorDao,private val dao2: DeudaDao) : ViewModel() {
@@ -42,32 +45,55 @@ class HomeViewModel(private val dao: DeudorDao,private val dao2: DeudaDao) : Vie
         _textoBusqueda,
         _pestañaActual,
         dao2.obtenerTodasLasDeudas()
-    ){
-        listaDeDeudores, texto, pestaña,deuda ->
+    ){ listaDeDeudores: List<Deudor>, texto: String, pestaña: Pestaña, listaDeDeudas: List<Deuda> -> // <-- ¡LA SOLUCIÓN ESTÁ AQUÍ!
 
-        val listaPorPestaña = listaDeDeudores.filter {
-            deudor ->
-            val deudasDeEstaPersona = deuda.filter { it.idDeudor == deudor.id  }
-
-           val deudaTotal = deudasDeEstaPersona.sumOf { it.montoRestante }
-
-            if (pestaña == Pestaña.PENDIENTES){
-                deudaTotal >0.0
-            }else   {
-                deudaTotal <=0.0
-            }
-
-        }
-
-        if(texto.isBlank()){
-            listaPorPestaña
-        }else{
-
-                listaPorPestaña.filter { deudor ->
-                    deudor.nombre.contains(texto, ignoreCase = true) ||
-                            deudor.apellido.contains(texto, ignoreCase = true)
+        // 1. Primero filtramos por el buscador de texto
+        val filtradosPorTexto = if (texto.isBlank()) {
+            listaDeDeudores
+        } else {
+            listaDeDeudores.filter { deudor ->
+                deudor.nombre.contains(texto, ignoreCase = true) ||
+                        deudor.apellido.contains(texto, ignoreCase = true)
             }
         }
+
+        // 2. Preparamos una lista vacía para guardar nuestras cajas
+        val listaListaParaLaUI = mutableListOf<DeudorDetalle>()
+
+        // 3. Revisamos deudor por deudor para armar su paquete
+        for (deudor in filtradosPorTexto) {
+
+            // Buscamos sus deudas y calculamos el total
+            val deudasDeEstaPersona = listaDeDeudas.filter { it.idDeudor == deudor.id }
+            val deudaTotal = deudasDeEstaPersona.sumOf { it.montoRestante }
+
+            // Tomamos la deuda más reciente para mostrar en la tarjeta (tipo, fecha, descripción)
+            val deudaPrincipal = deudasDeEstaPersona.lastOrNull()
+
+            // Si la persona tiene al menos una deuda registrada, evaluamos en qué pestaña va
+            if (deudaPrincipal != null) {
+
+                val perteneceAPestaña = if (pestaña == Pestaña.PENDIENTES) {
+                    deudaTotal > 0.0
+                } else {
+                    deudaTotal <= 0.0
+                }
+
+                // Si pertenece a la pestaña seleccionada, armamos la caja y la guardamos en la lista
+                if (perteneceAPestaña) {
+                    listaListaParaLaUI.add(
+                        DeudorDetalle(
+                            deudor = deudor,
+                            deuda = deudaPrincipal,
+                            montoRestante = deudaTotal
+                        )
+                    )
+                }
+            }
+        }
+
+        // 4. Entregamos la lista final llena de cajas
+        listaListaParaLaUI
 
     }.stateIn(
         scope = viewModelScope,
@@ -85,4 +111,9 @@ class HomeViewModel(private val dao: DeudorDao,private val dao2: DeudaDao) : Vie
 
 
 }
+data class DeudorDetalle(
+    val deudor: Deudor,
+    val deuda: Deuda,
+    val montoRestante: Double
+)
 
