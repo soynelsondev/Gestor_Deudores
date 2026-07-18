@@ -81,7 +81,7 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
     val textoBusqueda by viewModel.textoBusqueda.collectAsState()
     val pestañaActual by viewModel.pestañaActual.collectAsState()
     val listaDeudores by viewModel.deudorFiltrados.collectAsState()
-
+    var deudaMaximaPermitida by remember { mutableStateOf(0.0) }
     // --- NUEVOS INTERRUPTORES PARA EL DIALOG ---
     var mostrarDialogoAbono by remember { mutableStateOf(false) }
     var deudorSeleccionado by remember { mutableStateOf<Deudor?>(null) }
@@ -90,6 +90,7 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
     if (mostrarDialogoAbono && deudorSeleccionado != null) {
         DialogoAbono(
             nombreDeudor = deudorSeleccionado!!.nombre,
+            deudaMaxima = deudaMaximaPermitida,
             onDismiss = {
                 mostrarDialogoAbono = false // Apagamos el interruptor
                 deudorSeleccionado = null
@@ -139,8 +140,8 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
                         },
 
                         onAbonarClick = {
-                            // Encendemos el interruptor y le decimos a quién le vamos a abonar
                             deudorSeleccionado = paquete.deudor
+                            deudaMaximaPermitida = paquete.montoRestante // Guardamos el límite
                             mostrarDialogoAbono = true
                         }
 
@@ -195,7 +196,7 @@ fun BarraNavegacionInferior(
 @Composable
 fun toolbar(){
     CenterAlignedTopAppBar( // <-- CAMBIADO PARA CENTRAR EL TÍTULO
-        title = { Text("NUEVO DEUDOR", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 24.sp) },
+        title = { Text("DEUDORES ", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 24.sp) },
         colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = fondo2)
     )
 
@@ -238,7 +239,7 @@ fun SelectorPestañas(
                 text = "PENDIENTES",
                 fontWeight = FontWeight.Bold,
                 fontSize = 14.sp,
-                color = if (pestañaActual == Pestaña.PENDIENTES) componentes else colorTextoInactivo
+                color = if (pestañaActual == Pestaña.PENDIENTES) estados else colorTextoInactivo
             )
         }
 
@@ -249,7 +250,7 @@ fun SelectorPestañas(
                 .clip(RoundedCornerShape(50))
                 .background(
                     // Condición: Si está seleccionada, pintamos el fondo, si no, transparente
-                    if (pestañaActual == Pestaña.HISTORIAL) componentes else Color.Transparent
+                    if (pestañaActual == Pestaña.HISTORIAL) fondo_claro else Color.Transparent
                 )
                 .clickable { onPestañaSeleccionada(Pestaña.HISTORIAL) }
                 .padding(vertical = 12.dp),
@@ -375,8 +376,10 @@ fun carDeudores(deudor: Deudor,deuda: Deuda,montoRestante: Double,onEditarClick:
             // --- PARTE INFERIOR: Detalles de la deuda ---
             Text(text = "Monto Restante:", fontSize = 12.sp, color = Color.Gray)
             // Colocamos la variable del monto matemático
+            // Colocamos la variable con formato de moneda (Ej: 1.500,00)
+            val montoFormateado = String.format(java.util.Locale.US, "%,.2f", montoRestante)
             Text(
-                text = "${montoRestante}",
+                text = "$montoFormateado",
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
                 color = componentes
@@ -456,12 +459,13 @@ fun avatar(deudor: Deudor){
 @Composable
 fun DialogoAbono(
     nombreDeudor: String,
+    deudaMaxima: Double,
     onDismiss: () -> Unit, // Cuando toca fuera de la caja o cancela
     onConfirmar: (Double) -> Unit // Cuando le da a guardar pasamos el monto
 ) {
     // Variable para guardar lo que escribe en el campo de texto de la ventanita
     var montoAbono by remember { mutableStateOf("") }
-
+    var mensajeError by remember { mutableStateOf("") }
     Dialog(onDismissRequest = { onDismiss() }) {
         Card(
             modifier = Modifier
@@ -482,17 +486,23 @@ fun DialogoAbono(
                     fontWeight = FontWeight.Bold,
                     color = Color.Black
                 )
+                Text(text = "Deuda actual: $$deudaMaxima", color = Color.Gray, fontSize = 14.sp)
 
                 Spacer(modifier = Modifier.height(16.dp))
 
                 OutlinedTextField(
                     value = montoAbono,
-                    onValueChange = { montoAbono = it },
+                    onValueChange = { montoAbono = it
+                        mensajeError = ""},
                     label = { Text("Monto del abono") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
+                // Muestra mensaje de error en rojo si se pasa
+                if (mensajeError.isNotEmpty()) {
+                    Text(text = mensajeError, color = Color.Red, fontSize = 12.sp)
+                }
 
                 Spacer(modifier = Modifier.height(24.dp))
 
@@ -508,7 +518,9 @@ fun DialogoAbono(
                         onClick = {
                             // Convertimos el texto a número. Si está vacío o da error, ponemos 0.0
                             val monto = montoAbono.toDoubleOrNull() ?: 0.0
-                            if (monto > 0) {
+                            if (monto > deudaMaxima) {
+                                mensajeError = "No puedes abonar más de la deuda"
+                            } else if (monto > 0) {
                                 onConfirmar(monto)
                             }
                         },

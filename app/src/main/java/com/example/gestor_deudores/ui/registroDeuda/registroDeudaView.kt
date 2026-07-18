@@ -2,6 +2,9 @@
 package com.example.gestor_deudores.ui.registroDeuda
 
 import androidx.annotation.OptIn
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -12,10 +15,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Phone
@@ -63,6 +69,7 @@ import com.example.gestor_deudores.ui.Registro.toolbar
 import com.example.gestor_deudores.ui.theme.estados
 import com.example.gestor_deudores.ui.theme.fondo
 import com.example.gestor_deudores.ui.theme.fondo2
+import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -72,8 +79,10 @@ import java.util.Locale
 fun Principal(viewModel: RDeudaViewModel, onNavegarAtras: () -> Unit){
     val estado by viewModel.uiEstado.collectAsState()
 
+
     LaunchedEffect(estado.guardadoExitoso) {
         if (estado.guardadoExitoso) {
+            delay(1500)
             viewModel.reiniciarEstadoGuardado()
             onNavegarAtras() // Cerramos la pantalla y volvemos
         }
@@ -83,6 +92,46 @@ fun Principal(viewModel: RDeudaViewModel, onNavegarAtras: () -> Unit){
         {
             datos_prestamo(viewModel)
             btnDeuda { viewModel.GuardarDeuda() }
+
+
+        }
+    }
+    animacion(viewModel,estado)
+}
+
+@Composable
+fun animacion(viewModel: RDeudaViewModel,estado: R_DeudaEstado){
+
+    // 2. Colocamos todo dentro de un Box para poder poner la animación encima
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold (topBar = { toolbar2() }){ innerPadding ->
+            Column (modifier = Modifier.fillMaxSize().padding(innerPadding).background(fondo))
+            {
+                datos_prestamo(viewModel)
+                btnDeuda { viewModel.GuardarDeuda() }
+            }
+        }
+
+        // 3. LA ANIMACIÓN MAGICA
+        AnimatedVisibility(
+            visible = estado.guardadoExitoso,
+            enter = scaleIn(),
+            exit = scaleOut(),
+            modifier = Modifier.align(Alignment.Center)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(150.dp)
+                    .background(estados, shape = CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = "Éxito",
+                    tint = Color.White,
+                    modifier = Modifier.size(80.dp)
+                )
+            }
         }
     }
 }

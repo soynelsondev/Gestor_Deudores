@@ -51,6 +51,9 @@ class RegistroDeudorViewModel(private val deudorDao: DeudorDao) : ViewModel() {
     fun resetNuevoDeudorId() {
         _uiState.update { it.copy(nuevoDeudorId = 0) }
     }
+    fun limpiarFormulario() {
+        _uiState.update { RegistroDeudorUiState() }
+    }
 
     // ==========================================
     // PASO 4: ACCIÓN FINAL (Guardar)

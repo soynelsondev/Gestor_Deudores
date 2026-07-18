@@ -68,6 +68,12 @@ fun NavegacionPrincipal(
                 }
             )
         }
+        composable(rutas.REGISTRO) {
+            // Limpiamos los fantasmas antes de mostrar la pantalla
+            viewModelRegistro.limpiarFormulario()
+
+            PantallaRegistroDeudor( )
+        }
 
 
 
@@ -91,7 +97,7 @@ fun NavegacionPrincipal(
                 viewModel = viewModelDeuda,
                 onNavegarAtras = {
                     // Cuando guarde con éxito, volvemos al inicio
-                    navController.popBackStack(rutas.REGISTRO, inclusive = false)
+                    navController.popBackStack(rutas.HOME, inclusive = false)
                 }
             )
         }
