@@ -4,6 +4,7 @@ package com.example.gestor_deudores.ui.home
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -276,7 +277,8 @@ fun BuscadorDeudores(
 
 
 @Composable
-fun carDeudores(deudor: Deudor,deuda: Deuda,montoRestante: Double){
+fun carDeudores(deudor: Deudor,deuda: Deuda,montoRestante: Double,onEditarClick: () -> Unit,
+                onAbonarClick: () -> Unit ){
 
     Card(
         modifier = Modifier
@@ -350,6 +352,44 @@ fun carDeudores(deudor: Deudor,deuda: Deuda,montoRestante: Double){
             // Validamos que si no hay descripción, no se vea feo
             if (deuda.descripcion.isNotBlank()) {
                 Text(text = "Descripción: ${deuda.descripcion}", fontSize = 14.sp, color = Color.DarkGray)
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // --- NUEVO: Fila de Botones de Acción ---
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End // Alineamos los botones a la derecha
+            ) {
+                // Botón Editar
+                IconButton(
+                    onClick = { onEditarClick() },
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(fondo2, shape = CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Editar deudor",
+                        tint = estados
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                // Botón Abonar
+                IconButton(
+                    onClick = { onAbonarClick() },
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(componentes, shape = CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add, // Puedes cambiar el icono si deseas
+                        contentDescription = "Abonar a la deuda",
+                        tint = Color.White
+                    )
+                }
             }
         }
     }
