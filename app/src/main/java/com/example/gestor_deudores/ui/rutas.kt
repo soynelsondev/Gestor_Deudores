@@ -3,6 +3,14 @@ package com.example.gestor_deudores.ui
 object rutas {
     const val HOME = "pantalla_Principal"
     const val REGISTRO = "pantalla_registro_deudor"
+
+    // --- NUEVO: Rutas para editar un deudor existente ---
+    const val EDITAR_DEUDOR_TEMPLATE = "$REGISTRO/{id}"
+
+    // ¡ESTA ES LA FUNCIÓN QUE TE FALTABA!
+    fun crearRutaEditarDeudor(id: Int): String {
+        return "$REGISTRO/$id"
+    }
     private const val REGISTRO_DEUDA_BASE = "pantalla_registro_deuda"
 
     // 2. LA PLANTILLA (Esta es la que vas a poner dentro del NavHost)

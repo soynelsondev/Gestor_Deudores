@@ -38,6 +38,31 @@ fun NavegacionPrincipal(
             )
         }
 
+        composable(
+            route = rutas.EDITAR_DEUDOR_TEMPLATE,
+            arguments = listOf(navArgument("id") { type = NavType.IntType })
+        ) { backStackEntry ->
+
+            // Atrapamos el ID que mandaste desde el botón del lapicito
+            val idAEditar = backStackEntry.arguments?.getInt("id") ?: 0
+
+            // TODO: Aquí tendrías una función en tu RegistroDeudorViewModel para buscar a la persona
+            // viewModelRegistro.cargarDeudor(idAEditar)
+
+            PantallaRegistroDeudor(
+                viewModel = viewModelRegistro,
+                onNavegarADeuda = {
+                    // Al terminar de editar, usualmente regresas al Home
+                    navController.popBackStack(rutas.HOME, inclusive = false)
+                }
+            )
+        }
+
+
+
+
+
+
         // ==========================================
         // 2. PANTALLA: REGISTRO DE DEUDA
         // ==========================================

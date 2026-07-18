@@ -19,12 +19,16 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Icon
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -33,6 +37,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButtonDefaults.Icon
 import androidx.compose.material3.Text
@@ -43,14 +48,19 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavController
 import com.example.gestor_deudores.data.Deuda
 import com.example.gestor_deudores.data.Deudor
@@ -71,6 +81,26 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
     val textoBusqueda by viewModel.textoBusqueda.collectAsState()
     val pestañaActual by viewModel.pestañaActual.collectAsState()
     val listaDeudores by viewModel.deudorFiltrados.collectAsState()
+
+    // --- NUEVOS INTERRUPTORES PARA EL DIALOG ---
+    var mostrarDialogoAbono by remember { mutableStateOf(false) }
+    var deudorSeleccionado by remember { mutableStateOf<Deudor?>(null) }
+
+    // Si el interruptor está encendido y hay un deudor, dibujamos la ventana por encima de todo
+    if (mostrarDialogoAbono && deudorSeleccionado != null) {
+        DialogoAbono(
+            nombreDeudor = deudorSeleccionado!!.nombre,
+            onDismiss = {
+                mostrarDialogoAbono = false // Apagamos el interruptor
+                deudorSeleccionado = null
+            },
+            onConfirmar = { monto ->
+                viewModel.registrarAbono(deudorSeleccionado!!, monto)
+                mostrarDialogoAbono = false
+                deudorSeleccionado = null
+            }
+        )
+    }
 
     Scaffold (topBar = {toolbar()},
         bottomBar = {
@@ -102,7 +132,18 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
                     carDeudores(
                         deudor = paquete.deudor,
                         deuda = paquete.deuda,
-                        montoRestante = paquete.montoRestante
+                        montoRestante = paquete.montoRestante,onEditarClick = {
+                            // Para editar, viajamos a la ruta de registro PERO enviándole el ID
+                            // (Tendremos que ajustar rutas.kt para que acepte este ID)
+                            navController.navigate(rutas.crearRutaEditarDeudor(paquete.deudor.id))
+                        },
+
+                        onAbonarClick = {
+                            // Encendemos el interruptor y le decimos a quién le vamos a abonar
+                            deudorSeleccionado = paquete.deudor
+                            mostrarDialogoAbono = true
+                        }
+
                     )
 
                 }
@@ -409,5 +450,74 @@ fun avatar(deudor: Deudor){
     ) {
         val iniciales = "${deudor.nombre.firstOrNull()?.uppercase() ?: ""}${deudor.apellido.firstOrNull()?.uppercase() ?: ""}"
         Text(text = iniciales, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+    }
+}
+
+@Composable
+fun DialogoAbono(
+    nombreDeudor: String,
+    onDismiss: () -> Unit, // Cuando toca fuera de la caja o cancela
+    onConfirmar: (Double) -> Unit // Cuando le da a guardar pasamos el monto
+) {
+    // Variable para guardar lo que escribe en el campo de texto de la ventanita
+    var montoAbono by remember { mutableStateOf("") }
+
+    Dialog(onDismissRequest = { onDismiss() }) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = fondo)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Abonar a $nombreDeudor",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedTextField(
+                    value = montoAbono,
+                    onValueChange = { montoAbono = it },
+                    label = { Text("Monto del abono") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    TextButton(onClick = { onDismiss() }) {
+                        Text("Cancelar", color = Color.Gray)
+                    }
+
+                    Button(
+                        onClick = {
+                            // Convertimos el texto a número. Si está vacío o da error, ponemos 0.0
+                            val monto = montoAbono.toDoubleOrNull() ?: 0.0
+                            if (monto > 0) {
+                                onConfirmar(monto)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = fondo2)
+                    ) {
+                        Text("Guardar Abono", color = Color.White)
+                    }
+                }
+            }
+        }
     }
 }

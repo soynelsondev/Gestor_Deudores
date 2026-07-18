@@ -12,6 +12,10 @@ import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 enum class Pestaña{
     PENDIENTES,
@@ -106,9 +110,26 @@ class HomeViewModel(private val dao: DeudorDao,private val dao2: DeudaDao) : Vie
         _pestañaActual.value = nuevaPestaña
     }
 
+    fun registrarAbono(deudor: Deudor, montoAbono: Double) {
+        viewModelScope.launch {
+            // Obtenemos la fecha actual del teléfono para que el abono quede registrado con el día exacto
+            val fechaActual = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date())
 
+            val nuevoAbono = Deuda(
+                idDeudor = deudor.id,
+                montoInicial = 0.0,
+                montoRestante = -montoAbono, // ¡El truco de magia! El signo negativo restará la deuda total
+                tipoDeuda = "Abono / Pago Parcial",
+                fecha = fechaActual,
+                descripcion = "Abono registrado desde la pantalla principal",
+                rol = "PAGO", // Puedes usar un rol especial o dejarlo vacío
+                estado = "Activo" // Debe coincidir con lo que suma tu DAO
+            )
 
-
+            // Insertamos el recibo en la base de datos
+            dao2.agregarDeuda(nuevoAbono)
+        }
+    }
 
 }
 data class DeudorDetalle(
