@@ -19,14 +19,19 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Icon
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButtonDefaults.Icon
 import androidx.compose.material3.Text
@@ -45,12 +50,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
 import com.example.gestor_deudores.data.Deuda
 import com.example.gestor_deudores.data.Deudor
 import com.example.gestor_deudores.ui.Registro.AvatarUsuario
 import com.example.gestor_deudores.ui.Registro.btnAceptar
 import com.example.gestor_deudores.ui.Registro.datos_personales
 import com.example.gestor_deudores.ui.Registro.toolbar
+import com.example.gestor_deudores.ui.rutas
 import com.example.gestor_deudores.ui.theme.componentes
 import com.example.gestor_deudores.ui.theme.estados
 import com.example.gestor_deudores.ui.theme.fondo
@@ -59,12 +66,19 @@ import com.example.gestor_deudores.ui.theme.fondo_claro
 
 
 @Composable
-fun homePrincipal(viewModel: HomeViewModel){
+fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
     val textoBusqueda by viewModel.textoBusqueda.collectAsState()
     val pestañaActual by viewModel.pestañaActual.collectAsState()
     val listaDeudores by viewModel.deudorFiltrados.collectAsState()
 
-    Scaffold (topBar = {toolbar()}){ innerPadding ->
+    Scaffold (topBar = {toolbar()},
+        bottomBar = {
+            BarraNavegacionInferior(onIrAInicio = {},
+                onIrAAgregar = {
+                    navController.navigate(rutas.REGISTRO)
+                })
+        }
+        ){ innerPadding ->
 
         Column (modifier = Modifier.fillMaxSize().padding(innerPadding) .background(fondo))
         {
@@ -93,6 +107,45 @@ fun homePrincipal(viewModel: HomeViewModel){
                 }
             }
         }
+    }
+}
+
+
+@Composable
+fun BarraNavegacionInferior(
+    // Pasamos funciones para que la barra avise a dónde quiere viajar el usuario
+    onIrAInicio: () -> Unit,
+    onIrAAgregar: () -> Unit
+) {
+    NavigationBar(
+        containerColor = fondo2, // El color base de tu barra
+    ) {
+        // Ítem 1: Inicio
+        NavigationBarItem(
+            selected = true, // Aquí luego pondremos lógica para saber si estamos en home
+            onClick = { onIrAInicio() },
+            icon = { Icon(Icons.Default.Home, contentDescription = "Inicio") },
+            label = { Text("Inicio") },
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = estados,
+                selectedTextColor =estados,
+                indicatorColor = Color.White // El circulito que marca donde estás
+            )
+        )
+
+        // Ítem 2: Agregar (El que te llevará a la pantalla de registro)
+        NavigationBarItem(
+            selected = false,
+            onClick = { onIrAAgregar() },
+            icon = { Icon(Icons.Default.Add, contentDescription = "Agregar") },
+            label = { Text("Agregar") },
+            colors = NavigationBarItemDefaults.colors(
+                unselectedIconColor = Color.Gray,
+                unselectedTextColor = Color.Gray
+            )
+        )
+
+
     }
 }
 
