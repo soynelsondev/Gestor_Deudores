@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -35,6 +36,7 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -74,10 +76,22 @@ fun homePrincipal(viewModel: HomeViewModel){
                 pestañaActual = pestañaActual,
                 onPestañaSeleccionada = { nuevaPestaña -> viewModel.cambiarPestaña(nuevaPestaña) }
             )
+// 5. La lista que dibuja las tarjetas automáticamente
+            LazyColumn(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                // Iteramos sobre la lista de "paquetes" que nos mandó el ViewModel
+                items(listaDeudores) { paquete ->
 
+                    // Le entregamos a la tarjeta exactamente lo que pide sacándolo del paquete
+                    carDeudores(
+                        deudor = paquete.deudor,
+                        deuda = paquete.deuda,
+                        montoRestante = paquete.montoRestante
+                    )
 
-
-
+                }
+            }
         }
     }
 }
