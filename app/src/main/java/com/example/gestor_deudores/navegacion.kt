@@ -11,6 +11,8 @@ import androidx.navigation.navArgument
 // Importamos con un alias (as) para que no haya conflicto si ambas funciones se llaman "Principal"
 import com.example.gestor_deudores.ui.Registro.Principal as PantallaRegistroDeudor
 import com.example.gestor_deudores.ui.Registro.RegistroDeudorViewModel
+import com.example.gestor_deudores.ui.home.HomeViewModel
+import com.example.gestor_deudores.ui.home.homePrincipal
 import com.example.gestor_deudores.ui.registroDeuda.Principal as PantallaRegistroDeuda
 import com.example.gestor_deudores.ui.registroDeuda.RDeudaViewModel
 import com.example.gestor_deudores.ui.rutas
@@ -18,12 +20,21 @@ import com.example.gestor_deudores.ui.rutas
 @Composable
 fun NavegacionPrincipal(
     viewModelRegistro: RegistroDeudorViewModel,
-    viewModelDeuda: RDeudaViewModel
+    viewModelDeuda: RDeudaViewModel,
+    viewModelHome : HomeViewModel
 ) {
     val navController = rememberNavController()
 
     // Arrancamos directamente en el registro para probar
-    NavHost(navController = navController, startDestination = rutas.REGISTRO) {
+    NavHost(navController = navController, startDestination = rutas.HOME) {
+
+
+        composable(rutas.HOME){
+            homePrincipal(
+                viewModel= viewModelHome,
+                navController = navController
+            )
+        }
 
         // ==========================================
         // 1. PANTALLA: REGISTRO DE DEUDOR
