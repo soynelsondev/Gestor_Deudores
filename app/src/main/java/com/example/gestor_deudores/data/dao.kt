@@ -44,6 +44,10 @@ interface DeudaDao {
     @Delete
     suspend fun eliminarDeuda(deuda: Deuda)
 
+    // --- ¡AQUÍ VA LA NUEVA FUNCIÓN! ---
+    @Query("DELETE FROM Tabla_Deuda WHERE idDeudor = :idDeudor")
+    suspend fun eliminarDeudasDeUsuario(idDeudor: Int)
+
     // Obtener TODAS las deudas (por si quieres un historial general)
     @Query("SELECT * FROM Tabla_Deuda")
     fun obtenerTodasLasDeudas(): Flow<List<Deuda>>

@@ -42,6 +42,16 @@ class HomeViewModel(private val dao: DeudorDao,private val dao2: DeudaDao) : Vie
     fun actualizarBuscador(nuevoTexto: String){
         _textoBusqueda.value   = nuevoTexto
     }
+    // Esta función va dentro de tu clase HomeViewModel
+    fun eliminarHistorialCompleto(deudor: Deudor) {
+        viewModelScope.launch {
+            // 1. Primero borramos todas sus deudas registradas usando la función que acabas de agregar
+            dao2.eliminarDeudasDeUsuario(deudor.id)
+            // 2. Luego borramos el perfil del deudor
+            dao.eliminarDeudor(deudor)
+        }
+    }
+
 
     // buscadore de deudores
     val deudorFiltrados = combine(
