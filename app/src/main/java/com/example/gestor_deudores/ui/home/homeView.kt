@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Icon
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
@@ -145,6 +146,9 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
                             deudorSeleccionado = paquete.deudor
                             deudaMaximaPermitida = paquete.montoRestante // Guardamos el límite
                             mostrarDialogoAbono = true
+                        },
+                        onEliminarClick = {
+                            viewModel.eliminarHistorialCompleto(paquete.deudor)
                         }
 
                     )
@@ -322,7 +326,7 @@ fun BuscadorDeudores(
 
 @Composable
 fun carDeudores(deudor: Deudor,deuda: Deuda,montoRestante: Double,onEditarClick: () -> Unit,
-                onAbonarClick: () -> Unit ){
+                onAbonarClick: () -> Unit, onEliminarClick: () -> Unit ){
 
     Card(
         modifier = Modifier
@@ -409,7 +413,20 @@ fun carDeudores(deudor: Deudor,deuda: Deuda,montoRestante: Double,onEditarClick:
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End // Alineamos los botones a la derecha
+            ){
+            // --- NUEVO BOTÓN: Eliminar ---
+            IconButton(
+                onClick = { onEliminarClick() },
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(Color(0xFFFFEBEE), shape = CircleShape) // Un fondo rojito claro
             ) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Eliminar deudor",
+                    tint = Color.Red
+                )
+            }
                 // Botón Editar
                 IconButton(
                     onClick = { onEditarClick() },
