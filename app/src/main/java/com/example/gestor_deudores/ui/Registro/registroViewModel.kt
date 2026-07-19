@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 
 
 data class RegistroDeudorUiState(
+    val idActual: Int = 0,
     val nombre: String = "",
     val apellido: String = "",
     val telefono: String = "",
@@ -55,9 +56,25 @@ class RegistroDeudorViewModel(private val deudorDao: DeudorDao) : ViewModel() {
         _uiState.update { RegistroDeudorUiState() }
     }
 
-    // ==========================================
-    // PASO 4: ACCIÓN FINAL (Guardar)
-    // ==========================================
+    fun cargarDeudor(id: Int) {
+        viewModelScope.launch {
+            val deudor = deudorDao.obtenerDeudorPorId(id)
+            if (deudor != null) {
+                // Rellenamos los campos de texto con los datos que vinieron de la base de datos
+                _uiState.update {
+                    it.copy(
+                        idActual = deudor.id,
+                        nombre = deudor.nombre,
+                        apellido = deudor.apellido,
+                        cedula = deudor.cedula,
+                        telefono = deudor.telf
+                    )
+                }
+            }
+        }
+    }
+
+
 
     fun guardarUsuario() {
         val estado = _uiState.value
@@ -72,11 +89,18 @@ class RegistroDeudorViewModel(private val deudorDao: DeudorDao) : ViewModel() {
         viewModelScope.launch {
             // Armamos el objeto tal cual lo pide tu Entity
             val nuevoDeudor = Deudor(
+                id = if(estado.idActual >0 ) estado.idActual else 0,
                 nombre = estado.nombre,
                 apellido = estado.apellido,
                 cedula = estado.cedula,
                 telf = estado.telefono
             )
+            if (estado.idActual > 0) {
+            // MODO EDICIÓN
+            deudorDao.actualizarDeudor(nuevoDeudor)
+            // Le avisamos a la pantalla que terminamos usando el mismo trigger (le pasamos el ID que editamos)
+            _uiState.update { it.copy(nuevoDeudorId = estado.idActual) }
+        } else {
 
             // C. Insertamos y capturamos el ID generado
             val idGenerado = deudorDao.agregarDeudor(nuevoDeudor)
@@ -84,6 +108,7 @@ class RegistroDeudorViewModel(private val deudorDao: DeudorDao) : ViewModel() {
             // D. Actualizamos el estado para avisarle a la pantalla que ya terminamos
             // y le entregamos el ID para que salte a la pantalla de Deuda
             _uiState.update { it.copy(nuevoDeudorId = idGenerado.toInt()) }
+        }
         }
     }
 }

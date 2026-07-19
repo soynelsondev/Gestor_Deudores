@@ -40,6 +40,7 @@ fun NavegacionPrincipal(
         // 1. PANTALLA: REGISTRO DE DEUDOR
         // ==========================================
         composable(rutas.REGISTRO) {
+            viewModelRegistro.limpiarFormulario()
             PantallaRegistroDeudor(
                 viewModel = viewModelRegistro,
                 onNavegarADeuda = { idGenerado ->
@@ -58,7 +59,7 @@ fun NavegacionPrincipal(
             val idAEditar = backStackEntry.arguments?.getInt("id") ?: 0
 
             // TODO: Aquí tendrías una función en tu RegistroDeudorViewModel para buscar a la persona
-            // viewModelRegistro.cargarDeudor(idAEditar)
+             viewModelRegistro.cargarDeudor(idAEditar)
 
             PantallaRegistroDeudor(
                 viewModel = viewModelRegistro,
@@ -68,12 +69,7 @@ fun NavegacionPrincipal(
                 }
             )
         }
-        composable(rutas.REGISTRO) {
-            // Limpiamos los fantasmas antes de mostrar la pantalla
-            viewModelRegistro.limpiarFormulario()
 
-            PantallaRegistroDeudor( )
-        }
 
 
 

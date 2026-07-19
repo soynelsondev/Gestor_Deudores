@@ -24,6 +24,9 @@ interface DeudorDao{
     @Query("SELECT * FROM deudores WHERE nombre LIKE '%' || :busqueda || '%' OR apellido LIKE '%' || :busqueda || '%'")
     fun buscarDeudores(busqueda: String): Flow<List<Deudor>>
 
+    @Query("SELECT * FROM deudores WHERE id = :id") // Asegúrate de que "deudor" sea el nombre real de tu tabla
+    suspend fun obtenerDeudorPorId(id: Int): Deudor?
+
     @Delete
     suspend fun eliminarDeudor(deudor: Deudor)
 
