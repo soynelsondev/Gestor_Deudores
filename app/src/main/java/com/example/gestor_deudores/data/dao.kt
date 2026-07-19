@@ -30,6 +30,7 @@ interface DeudorDao{
     @Delete
     suspend fun eliminarDeudor(deudor: Deudor)
 
+
 }
 
 @Dao

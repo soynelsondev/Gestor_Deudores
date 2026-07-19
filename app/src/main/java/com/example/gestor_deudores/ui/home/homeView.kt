@@ -74,6 +74,8 @@ import com.example.gestor_deudores.ui.theme.estados
 import com.example.gestor_deudores.ui.theme.fondo
 import com.example.gestor_deudores.ui.theme.fondo2
 import com.example.gestor_deudores.ui.theme.fondo_claro
+import java.text.NumberFormat
+import java.util.Locale
 
 
 @Composable
@@ -375,9 +377,12 @@ fun carDeudores(deudor: Deudor,deuda: Deuda,montoRestante: Double,onEditarClick:
 
             // --- PARTE INFERIOR: Detalles de la deuda ---
             Text(text = "Monto Restante:", fontSize = 12.sp, color = Color.Gray)
-            // Colocamos la variable del monto matemático
-            // Colocamos la variable con formato de moneda (Ej: 1.500,00)
-            val montoFormateado = String.format(java.util.Locale.US, "%,.2f", montoRestante)
+
+            val formatoMoneda = NumberFormat.getNumberInstance(Locale("es", "VE")).apply {
+                minimumFractionDigits = 2
+                maximumFractionDigits = 2
+            }
+                val montoFormateado = formatoMoneda.format(montoRestante)
             Text(
                 text = "$montoFormateado",
                 fontSize = 24.sp,
