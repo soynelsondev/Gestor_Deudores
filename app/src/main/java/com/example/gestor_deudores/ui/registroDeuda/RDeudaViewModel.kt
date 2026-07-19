@@ -83,8 +83,8 @@ class RDeudaViewModel(private val deudaDao: DeudaDao): ViewModel(){
         viewModelScope.launch {
             val nuevaDeuda = Deuda(
             idDeudor = estado.idDeudor,
-                montoInicial = montoDouble,
-                montoRestante = montoDouble,
+                montoInicial = monto_Double,
+                montoRestante = monto_Double,
                 tipoDeuda = estado.tipoDeuda,
                 fecha = estado.fecha,
                 rol = estado.rol,

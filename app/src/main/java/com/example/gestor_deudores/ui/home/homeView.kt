@@ -508,7 +508,7 @@ fun DialogoAbono(
                     fontWeight = FontWeight.Bold,
                     color = Color.Black
                 )
-                Text(text = "Deuda actual: $$deudaMaxima", color = Color.Gray, fontSize = 14.sp)
+                Text(text = "Deuda actual: $deudaMaxima", color = Color.Gray, fontSize = 14.sp)
 
                 Spacer(modifier = Modifier.height(16.dp))
 
