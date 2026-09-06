@@ -427,6 +427,7 @@ fun carDeudores(deudor: Deudor,deuda: Deuda,montoRestante: Double,onEditarClick:
                     tint = Color.Red
                 )
             }
+                Spacer(modifier = Modifier.width(12.dp))
                 // Botón Editar
                 IconButton(
                     onClick = { onEditarClick() },
