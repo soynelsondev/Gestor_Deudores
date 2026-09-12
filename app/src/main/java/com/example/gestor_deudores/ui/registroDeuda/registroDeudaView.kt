@@ -210,6 +210,7 @@ fun datos_prestamo(viewModel: RDeudaViewModel) {
             textReutilizable(
                 textoActual = estado.monto,
                 textoFondo = "Monto Inicial",
+                textoPrefijo = "$ ",
                 tipoTeclado = KeyboardType.Decimal,
                 alEscribir = { entrada ->
                     // 1. Quitamos los puntos existentes para trabajar con el número puro

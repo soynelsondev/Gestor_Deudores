@@ -382,10 +382,7 @@ fun carDeudores(deudor: Deudor,deuda: Deuda,montoRestante: Double,onEditarClick:
             // --- PARTE INFERIOR: Detalles de la deuda ---
             Text(text = "Monto Restante:", fontSize = 12.sp, color = Color.Gray)
 
-            val formatoMoneda = NumberFormat.getNumberInstance(Locale("es", "VE")).apply {
-                minimumFractionDigits = 2
-                maximumFractionDigits = 2
-            }
+            val formatoMoneda = NumberFormat.getCurrencyInstance(Locale("en", "US"))
                 val montoFormateado = formatoMoneda.format(montoRestante)
             Text(
                 text = "$montoFormateado",
