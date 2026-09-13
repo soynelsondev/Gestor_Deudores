@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -149,6 +150,9 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
                         },
                         onEliminarClick = {
                             viewModel.eliminarHistorialCompleto(paquete.deudor)
+                        },
+                        onHistorialClick= {
+                            navController.navigate(rutas.crearRutaHistorial(paquete.deudor.id))
                         }
 
                     )
@@ -326,7 +330,7 @@ fun BuscadorDeudores(
 
 @Composable
 fun carDeudores(deudor: Deudor,deuda: Deuda,montoRestante: Double,onEditarClick: () -> Unit,
-                onAbonarClick: () -> Unit, onEliminarClick: () -> Unit ){
+                onAbonarClick: () -> Unit, onEliminarClick: () -> Unit, onHistorialClick: () -> Unit ){
 
     Card(
         modifier = Modifier
@@ -411,6 +415,21 @@ fun carDeudores(deudor: Deudor,deuda: Deuda,montoRestante: Double,onEditarClick:
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End // Alineamos los botones a la derecha
             ){
+                // --- NUEVO BOTÓN: Ver Historial (Un ícono de lista o menú) ---
+                IconButton(
+                    onClick = { onHistorialClick() },
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(Color(0xFFE0F7FA), shape = CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info, // O puedes usar Icons.Default.List si lo importas
+                        contentDescription = "Ver Historial",
+                        tint = Color(0xFF00ACC1)
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+
             // --- NUEVO BOTÓN: Eliminar ---
             IconButton(
                 onClick = { onEliminarClick() },
