@@ -126,10 +126,28 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
                 pestañaActual = pestañaActual,
                 onPestañaSeleccionada = { nuevaPestaña -> viewModel.cambiarPestaña(nuevaPestaña) }
             )
+
+
+
 // 5. La lista que dibuja las tarjetas automáticamente
             LazyColumn(
                 modifier = Modifier.fillMaxSize()
             ) {
+                // --- NUEVO: CÁLCULO Y TARJETA DE RESUMEN ---
+                // Solo lo mostramos si estamos en la pestaña de pendientes
+                if (pestañaActual == Pestaña.PENDIENTES) {
+                    item {
+                        // 1. Calculamos las personas (tamaño de la lista)
+                        val totalPersonas = listaDeudores.size
+
+                        // 2. Sumamos todo el dinero restante de la lista
+                        val dineroTotal = listaDeudores.sumOf { it.montoRestante }
+
+                        // 3. Pintamos la tarjeta
+                        TarjetaResumen(totalPersonas = totalPersonas, dineroTotal = dineroTotal)
+                    }
+                }
+
                 // Iteramos sobre la lista de "paquetes" que nos mandó el ViewModel
                 items(listaDeudores) { paquete ->
 
@@ -569,6 +587,47 @@ fun DialogoAbono(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun TarjetaResumen(totalPersonas: Int, dineroTotal: Double) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = fondo2) // Usamos el color de tu app
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = "TOTAL POR COBRAR",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
+                )
+                Text(
+                    text = "$totalPersonas deudores pendientes",
+                    color = Color.LightGray,
+                    fontSize = 12.sp
+                )
+            }
+
+            val formatoUSD = NumberFormat.getCurrencyInstance(Locale("en", "US"))
+            Text(
+                text = formatoUSD.format(dineroTotal),
+                color = Color.White,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }
