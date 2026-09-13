@@ -22,4 +22,13 @@ object rutas {
     fun crearRutaRegistroDeuda(id: Int): String {
         return "$REGISTRO_DEUDA_BASE/$id"
     }
+
+
+    // --- NUEVO: Rutas para ver el historial de un deudor ---
+    private const val HISTORIAL_DEUDOR_BASE = "pantalla_historial"
+    const val HISTORIAL_DEUDOR_TEMPLATE = "$HISTORIAL_DEUDOR_BASE/{id}"
+
+    fun crearRutaHistorial(id: Int): String {
+        return "$HISTORIAL_DEUDOR_BASE/$id"
+    }
 }

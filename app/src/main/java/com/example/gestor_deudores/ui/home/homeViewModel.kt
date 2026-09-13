@@ -51,6 +51,8 @@ class HomeViewModel(private val dao: DeudorDao,private val dao2: DeudaDao) : Vie
             dao.eliminarDeudor(deudor)
         }
     }
+    // --- NUEVO: Obtener el historial completo de UNA sola persona ---
+    fun obtenerHistorialDeudor(idDeudor: Int) = dao2.obtenerDeudasPorDeudor(idDeudor)
 
 
     // buscadore de deudores
