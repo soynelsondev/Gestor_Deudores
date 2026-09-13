@@ -148,7 +148,7 @@ class RDeudaViewModel(private val deudaDao: DeudaDao): ViewModel(){
     }
     // Limpieza tras el éxito
     fun reiniciarEstadoGuardado() {
-        _uiState.update { it.copy(guardadoExitoso = false) }
+        _uiState.value = R_DeudaEstado()
     }
 
 }
