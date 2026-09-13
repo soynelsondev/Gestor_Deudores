@@ -10,12 +10,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -38,6 +40,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -76,9 +79,8 @@ import java.util.Locale
 
 
 @Composable
-fun Principal(viewModel: RDeudaViewModel, onNavegarAtras: () -> Unit){
+fun Principal(viewModel: RDeudaViewModel, onNavegarAtras: () -> Unit) {
     val estado by viewModel.uiEstado.collectAsState()
-
 
     LaunchedEffect(estado.guardadoExitoso) {
         if (estado.guardadoExitoso) {
@@ -87,32 +89,34 @@ fun Principal(viewModel: RDeudaViewModel, onNavegarAtras: () -> Unit){
             onNavegarAtras() // Cerramos la pantalla y volvemos
         }
     }
-    Scaffold (topBar = { toolbar2() }){ innerPadding ->
-        Column (modifier = Modifier.fillMaxSize().padding(innerPadding) .background(fondo))
-        {
-            datos_prestamo(viewModel)
-            btnDeuda { viewModel.GuardarDeuda() }
 
-
-        }
-    }
-    animacion(viewModel,estado)
-}
-
-@Composable
-fun animacion(viewModel: RDeudaViewModel,estado: R_DeudaEstado){
-
-    // 2. Colocamos todo dentro de un Box para poder poner la animación encima
+    // 1. Un solo Box principal para poder superponer la animación de éxito
     Box(modifier = Modifier.fillMaxSize()) {
-        Scaffold (topBar = { toolbar2() }){ innerPadding ->
-            Column (modifier = Modifier.fillMaxSize().padding(innerPadding).background(fondo))
-            {
-                datos_prestamo(viewModel)
-                btnDeuda { viewModel.GuardarDeuda() }
+
+        // 2. Tu diseño normal con la barra superior
+        Scaffold(topBar = { toolbar2() }) { innerPadding ->
+
+            // --- LA SOLUCIÓN: LazyColumn en lugar de Column ---
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .background(fondo)
+            ) {
+                // Primer elemento: La tarjeta gigante con todos los campos
+                item {
+                    datos_prestamo(viewModel)
+                }
+
+                // Segundo elemento: El botón de guardar y un espacio al final
+                item {
+                    btnDeuda { viewModel.GuardarDeuda() }
+                    Spacer(modifier = Modifier.height(24.dp)) // Da respiro visual al final al scrollear
+                }
             }
         }
 
-        // 3. LA ANIMACIÓN MAGICA
+        // 3. LA ANIMACIÓN MÁGICA (Se muestra por encima solo cuando es exitoso)
         AnimatedVisibility(
             visible = estado.guardadoExitoso,
             enter = scaleIn(),
@@ -136,6 +140,8 @@ fun animacion(viewModel: RDeudaViewModel,estado: R_DeudaEstado){
     }
 }
 
+
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun toolbar2(){
@@ -153,7 +159,12 @@ fun datos_prestamo(viewModel: RDeudaViewModel) {
     val estado by viewModel.uiEstado.collectAsState()
     // Variables para controlar el popup del calendario
     var mostrarCalendario by remember { mutableStateOf(false) }
-    val datePickerState = rememberDatePickerState()
+    val datePickerState = rememberDatePickerState(selectableDates = object : SelectableDates {
+        override fun isSelectableDate(utcTimeMillis: Long): Boolean {
+            // Solo permite fechas menores o iguales al día de hoy
+            return utcTimeMillis <= System.currentTimeMillis()
+        }
+    })
 
     if (mostrarCalendario) {
         DatePickerDialog(
@@ -238,6 +249,39 @@ fun datos_prestamo(viewModel: RDeudaViewModel) {
                 }
             )
 
+            // 2. ABONO INICIAL / ADELANTO (Opcional)
+            textReutilizable(
+                textoActual = estado.abonoInicial,
+                textoFondo = "Abono / Adelanto (Opcional)",
+                textoPrefijo = "$ ",
+                tipoTeclado = KeyboardType.Decimal,
+                alEscribir = { entrada ->
+                    // Usamos tu misma lógica de formateo de números
+                    val textoLimpio = entrada.replace(".", "")
+                    if (textoLimpio.count { it == ',' } <= 1 && textoLimpio.replace(",", "").all { it.isDigit() }) {
+                        val partes = textoLimpio.split(",")
+                        val parteEntera = partes[0]
+                        val parteDecimal = if (partes.size > 1) "," + partes[1] else ""
+                        val enterosFormateados = parteEntera.reversed().chunked(3).joinToString(".").reversed()
+                        viewModel.onAbonoChange(enterosFormateados + parteDecimal)
+                    }
+                }
+            )
+
+            // 3. NÚMERO DE CUOTAS
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Box(modifier = Modifier.fillMaxWidth(0.5f)) {
+                    textReutilizable(
+                        textoActual = estado.cuotas,
+                        textoFondo = "N° Cuotas",
+                        tipoTeclado = KeyboardType.Number,
+                        alEscribir = { viewModel.onCuotasChange(it) }
+                    )
+                }
+            }
+
+
+
             textReutilizable(
                 textoActual = estado.tipoDeuda,
                 textoFondo = "Tipo de Préstamo",
@@ -303,6 +347,49 @@ fun datos_prestamo(viewModel: RDeudaViewModel) {
                             color = if (seleccionado) Color.White else estados,
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+
+            // FRECUENCIA CON LA QUE VAN A CANCELAR
+            Text(
+                text = "FRECUENCIA DE PAGO",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = estados,
+                modifier = Modifier.padding(start = 8.dp, bottom = 12.dp, top = 12.dp)
+            )
+
+            val opcionesFrecuencia = listOf("SEMANAL", "QUINCENAL", "MENSUAL")
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 10.dp)
+                    .height(45.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(fondo2),
+                verticalAlignment = Alignment.CenterVertically
+            ){
+                opcionesFrecuencia.forEach { opcion ->
+                    val seleccionado = estado.frecuenciaPago == opcion
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(50))
+                            .background(if (seleccionado) estados else Color.Transparent)
+                            .clickable { viewModel.onFrecuenciaChange(opcion) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = opcion,
+                            color = if (seleccionado) Color.White else estados,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
                             textAlign = TextAlign.Center
                         )
                     }

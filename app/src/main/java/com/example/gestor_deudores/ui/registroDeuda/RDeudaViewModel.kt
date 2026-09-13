@@ -9,10 +9,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 data class R_DeudaEstado(
     val idDeudor: Int = 0,
     val monto : String = "",
+    val abonoInicial: String = "",
+    val cuotas: String = "",
+    val frecuenciaPago: String = "SEMANAL", // <-- NUEVO
     val tipoDeuda: String = "",
     val fecha: String = "",
     val rol: String = "CLIENTE",
@@ -51,52 +58,93 @@ class RDeudaViewModel(private val deudaDao: DeudaDao): ViewModel(){
         _uiState.update { it.copy(rol = nuevoRol, error = null) }
     }
 
+    fun onFrecuenciaChange(nuevaFrecuencia: String) {
+        _uiState.update { it.copy(frecuenciaPago = nuevaFrecuencia, error = null) }
+    }
+
+    fun onAbonoChange(nuevoAbono: String) {
+        _uiState.update { it.copy(abonoInicial = nuevoAbono, error = null) }
+    }
+
+    fun onCuotasChange(nuevasCuotas: String) {
+        // Solo permitimos números enteros para las cuotas
+        if (nuevasCuotas.all { it.isDigit() }) {
+            _uiState.update { it.copy(cuotas = nuevasCuotas, error = null) }
+        }
+    }
+
     fun GuardarDeuda(){
         val estado = _uiState.value
 
         val montoLimpio = estado.monto.replace(".", "").replace(",", ".")
+        val monto_Double = montoLimpio.toDoubleOrNull() ?: 0.0
 
-        // Ahora sí lo convertimos a número seguro
-        val monto_Double = montoLimpio.toDoubleOrNull()
+        val abonoLimpio = estado.abonoInicial.replace(".", "").replace(",", ".")
+        val abono_Double = abonoLimpio.toDoubleOrNull() ?: 0.0
 
-        if (monto_Double == null || monto_Double <= 0.0) {
+        if (monto_Double <= 0.0) {
             _uiState.update { it.copy(error = "Ingresa un monto válido mayor a cero") }
             return
         }
-        // A. Validaciones críticas
-        if (estado.idDeudor == 0) {
-            _uiState.update { it.copy(error = "Error crítico: Cliente no identificado") }
+        if (estado.idDeudor == 0 || estado.fecha.isBlank() || estado.tipoDeuda.isBlank()) {
+            _uiState.update { it.copy(error = "Faltan datos obligatorios") }
             return
         }
 
-        val montoDouble = estado.monto.toDoubleOrNull()
-        if (montoDouble == null || montoDouble <= 0.0) {
-            _uiState.update { it.copy(error = "Ingresa un monto válido mayor a cero") }
-            return
+        // --- CÁLCULO INTELIGENTE DE CUOTAS Y FECHAS ---
+        val numCuotas = estado.cuotas.toIntOrNull() ?: 1
+        var textoCuotas = ""
+
+        if (numCuotas > 1) {
+            val formato = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+            val fechaBase = try { formato.parse(estado.fecha) } catch (e: Exception) {
+                Date()
+            }
+            val calendario = Calendar.getInstance().apply { time = fechaBase }
+
+            val fechasList = mutableListOf<String>()
+            for (i in 1..numCuotas) {
+                when (estado.frecuenciaPago) {
+                    "SEMANAL" -> calendario.add(Calendar.DAY_OF_YEAR, 7)
+                    "QUINCENAL" -> calendario.add(Calendar.DAY_OF_YEAR, 15)
+                    "MENSUAL" -> calendario.add(Calendar.MONTH, 1)
+                }
+                fechasList.add(formato.format(calendario.time))
+            }
+            textoCuotas = " | Paga en $numCuotas cuotas (${estado.frecuenciaPago.lowercase()}). Vencimientos: ${fechasList.joinToString(", ")}"
         }
 
-        if (estado.fecha.isBlank() || estado.tipoDeuda.isBlank()) {
-            _uiState.update { it.copy(error = "La fecha y el tipo de deuda son obligatorios") }
-            return
-        }
+        val descripcionFinal = "${estado.descripcion}$textoCuotas"
 
         viewModelScope.launch {
             val nuevaDeuda = Deuda(
-            idDeudor = estado.idDeudor,
+                idDeudor = estado.idDeudor,
                 montoInicial = monto_Double,
                 montoRestante = monto_Double,
                 tipoDeuda = estado.tipoDeuda,
                 fecha = estado.fecha,
                 rol = estado.rol,
-                descripcion = estado.descripcion,
-                estado = "Pendiente" // Estado inicial automático
+                descripcion = descripcionFinal,
+                estado = "Pendiente"
             )
             deudaDao.agregarDeuda(nuevaDeuda)
 
+            if (abono_Double > 0.0) {
+                val reciboAdelanto = Deuda(
+                    idDeudor = estado.idDeudor,
+                    montoInicial = 0.0,
+                    montoRestante = -abono_Double,
+                    tipoDeuda = "Abono Inicial",
+                    fecha = estado.fecha,
+                    rol = "PAGO",
+                    descripcion = "Adelanto entregado al registrar el pedido",
+                    estado = "Activo"
+                )
+                deudaDao.agregarDeuda(reciboAdelanto)
+            }
+
             _uiState.update { it.copy(guardadoExitoso = true) }
-
         }
-
     }
     // Limpieza tras el éxito
     fun reiniciarEstadoGuardado() {

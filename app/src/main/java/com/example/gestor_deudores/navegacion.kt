@@ -11,6 +11,7 @@ import androidx.navigation.navArgument
 // Importamos con un alias (as) para que no haya conflicto si ambas funciones se llaman "Principal"
 import com.example.gestor_deudores.ui.Registro.Principal as PantallaRegistroDeudor
 import com.example.gestor_deudores.ui.Registro.RegistroDeudorViewModel
+import com.example.gestor_deudores.ui.home.HistorialDeudorView
 import com.example.gestor_deudores.ui.home.HomeViewModel
 import com.example.gestor_deudores.ui.home.homePrincipal
 import com.example.gestor_deudores.ui.registroDeuda.Principal as PantallaRegistroDeuda
@@ -94,6 +95,24 @@ fun NavegacionPrincipal(
                 onNavegarAtras = {
                     // Cuando guarde con éxito, volvemos al inicio
                     navController.popBackStack(rutas.HOME, inclusive = false)
+                }
+            )
+        }
+
+        // ==========================================
+        // 3. PANTALLA: HISTORIAL DE DEUDOR
+        // ==========================================
+        composable(
+            route = rutas.HISTORIAL_DEUDOR_TEMPLATE,
+            arguments = listOf(navArgument("id") { type = NavType.IntType })
+        ) { backStackEntry ->
+            val idRecibido = backStackEntry.arguments?.getInt("id") ?: 0
+
+            HistorialDeudorView(
+                idDeudor = idRecibido,
+                viewModel = viewModelHome,
+                onVolver = {
+                    navController.popBackStack() // Nos devuelve al inicio
                 }
             )
         }
