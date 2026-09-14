@@ -44,6 +44,9 @@ interface DeudaDao {
     @Delete
     suspend fun eliminarDeuda(deuda: Deuda)
 
+    @Query("SELECT * FROM Tabla_Deuda WHERE id = :idDeuda")
+    suspend fun obtenerDeudaPorId(idDeuda: Int): Deuda?
+
     // --- ¡AQUÍ VA LA NUEVA FUNCIÓN! ---
     @Query("DELETE FROM Tabla_Deuda WHERE idDeudor = :idDeudor")
     suspend fun eliminarDeudasDeUsuario(idDeudor: Int)

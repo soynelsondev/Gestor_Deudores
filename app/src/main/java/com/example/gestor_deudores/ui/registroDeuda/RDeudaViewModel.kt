@@ -15,6 +15,7 @@ import java.util.Date
 import java.util.Locale
 
 data class R_DeudaEstado(
+    val idDeudaActual: Int = 0,
     val idDeudor: Int = 0,
     val monto : String = "",
     val abonoInicial: String = "",
@@ -36,6 +37,25 @@ class RDeudaViewModel(private val deudaDao: DeudaDao): ViewModel(){
     // Esta función es vital: la llamas apenas abres la pantalla para inyectarle el ID del cliente
     fun inicializarIdDeudor(id: Int) {
         _uiState.update { it.copy(idDeudor = id) }
+    }
+
+    fun cargarDeuda(idDeuda: Int) {
+        viewModelScope.launch {
+            val deuda = deudaDao.obtenerDeudaPorId(idDeuda)
+            if (deuda != null) {
+                _uiState.update {
+                    it.copy(
+                        idDeudaActual = deuda.id,
+                        idDeudor = deuda.idDeudor,
+                        monto = deuda.montoInicial.toString(),
+                        tipoDeuda = deuda.tipoDeuda,
+                        fecha = deuda.fecha,
+                        rol = deuda.rol,
+                        descripcion = deuda.descripcion.substringBefore(" | Paga en")
+                    )
+                }
+            }
+        }
     }
 
     fun onMontoChange(nuevoMonto: String) {
@@ -117,30 +137,63 @@ class RDeudaViewModel(private val deudaDao: DeudaDao): ViewModel(){
         val descripcionFinal = "${estado.descripcion}$textoCuotas"
 
         viewModelScope.launch {
-            val nuevaDeuda = Deuda(
-                idDeudor = estado.idDeudor,
-                montoInicial = monto_Double,
-                montoRestante = monto_Double,
-                tipoDeuda = estado.tipoDeuda,
-                fecha = estado.fecha,
-                rol = estado.rol,
-                descripcion = descripcionFinal,
-                estado = "Pendiente"
-            )
-            deudaDao.agregarDeuda(nuevaDeuda)
-
-            if (abono_Double > 0.0) {
-                val reciboAdelanto = Deuda(
+            if (estado.idDeudaActual > 0) {
+                // MODO EDICIÓN
+                val deudaExistente = deudaDao.obtenerDeudaPorId(estado.idDeudaActual)
+                if (deudaExistente != null) {
+                    val diferencia = monto_Double - deudaExistente.montoInicial
+                    val deudaEditada = deudaExistente.copy(
+                        montoInicial = monto_Double,
+                        montoRestante = deudaExistente.montoRestante + diferencia,
+                        tipoDeuda = estado.tipoDeuda,
+                        fecha = estado.fecha,
+                        rol = estado.rol,
+                        descripcion = descripcionFinal
+                    )
+                    deudaDao.actualizarDeuda(deudaEditada)
+                    
+                    // Si se hace un nuevo abono durante la edición (aunque usualmente se hace desde el home, lo soportamos)
+                    if (abono_Double > 0.0) {
+                        val reciboAdelanto = Deuda(
+                            idDeudor = estado.idDeudor,
+                            montoInicial = 0.0,
+                            montoRestante = -abono_Double,
+                            tipoDeuda = "Abono Adicional",
+                            fecha = estado.fecha,
+                            rol = "PAGO",
+                            descripcion = "Abono agregado en edición",
+                            estado = "Activo"
+                        )
+                        deudaDao.agregarDeuda(reciboAdelanto)
+                    }
+                }
+            } else {
+                // MODO CREACIÓN
+                val nuevaDeuda = Deuda(
                     idDeudor = estado.idDeudor,
-                    montoInicial = 0.0,
-                    montoRestante = -abono_Double,
-                    tipoDeuda = "Abono Inicial",
+                    montoInicial = monto_Double,
+                    montoRestante = monto_Double,
+                    tipoDeuda = estado.tipoDeuda,
                     fecha = estado.fecha,
-                    rol = "PAGO",
-                    descripcion = "Adelanto entregado al registrar el pedido",
-                    estado = "Activo"
+                    rol = estado.rol,
+                    descripcion = descripcionFinal,
+                    estado = "Pendiente"
                 )
-                deudaDao.agregarDeuda(reciboAdelanto)
+                deudaDao.agregarDeuda(nuevaDeuda)
+
+                if (abono_Double > 0.0) {
+                    val reciboAdelanto = Deuda(
+                        idDeudor = estado.idDeudor,
+                        montoInicial = 0.0,
+                        montoRestante = -abono_Double,
+                        tipoDeuda = "Abono Inicial",
+                        fecha = estado.fecha,
+                        rol = "PAGO",
+                        descripcion = "Adelanto entregado al registrar el pedido",
+                        estado = "Activo"
+                    )
+                    deudaDao.agregarDeuda(reciboAdelanto)
+                }
             }
 
             _uiState.update { it.copy(guardadoExitoso = true) }

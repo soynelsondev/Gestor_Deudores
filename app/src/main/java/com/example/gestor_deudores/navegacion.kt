@@ -53,19 +53,44 @@ fun NavegacionPrincipal(
 
         composable(
             route = rutas.EDITAR_DEUDOR_TEMPLATE,
-            arguments = listOf(navArgument("id") { type = NavType.IntType })
+            arguments = listOf(
+                navArgument("id") { type = NavType.IntType },
+                navArgument("idDeuda") { type = NavType.IntType }
+            )
         ) { backStackEntry ->
 
             // Atrapamos el ID que mandaste desde el botón del lapicito
             val idAEditar = backStackEntry.arguments?.getInt("id") ?: 0
+            val idDeuda = backStackEntry.arguments?.getInt("idDeuda") ?: 0
 
-            // TODO: Aquí tendrías una función en tu RegistroDeudorViewModel para buscar a la persona
-             viewModelRegistro.cargarDeudor(idAEditar)
+            viewModelRegistro.cargarDeudor(idAEditar)
 
             PantallaRegistroDeudor(
                 viewModel = viewModelRegistro,
                 onNavegarADeuda = {
-                    // Al terminar de editar, usualmente regresas al Home
+                    // Al terminar de editar el deudor, navegamos a editar la deuda
+                    navController.navigate(rutas.crearRutaEditarDeuda(idDeuda))
+                }
+            )
+        }
+
+        // ==========================================
+        // 1.5. PANTALLA: EDITAR DEUDA
+        // ==========================================
+        composable(
+            route = rutas.EDITAR_DEUDA_TEMPLATE,
+            arguments = listOf(navArgument("idDeuda") { type = NavType.IntType })
+        ) { backStackEntry ->
+
+            val idDeuda = backStackEntry.arguments?.getInt("idDeuda") ?: 0
+
+            // Le inyectamos el ID de la deuda al ViewModel
+            viewModelDeuda.cargarDeuda(idDeuda)
+
+            PantallaRegistroDeuda(
+                viewModel = viewModelDeuda,
+                onNavegarAtras = {
+                    // Cuando guarde con éxito, volvemos al inicio
                     navController.popBackStack(rutas.HOME, inclusive = false)
                 }
             )

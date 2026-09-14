@@ -158,7 +158,7 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
                         montoRestante = paquete.montoRestante,onEditarClick = {
                             // Para editar, viajamos a la ruta de registro PERO enviándole el ID
                             // (Tendremos que ajustar rutas.kt para que acepte este ID)
-                            navController.navigate(rutas.crearRutaEditarDeudor(paquete.deudor.id))
+                            navController.navigate(rutas.crearRutaEditarDeudor(paquete.deudor.id, paquete.deuda.id))
                         },
 
                         onAbonarClick = {
