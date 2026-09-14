@@ -249,34 +249,37 @@ fun datos_prestamo(viewModel: RDeudaViewModel) {
                 }
             )
 
-            // 2. ABONO INICIAL / ADELANTO (Opcional)
-            textReutilizable(
-                textoActual = estado.abonoInicial,
-                textoFondo = "Abono / Adelanto (Opcional)",
-                textoPrefijo = "$ ",
-                tipoTeclado = KeyboardType.Decimal,
-                alEscribir = { entrada ->
-                    // Usamos tu misma lógica de formateo de números
-                    val textoLimpio = entrada.replace(".", "")
-                    if (textoLimpio.count { it == ',' } <= 1 && textoLimpio.replace(",", "").all { it.isDigit() }) {
-                        val partes = textoLimpio.split(",")
-                        val parteEntera = partes[0]
-                        val parteDecimal = if (partes.size > 1) "," + partes[1] else ""
-                        val enterosFormateados = parteEntera.reversed().chunked(3).joinToString(".").reversed()
-                        viewModel.onAbonoChange(enterosFormateados + parteDecimal)
+            // 2. ABONO INICIAL / ADELANTO (Solo visible en modo creación)
+            if (estado.idDeudaActual == 0) {
+                textReutilizable(
+                    textoActual = estado.abonoInicial,
+                    textoFondo = "Abono / Adelanto (Opcional)",
+                    textoPrefijo = "$ ",
+                    tipoTeclado = KeyboardType.Decimal,
+                    alEscribir = { entrada ->
+                        val textoLimpio = entrada.replace(".", "")
+                        if (textoLimpio.count { it == ',' } <= 1 && textoLimpio.replace(",", "").all { it.isDigit() }) {
+                            val partes = textoLimpio.split(",")
+                            val parteEntera = partes[0]
+                            val parteDecimal = if (partes.size > 1) "," + partes[1] else ""
+                            val enterosFormateados = parteEntera.reversed().chunked(3).joinToString(".").reversed()
+                            viewModel.onAbonoChange(enterosFormateados + parteDecimal)
+                        }
                     }
-                }
-            )
+                )
+            }
 
-            // 3. NÚMERO DE CUOTAS
-            Row(modifier = Modifier.fillMaxWidth()) {
-                Box(modifier = Modifier.fillMaxWidth(0.5f)) {
-                    textReutilizable(
-                        textoActual = estado.cuotas,
-                        textoFondo = "N° Cuotas",
-                        tipoTeclado = KeyboardType.Number,
-                        alEscribir = { viewModel.onCuotasChange(it) }
-                    )
+            // 3. NÚMERO DE CUOTAS (Solo visible en modo creación)
+            if (estado.idDeudaActual == 0) {
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    Box(modifier = Modifier.fillMaxWidth(0.5f)) {
+                        textReutilizable(
+                            textoActual = estado.cuotas,
+                            textoFondo = "N° Cuotas",
+                            tipoTeclado = KeyboardType.Number,
+                            alEscribir = { viewModel.onCuotasChange(it) }
+                        )
+                    }
                 }
             }
 

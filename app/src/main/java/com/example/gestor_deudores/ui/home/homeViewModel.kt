@@ -83,8 +83,9 @@ class HomeViewModel(private val dao: DeudorDao,private val dao2: DeudaDao) : Vie
             val deudasDeEstaPersona = listaDeDeudas.filter { it.idDeudor == deudor.id }
             val deudaTotal = deudasDeEstaPersona.sumOf { it.montoRestante }
 
-            // Tomamos la deuda más reciente para mostrar en la tarjeta (tipo, fecha, descripción)
-            val deudaPrincipal = deudasDeEstaPersona.lastOrNull()
+            // Tomamos la deuda más reciente para mostrar en la tarjeta (ignorando los abonos para que la edición funcione con la deuda real)
+            val deudaPrincipal = deudasDeEstaPersona.lastOrNull { it.rol != "PAGO" } 
+                ?: deudasDeEstaPersona.lastOrNull()
 
             // Si la persona tiene al menos una deuda registrada, evaluamos en qué pestaña va
             if (deudaPrincipal != null) {

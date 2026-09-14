@@ -48,6 +48,7 @@ class RDeudaViewModel(private val deudaDao: DeudaDao): ViewModel(){
                         idDeudaActual = deuda.id,
                         idDeudor = deuda.idDeudor,
                         monto = deuda.montoInicial.toString(),
+                        abonoInicial = "", // Limpiamos el abono para no duplicarlo por error
                         tipoDeuda = deuda.tipoDeuda,
                         fecha = deuda.fecha,
                         rol = deuda.rol,
@@ -152,20 +153,9 @@ class RDeudaViewModel(private val deudaDao: DeudaDao): ViewModel(){
                     )
                     deudaDao.actualizarDeuda(deudaEditada)
                     
-                    // Si se hace un nuevo abono durante la edición (aunque usualmente se hace desde el home, lo soportamos)
-                    if (abono_Double > 0.0) {
-                        val reciboAdelanto = Deuda(
-                            idDeudor = estado.idDeudor,
-                            montoInicial = 0.0,
-                            montoRestante = -abono_Double,
-                            tipoDeuda = "Abono Adicional",
-                            fecha = estado.fecha,
-                            rol = "PAGO",
-                            descripcion = "Abono agregado en edición",
-                            estado = "Activo"
-                        )
-                        deudaDao.agregarDeuda(reciboAdelanto)
-                    }
+                    // Bloqueamos la creación de nuevos abonos desde aquí en modo edición
+                    // para evitar ensuciar el historial accidentalmente.
+                    // Si el usuario quiere abonar, lo hará desde la pantalla Home.
                 }
             } else {
                 // MODO CREACIÓN
