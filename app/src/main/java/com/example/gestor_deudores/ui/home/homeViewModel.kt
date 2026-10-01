@@ -6,6 +6,8 @@ import com.example.gestor_deudores.data.Deuda
 import com.example.gestor_deudores.data.DeudaDao
 import com.example.gestor_deudores.data.Deudor
 import com.example.gestor_deudores.data.DeudorDao
+import com.example.gestor_deudores.data.EstadoCobro
+import com.example.gestor_deudores.data.calcularEstadoCobro
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.WhileSubscribed
@@ -104,7 +106,6 @@ class HomeViewModel(private val dao: DeudorDao,private val dao2: DeudaDao) : Vie
 
             // Buscamos sus deudas y calculamos el total
             val deudasDeEstaPersona = listaDeDeudas.filter { it.idDeudor == deudor.id }
-            val deudaTotal = deudasDeEstaPersona.sumOf { it.montoRestante }
 
             // Tomamos la deuda más reciente para mostrar en la tarjeta
             val deudaPrincipal = deudasDeEstaPersona.lastOrNull { it.rol != "PAGO" } 
@@ -113,9 +114,12 @@ class HomeViewModel(private val dao: DeudorDao,private val dao2: DeudaDao) : Vie
             // Si no tiene deuda (ej. recién creado), le creamos una ficticia para que igual se muestre
             val deudaParaMostrar = deudaPrincipal ?: Deuda(idDeudor = deudor.id, montoInicial = 0.0, montoRestante = 0.0, tipoDeuda = "Sin registro", fecha = "", rol = "CLIENTE", descripcion = "", estado = "")
 
+            // Calculamos matemáticamente las cuotas y vencimientos usando nuestro nuevo archivo CobroUtils
+            val estadoCobro = calcularEstadoCobro(deudasDeEstaPersona)
+
             val perteneceAPestaña = when (pestaña) {
-                Pestaña.PENDIENTES -> deudaTotal > 0.0
-                Pestaña.HISTORIAL -> deudaTotal <= 0.0
+                Pestaña.PENDIENTES -> estadoCobro.saldo > 0.0
+                Pestaña.HISTORIAL -> estadoCobro.saldo <= 0.0
                 Pestaña.ARCHIVADOS -> true // En archivados ya filtramos antes
             }
 
@@ -125,14 +129,24 @@ class HomeViewModel(private val dao: DeudorDao,private val dao2: DeudaDao) : Vie
                     DeudorDetalle(
                         deudor = deudor,
                         deuda = deudaParaMostrar,
-                        montoRestante = deudaTotal
+                        montoRestante = estadoCobro.saldo,
+                        estadoCobro = estadoCobro // <-- Agregamos el cálculo
                     )
                 )
             }
         }
 
+        // --- ORDEN DE PRIORIDAD (La magia de la urgencia) ---
+        // 1. Vencidos arriba
+        // 2. Si no están vencidos, ordenamos por fecha de próximo vencimiento
+        val listaOrdenada = listaListaParaLaUI.sortedWith(compareByDescending<DeudorDetalle> { 
+            it.estadoCobro.vencida 
+        }.thenBy { 
+            it.estadoCobro.proximoVencimientoMillis ?: Long.MAX_VALUE 
+        })
+
         // 4. Entregamos la lista final llena de cajas
-        listaListaParaLaUI
+        listaOrdenada
 
     }.stateIn(
         scope = viewModelScope,
@@ -148,7 +162,7 @@ class HomeViewModel(private val dao: DeudorDao,private val dao2: DeudaDao) : Vie
     fun registrarAbono(deudor: Deudor, montoAbono: Double) {
         viewModelScope.launch {
             // Obtenemos la fecha actual del teléfono para que el abono quede registrado con el día exacto
-            val fechaActual = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date())
+            val fechaActual = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())
 
             val nuevoAbono = Deuda(
                 idDeudor = deudor.id,
@@ -156,6 +170,8 @@ class HomeViewModel(private val dao: DeudorDao,private val dao2: DeudaDao) : Vie
                 montoRestante = -montoAbono, // ¡El truco de magia! El signo negativo restará la deuda total
                 tipoDeuda = "Abono / Pago Parcial",
                 fecha = fechaActual,
+                fechaMillis = System.currentTimeMillis(),
+                tipo = "ABONO",
                 descripcion = "Abono registrado desde la pantalla principal",
                 rol = "PAGO", // Puedes usar un rol especial o dejarlo vacío
                 estado = "Activo" // Debe coincidir con lo que suma tu DAO
@@ -170,6 +186,7 @@ class HomeViewModel(private val dao: DeudorDao,private val dao2: DeudaDao) : Vie
 data class DeudorDetalle(
     val deudor: Deudor,
     val deuda: Deuda,
-    val montoRestante: Double
+    val montoRestante: Double,
+    val estadoCobro: EstadoCobro
 )
 

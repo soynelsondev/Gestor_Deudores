@@ -149,11 +149,14 @@ class RDeudaViewModel(private val deudaDao: DeudaDao): ViewModel(){
         var textoCuotas = ""
 
         if (numCuotas > 1) {
-            val formato = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+            // ¡EL ARREGLO! Forzamos la zona horaria UTC para que no nos reste un día por diferencias locales
+            val formato = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).apply {
+                timeZone = java.util.TimeZone.getTimeZone("UTC")
+            }
             val fechaBase = try { formato.parse(estado.fecha) } catch (e: Exception) {
                 Date()
             }
-            val calendario = Calendar.getInstance().apply { time = fechaBase }
+            val calendario = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).apply { time = fechaBase }
 
             val fechasList = mutableListOf<String>()
             for (i in 1..numCuotas) {
@@ -169,33 +172,42 @@ class RDeudaViewModel(private val deudaDao: DeudaDao): ViewModel(){
 
         val descripcionFinal = "${estado.descripcion}$textoCuotas"
 
+        // === Convertir la fecha a milisegundos para poder ordenarla matemáticamente ===
+        var fechaEnMilisegundos = 0L
+        try {
+            val formato = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).apply {
+                timeZone = java.util.TimeZone.getTimeZone("UTC") // <-- UTC TAMBIÉN AQUÍ
+            }
+            val dateParseada = formato.parse(estado.fecha)
+            if (dateParseada != null) {
+                fechaEnMilisegundos = dateParseada.time
+            }
+        } catch (e: Exception) {
+            fechaEnMilisegundos = System.currentTimeMillis()
+        }
+
         viewModelScope.launch {
             if (estado.idDeudaActual > 0) {
                 // MODO EDICIÓN
                 val deudaExistente = deudaDao.obtenerDeudaPorId(estado.idDeudaActual)
                 if (deudaExistente != null) {
                     
-                    // Solo actualizamos el montoRestante al nuevo valor si es un cargo normal
-                    // y no un abono. (Si es abono, se edita directo sin calcular diferencia)
-                    val nuevoRestante = if (deudaExistente.rol != "PAGO") {
+                    val nuevoRestante = if (deudaExistente.tipo == "CARGO") {
                         monto_Double 
                     } else {
                         -monto_Double // Los abonos siempre se guardan negativos
                     }
 
                     val deudaEditada = deudaExistente.copy(
-                        montoInicial = if (deudaExistente.rol != "PAGO") monto_Double else 0.0,
+                        montoInicial = if (deudaExistente.tipo == "CARGO") monto_Double else 0.0,
                         montoRestante = nuevoRestante,
                         tipoDeuda = estado.tipoDeuda,
                         fecha = estado.fecha,
+                        fechaMillis = fechaEnMilisegundos,
                         rol = estado.rol,
                         descripcion = descripcionFinal
                     )
                     deudaDao.actualizarDeuda(deudaEditada)
-                    
-                    // Bloqueamos la creación de nuevos abonos desde aquí en modo edición
-                    // para evitar ensuciar el historial accidentalmente.
-                    // Si el usuario quiere abonar, lo hará desde la pantalla Home.
                 }
             } else {
                 // MODO CREACIÓN
@@ -205,6 +217,10 @@ class RDeudaViewModel(private val deudaDao: DeudaDao): ViewModel(){
                     montoRestante = monto_Double,
                     tipoDeuda = estado.tipoDeuda,
                     fecha = estado.fecha,
+                    fechaMillis = fechaEnMilisegundos,
+                    tipo = "CARGO",
+                    numCuotas = numCuotas,
+                    frecuencia = estado.frecuenciaPago,
                     rol = estado.rol,
                     descripcion = descripcionFinal,
                     estado = "Pendiente"
@@ -218,6 +234,9 @@ class RDeudaViewModel(private val deudaDao: DeudaDao): ViewModel(){
                         montoRestante = -abono_Double,
                         tipoDeuda = "Abono Inicial",
                         fecha = estado.fecha,
+                        fechaMillis = fechaEnMilisegundos,
+                        tipo = "ABONO",
+                        numCuotas = 1,
                         rol = "PAGO",
                         descripcion = "Adelanto entregado al registrar el pedido",
                         estado = "Activo"

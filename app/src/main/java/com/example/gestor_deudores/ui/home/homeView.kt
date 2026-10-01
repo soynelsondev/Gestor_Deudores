@@ -77,7 +77,10 @@ import com.example.gestor_deudores.ui.theme.estados
 import com.example.gestor_deudores.ui.theme.fondo
 import com.example.gestor_deudores.ui.theme.fondo2
 import com.example.gestor_deudores.ui.theme.fondo_claro
+import com.example.gestor_deudores.data.EstadoCobro
 import java.text.NumberFormat
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 
@@ -200,6 +203,7 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
                         onHistorialClick= {
                             navController.navigate(rutas.crearRutaHistorial(paquete.deudor.id))
                         },
+                        estadoCobro = paquete.estadoCobro,
                         pestañaActual = pestañaActual
                     )
 
@@ -399,6 +403,7 @@ fun carDeudores(
     deudor: Deudor,
     deuda: Deuda,
     montoRestante: Double,
+    estadoCobro: EstadoCobro?, // <-- AHORA RECIBE EL CÁLCULO
     pestañaActual: Pestaña,
     onEditarClick: () -> Unit,
     onAbonarClick: () -> Unit,
@@ -459,19 +464,66 @@ fun carDeudores(
             Spacer(modifier = Modifier.height(16.dp))
 
             // --- PARTE INFERIOR: Detalles de la deuda ---
-            Text(text = "Monto Restante:", fontSize = 12.sp, color = Color.Gray)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(text = "Monto Restante:", fontSize = 12.sp, color = Color.Gray)
 
-            val formatoMoneda = NumberFormat.getCurrencyInstance(Locale("en", "US"))
-                val montoFormateado = formatoMoneda.format(montoRestante)
-            Text(
-                text = "$montoFormateado",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = componentes
-            )
+                    val formatoMoneda = NumberFormat.getCurrencyInstance(Locale("en", "US"))
+                    val montoFormateado = formatoMoneda.format(montoRestante)
+                    Text(
+                        text = "$montoFormateado",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = componentes
+                    )
+                }
+
+                // --- NUEVO: ETIQUETA DE VENCIMIENTO ---
+                if (estadoCobro != null && montoRestante > 0.0) {
+                    if (estadoCobro.vencida) {
+                        // Etiqueta Roja (Vencida)
+                        Box(
+                            modifier = Modifier
+                                .background(Color(0xFFFFEBEE), shape = RoundedCornerShape(8.dp))
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            val textoAtraso = if (estadoCobro.diasAtraso == 1L) "hace 1 día" else "hace ${estadoCobro.diasAtraso} días"
+                            Text(
+                                text = "VENCIDA $textoAtraso",
+                                color = Color.Red,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    } else if (estadoCobro.proximoVencimientoMillis != null) {
+                        // Etiqueta Verde (Al día)
+                        val fechaFormateada = SimpleDateFormat("dd/MM", Locale.getDefault()).format(Date(estadoCobro.proximoVencimientoMillis))
+                        val cuotaFormateada = NumberFormat.getCurrencyInstance(Locale("en", "US")).format(estadoCobro.proximaCuotaMonto)
+                        
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(text = "Próxima cuota", fontSize = 10.sp, color = Color.Gray)
+                            Text(
+                                text = "$cuotaFormateada",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = estados
+                            )
+                            Text(
+                                text = "vence el $fechaFormateada",
+                                fontSize = 11.sp,
+                                color = estados
+                            )
+                        }
+                    }
+                }
+            }
 
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Colocamos el resto de los datos dinámicos concatenando textos
             Text(text = "Pedido/Producto: ${deuda.tipoDeuda}", fontSize = 14.sp, color = Color.DarkGray)
