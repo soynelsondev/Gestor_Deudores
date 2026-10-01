@@ -29,7 +29,11 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
+import com.example.gestor_deudores.data.abrirWhatsApp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -411,6 +415,7 @@ fun carDeudores(
     onRestaurarClick: () -> Unit,
     onHistorialClick: () -> Unit 
 ){
+    val contexto = LocalContext.current
 
     Card(
         modifier = Modifier
@@ -572,6 +577,42 @@ fun carDeudores(
                         )
                     }
                 } else {
+                    // --- BOTÓN WHATSAPP (VERDE) ---
+                    val tieneTelefono = deudor.telf.isNotBlank()
+                    
+                    IconButton(
+                        onClick = {
+                            if (!tieneTelefono) {
+                                Toast.makeText(contexto, "El cliente no tiene teléfono registrado", Toast.LENGTH_SHORT).show()
+                            } else {
+                                val saldoFormateado = NumberFormat.getCurrencyInstance(Locale("en", "US")).format(montoRestante)
+                                val cuotaFormateada = NumberFormat.getCurrencyInstance(Locale("en", "US")).format(estadoCobro?.proximaCuotaMonto ?: 0.0)
+                                val fechaFormateada = if (estadoCobro?.proximoVencimientoMillis != null) 
+                                    SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(estadoCobro.proximoVencimientoMillis)) 
+                                    else "la brevedad"
+
+                                val mensaje = if (estadoCobro != null && estadoCobro.vencida) {
+                                    val textoAtraso = if (estadoCobro.diasAtraso == 1L) "hace 1 día" else "hace ${estadoCobro.diasAtraso} días"
+                                    "Hola ${deudor.nombre}, te escribimos para recordarte que tu cuota de $cuotaFormateada USD venció $textoAtraso. Tu saldo total pendiente es de $saldoFormateado USD. Por favor indícanos cuándo podrías realizar el pago. ¡Muchas gracias!"
+                                } else {
+                                    "Hola ${deudor.nombre}, te escribimos para recordarte que tu saldo pendiente es de $saldoFormateado USD. Tu próxima cuota de $cuotaFormateada USD vence el $fechaFormateada. ¡Muchas gracias!"
+                                }
+
+                                abrirWhatsApp(contexto, deudor.telf, mensaje)
+                            }
+                        },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(if (tieneTelefono) Color(0xFF25D366) else Color(0xFFCCCCCC), shape = CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Phone,
+                            contentDescription = "Enviar mensaje por WhatsApp",
+                            tint = Color.White
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+
                     // --- BOTÓN VER HISTORIAL ---
                     IconButton(
                         onClick = { onHistorialClick() },
