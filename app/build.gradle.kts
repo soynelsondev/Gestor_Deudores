@@ -76,4 +76,7 @@ dependencies {
     // Librería de navegación para Jetpack Compose
     implementation("androidx.navigation:navigation-compose:2.7.7")
 
+    // Retrofit y Convertidor Gson para consultar la API de Tasas (Dólar BCV)
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
 }
