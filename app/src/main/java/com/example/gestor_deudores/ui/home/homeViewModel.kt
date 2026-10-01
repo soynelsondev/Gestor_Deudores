@@ -8,6 +8,8 @@ import com.example.gestor_deudores.data.Deudor
 import com.example.gestor_deudores.data.DeudorDao
 import com.example.gestor_deudores.data.EstadoCobro
 import com.example.gestor_deudores.data.calcularEstadoCobro
+import android.content.Context
+import com.example.gestor_deudores.data.api.RetrofitClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.WhileSubscribed
@@ -41,6 +43,64 @@ class HomeViewModel(private val dao: DeudorDao,private val dao2: DeudaDao) : Vie
     val textoBusqueda = _textoBusqueda.asStateFlow()
     private val _pestañaActual = MutableStateFlow(Pestaña.PENDIENTES)
     val pestañaActual = _pestañaActual.asStateFlow()
+
+    // --- ESTADOS Y LÓGICA DE TASA BCV Y MONEDA DE VISTA ---
+    private val _precioDolarBCV = MutableStateFlow(0.0)
+    val precioDolarBCV = _precioDolarBCV.asStateFlow()
+
+    private val _monedaVista = MutableStateFlow("USD") // "USD" o "VES"
+    val monedaVista = _monedaVista.asStateFlow()
+
+    private val _fechaTasaBCV = MutableStateFlow("Pendiente")
+    val fechaTasaBCV = _fechaTasaBCV.asStateFlow()
+
+    private val _cargandoTasa = MutableStateFlow(false)
+    val cargandoTasa = _cargandoTasa.asStateFlow()
+
+    private val _errorTasa = MutableStateFlow<String?>(null)
+    val errorTasa = _errorTasa.asStateFlow()
+
+    fun iniciarTasaBCV(contexto: Context) {
+        val prefs = contexto.getSharedPreferences("TasasZubli", Context.MODE_PRIVATE)
+        val ultimoDolarStr = prefs.getString("ultimoDolar", "0.0") ?: "0.0"
+        _precioDolarBCV.value = ultimoDolarStr.toDoubleOrNull() ?: 0.0
+        _monedaVista.value = prefs.getString("monedaVista", "USD") ?: "USD"
+        _fechaTasaBCV.value = prefs.getString("ultimaFecha", "Sin actualizar") ?: "Sin actualizar"
+
+        actualizarTasaBCV(contexto)
+    }
+
+    fun cambiarMonedaVista(nuevaMoneda: String, contexto: Context) {
+        _monedaVista.value = nuevaMoneda
+        val prefs = contexto.getSharedPreferences("TasasZubli", Context.MODE_PRIVATE)
+        prefs.edit().putString("monedaVista", nuevaMoneda).apply()
+    }
+
+    fun actualizarTasaBCV(contexto: Context) {
+        viewModelScope.launch {
+            _cargandoTasa.value = true
+            _errorTasa.value = null
+            try {
+                val dolar = RetrofitClient.apiService.obtenerDolarOficial()
+                val tasaPromedio = dolar.promedio
+                _precioDolarBCV.value = tasaPromedio
+
+                val formato = SimpleDateFormat("dd/MM/yyyy hh:mm a", Locale.getDefault())
+                val fechaActual = formato.format(Date())
+                _fechaTasaBCV.value = fechaActual
+
+                val prefs = contexto.getSharedPreferences("TasasZubli", Context.MODE_PRIVATE)
+                prefs.edit()
+                    .putString("ultimoDolar", tasaPromedio.toString())
+                    .putString("ultimaFecha", fechaActual)
+                    .apply()
+            } catch (e: Exception) {
+                _errorTasa.value = "Sin internet: Usando última tasa guardada"
+            } finally {
+                _cargandoTasa.value = false
+            }
+        }
+    }
 
     fun actualizarBuscador(nuevoTexto: String){
         _textoBusqueda.value   = nuevoTexto

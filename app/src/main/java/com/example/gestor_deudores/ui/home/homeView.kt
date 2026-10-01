@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.ModalDrawerSheet
@@ -63,6 +64,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -114,6 +116,17 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
     val textoBusqueda by viewModel.textoBusqueda.collectAsState()
     val pestañaActual by viewModel.pestañaActual.collectAsState()
     val listaDeudores by viewModel.deudorFiltrados.collectAsState()
+    
+    // --- ESTADOS DE LA TASA BCV Y MONEDA ---
+    val monedaVista by viewModel.monedaVista.collectAsState()
+    val precioDolarBCV by viewModel.precioDolarBCV.collectAsState()
+    val cargandoTasa by viewModel.cargandoTasa.collectAsState()
+    val errorTasa by viewModel.errorTasa.collectAsState()
+
+    LaunchedEffect(Unit) {
+        viewModel.iniciarTasaBCV(context)
+    }
+
     var deudaMaximaPermitida by remember { mutableStateOf(0.0) }
     
     // --- ESTADOS Y LAUNCHERS PARA RESPALDOS ---
@@ -318,7 +331,19 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
                 onPestañaSeleccionada = { nuevaPestaña -> viewModel.cambiarPestaña(nuevaPestaña) }
             )
 
-
+            // --- NUEVO: SELECTOR DE MONEDA (USD / VES) Y TASA BCV ---
+            SelectorMoneda(
+                monedaActual = monedaVista,
+                tasaBCV = precioDolarBCV,
+                cargando = cargandoTasa,
+                errorMsg = errorTasa,
+                onMonedaSeleccionada = { nuevaMoneda ->
+                    viewModel.cambiarMonedaVista(nuevaMoneda, context)
+                },
+                onRefrescarTasa = {
+                    viewModel.actualizarTasaBCV(context)
+                }
+            )
 
 // 5. La lista que dibuja las tarjetas automáticamente
             LazyColumn(
@@ -335,7 +360,12 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
                         val dineroTotal = listaDeudores.sumOf { it.montoRestante }
 
                         // 3. Pintamos la tarjeta
-                        TarjetaResumen(totalPersonas = totalPersonas, dineroTotal = dineroTotal)
+                        TarjetaResumen(
+                            totalPersonas = totalPersonas,
+                            dineroTotalUsd = dineroTotal,
+                            tasaBCV = precioDolarBCV,
+                            monedaVista = monedaVista
+                        )
                     }
                 }
 
@@ -346,7 +376,12 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
                     carDeudores(
                         deudor = paquete.deudor,
                         deuda = paquete.deuda,
-                        montoRestante = paquete.montoRestante,onEditarClick = {
+                        montoRestante = paquete.montoRestante,
+                        estadoCobro = paquete.estadoCobro,
+                        pestañaActual = pestañaActual,
+                        monedaVista = monedaVista,
+                        tasaBCV = precioDolarBCV,
+                        onEditarClick = {
                             // Para editar, viajamos a la ruta de registro PERO enviándole el ID
                             // (Tendremos que ajustar rutas.kt para que acepte este ID)
                             navController.navigate(rutas.crearRutaEditarDeudor(paquete.deudor.id, paquete.deuda.id))
@@ -366,9 +401,7 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
                         },
                         onHistorialClick= {
                             navController.navigate(rutas.crearRutaHistorial(paquete.deudor.id))
-                        },
-                        estadoCobro = paquete.estadoCobro,
-                        pestañaActual = pestañaActual
+                        }
                     )
 
                 }
@@ -583,6 +616,8 @@ fun carDeudores(
     montoRestante: Double,
     estadoCobro: EstadoCobro?, // <-- AHORA RECIBE EL CÁLCULO
     pestañaActual: Pestaña,
+    monedaVista: String = "USD",
+    tasaBCV: Double = 0.0,
     onEditarClick: () -> Unit,
     onAbonarClick: () -> Unit,
     onEliminarClick: () -> Unit,
@@ -651,14 +686,27 @@ fun carDeudores(
                 Column {
                     Text(text = "Monto Restante:", fontSize = 12.sp, color = Color.Gray)
 
-                    val formatoMoneda = NumberFormat.getCurrencyInstance(Locale("en", "US"))
-                    val montoFormateado = formatoMoneda.format(montoRestante)
+                    val montoBs = montoRestante * tasaBCV
+                    val formatoUSD = NumberFormat.getCurrencyInstance(Locale("en", "US")).format(montoRestante)
+                    val formatoBs = "Bs. ${"%.2f".format(montoBs)}"
+
+                    val textoPrincipal = if (monedaVista == "VES" && tasaBCV > 0) formatoBs else formatoUSD
+                    val textoSecundario = if (monedaVista == "VES") formatoUSD else formatoBs
+
                     Text(
-                        text = "$montoFormateado",
-                        fontSize = 24.sp,
+                        text = textoPrincipal,
+                        fontSize = 22.sp,
                         fontWeight = FontWeight.Bold,
                         color = componentes
                     )
+                    if (tasaBCV > 0) {
+                        Text(
+                            text = "($textoSecundario)",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = estados
+                        )
+                    }
                 }
 
                 // --- NUEVO: ETIQUETA DE VENCIMIENTO ---
@@ -765,11 +813,14 @@ fun carDeudores(
                                     SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(estadoCobro.proximoVencimientoMillis)) 
                                     else "la brevedad"
 
+                                val montoBsText = if (tasaBCV > 0) " (equivale a Bs. ${"%.2f".format(montoRestante * tasaBCV)})" else ""
+                                val cuotaBsText = if (tasaBCV > 0 && estadoCobro?.proximaCuotaMonto != null) " (Bs. ${"%.2f".format(estadoCobro.proximaCuotaMonto * tasaBCV)})" else ""
+
                                 val mensaje = if (estadoCobro != null && estadoCobro.vencida) {
                                     val textoAtraso = if (estadoCobro.diasAtraso == 1L) "hace 1 día" else "hace ${estadoCobro.diasAtraso} días"
-                                    "Hola ${deudor.nombre}, te escribimos para recordarte que tu cuota de $cuotaFormateada USD venció $textoAtraso. Tu saldo total pendiente es de $saldoFormateado USD. Por favor indícanos cuándo podrías realizar el pago. ¡Muchas gracias!"
+                                    "Hola ${deudor.nombre}, te escribimos para recordarte que tu cuota de $cuotaFormateada USD$cuotaBsText venció $textoAtraso. Tu saldo total pendiente es de $saldoFormateado USD$montoBsText. Por favor indícanos cuándo podrías realizar el pago. ¡Muchas gracias!"
                                 } else {
-                                    "Hola ${deudor.nombre}, te escribimos para recordarte que tu saldo pendiente es de $saldoFormateado USD. Tu próxima cuota de $cuotaFormateada USD vence el $fechaFormateada. ¡Muchas gracias!"
+                                    "Hola ${deudor.nombre}, te escribimos para recordarte que tu saldo pendiente es de $saldoFormateado USD$montoBsText. Tu próxima cuota de $cuotaFormateada USD$cuotaBsText vence el $fechaFormateada. ¡Muchas gracias!"
                                 }
 
                                 abrirWhatsApp(contexto, deudor.telf, mensaje)
@@ -948,13 +999,101 @@ fun DialogoAbono(
 }
 
 @Composable
-fun TarjetaResumen(totalPersonas: Int, dineroTotal: Double) {
+fun SelectorMoneda(
+    monedaActual: String,
+    tasaBCV: Double,
+    cargando: Boolean,
+    errorMsg: String?,
+    onMonedaSeleccionada: (String) -> Unit,
+    onRefrescarTasa: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Botones de cambio USD / VES
+        Row(
+            modifier = Modifier
+                .background(fondo2, shape = RoundedCornerShape(50))
+                .padding(3.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(if (monedaActual == "USD") estados else Color.Transparent)
+                    .clickable { onMonedaSeleccionada("USD") }
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "💵 USD",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (monedaActual == "USD") Color.White else Color.DarkGray
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(if (monedaActual == "VES") estados else Color.Transparent)
+                    .clickable { onMonedaSeleccionada("VES") }
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "🇻🇪 Bs.",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (monedaActual == "VES") Color.White else Color.DarkGray
+                )
+            }
+        }
+
+        // Indicador de la tasa BCV
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .clip(RoundedCornerShape(50))
+                .clickable { onRefrescarTasa() }
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+        ) {
+            val textoTasa = if (tasaBCV > 0) "Tasa BCV: ${"%.2f".format(tasaBCV)} Bs" else "Cargando..."
+            
+            Text(
+                text = if (errorMsg != null && tasaBCV > 0) "BCV: ${"%.2f".format(tasaBCV)} Bs" else textoTasa,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (errorMsg != null) componentes else estados
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Icon(
+                imageVector = Icons.Default.Refresh,
+                contentDescription = "Actualizar tasa",
+                modifier = Modifier.size(16.dp),
+                tint = estados
+            )
+        }
+    }
+}
+
+@Composable
+fun TarjetaResumen(
+    totalPersonas: Int,
+    dineroTotalUsd: Double,
+    tasaBCV: Double = 0.0,
+    monedaVista: String = "USD"
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = fondo2) // Usamos el color de tu app
+        colors = CardDefaults.cardColors(containerColor = fondo2)
     ) {
         Row(
             modifier = Modifier
@@ -971,19 +1110,32 @@ fun TarjetaResumen(totalPersonas: Int, dineroTotal: Double) {
                     fontSize = 14.sp
                 )
                 Text(
-                    text = "$totalPersonas deudores pendientes",
-                    color = Color.LightGray,
+                    text = "$totalPersonas clientes pendientes",
+                    color = Color.DarkGray,
                     fontSize = 12.sp
                 )
             }
 
-            val formatoUSD = NumberFormat.getCurrencyInstance(Locale("en", "US"))
-            Text(
-                text = formatoUSD.format(dineroTotal),
-                color = Color.White,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold
-            )
+            val totalBs = dineroTotalUsd * tasaBCV
+            val formatoUSD = NumberFormat.getCurrencyInstance(Locale("en", "US")).format(dineroTotalUsd)
+            val formatoBs = "Bs. ${"%.2f".format(totalBs)}"
+
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = if (monedaVista == "VES" && tasaBCV > 0) formatoBs else formatoUSD,
+                    color = Color.White,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                if (tasaBCV > 0) {
+                    Text(
+                        text = if (monedaVista == "VES") "($formatoUSD)" else "($formatoBs)",
+                        color = estados,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
     }
 }
