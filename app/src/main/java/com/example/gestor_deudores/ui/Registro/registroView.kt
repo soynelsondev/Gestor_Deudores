@@ -84,9 +84,9 @@ fun Principal(viewModel: RegistroDeudorViewModel,onNavegarADeuda: (Int) -> Unit)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun toolbar(){
+fun toolbar(titulo: String = "NUEVO DEUDOR"){
     CenterAlignedTopAppBar( // <-- CAMBIADO PARA CENTRAR EL TÍTULO
-        title = { Text("NUEVO DEUDOR", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 24.sp) },
+        title = { Text(titulo, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 24.sp) },
         colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = estados)
     )
 

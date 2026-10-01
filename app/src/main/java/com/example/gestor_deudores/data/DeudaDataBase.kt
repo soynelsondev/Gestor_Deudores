@@ -8,7 +8,9 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [Deudor::class, Deuda::class],
-    version = 1)
+    version = 1,
+    exportSchema = true
+)
 
 abstract class DeudaDataBase: RoomDatabase(){
 

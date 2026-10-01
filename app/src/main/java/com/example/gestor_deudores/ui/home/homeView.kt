@@ -107,7 +107,7 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
         )
     }
 
-    Scaffold (topBar = {toolbar()},
+    Scaffold (topBar = {toolbar(titulo = "Mis cobros")},
         bottomBar = {
             BarraNavegacionInferior(onIrAInicio = {},
                 onIrAAgregar = {
