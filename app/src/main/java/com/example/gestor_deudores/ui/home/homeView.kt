@@ -29,8 +29,18 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.NavigationDrawerItemDefaults
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.DrawerValue
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalContext
 import android.widget.Toast
 import com.example.gestor_deudores.data.abrirWhatsApp
@@ -74,7 +84,14 @@ import com.example.gestor_deudores.data.Deudor
 import com.example.gestor_deudores.ui.Registro.AvatarUsuario
 import com.example.gestor_deudores.ui.Registro.btnAceptar
 import com.example.gestor_deudores.ui.Registro.datos_personales
-import com.example.gestor_deudores.ui.Registro.toolbar
+import android.app.Activity
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import com.example.gestor_deudores.data.RespaldoUtils
 import com.example.gestor_deudores.ui.rutas
 import com.example.gestor_deudores.ui.theme.componentes
 import com.example.gestor_deudores.ui.theme.estados
@@ -90,10 +107,67 @@ import java.util.Locale
 
 @Composable
 fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+
     val textoBusqueda by viewModel.textoBusqueda.collectAsState()
     val pestañaActual by viewModel.pestañaActual.collectAsState()
     val listaDeudores by viewModel.deudorFiltrados.collectAsState()
     var deudaMaximaPermitida by remember { mutableStateOf(0.0) }
+    
+    // --- ESTADOS Y LAUNCHERS PARA RESPALDOS ---
+    var uriImportarPendiente by remember { mutableStateOf<Uri?>(null) }
+    var mostrarConfirmacionImportar by remember { mutableStateOf(false) }
+    val fechaHoyStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+
+    val launcherExportar = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/octet-stream")
+    ) { uri ->
+        if (uri != null) {
+            val exito = RespaldoUtils.exportarBaseDatos(context, uri)
+            if (exito) {
+                Toast.makeText(context, "Respaldo creado con éxito", Toast.LENGTH_LONG).show()
+            } else {
+                Toast.makeText(context, "Error al crear el respaldo", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    val launcherImportar = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            if (RespaldoUtils.esBaseDatosValida(context, uri)) {
+                uriImportarPendiente = uri
+                mostrarConfirmacionImportar = true
+            } else {
+                Toast.makeText(context, "El archivo seleccionado NO es un respaldo válido de la app", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    if (mostrarConfirmacionImportar && uriImportarPendiente != null) {
+        DialogoConfirmacion(
+            titulo = "Restaurar copia de seguridad",
+            mensaje = "¡ATENCIÓN! Se reemplazarán TODOS los clientes y ventas actuales por los datos de la copia de seguridad. Esta acción no se puede deshacer.",
+            onConfirmar = {
+                val exito = RespaldoUtils.importarBaseDatos(context, uriImportarPendiente!!)
+                mostrarConfirmacionImportar = false
+                if (exito) {
+                    Toast.makeText(context, "Respaldo restaurado con éxito", Toast.LENGTH_LONG).show()
+                    (context as? Activity)?.recreate()
+                } else {
+                    Toast.makeText(context, "Error al restaurar el respaldo", Toast.LENGTH_LONG).show()
+                }
+            },
+            onCancelar = {
+                mostrarConfirmacionImportar = false
+                uriImportarPendiente = null
+            }
+        )
+    }
+
     // --- NUEVOS INTERRUPTORES PARA EL DIALOG ---
     var mostrarDialogoAbono by remember { mutableStateOf(false) }
     var mostrarDialogoArchivar by remember { mutableStateOf(false) } // <-- NUEVO
@@ -138,14 +212,100 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
         )
     }
 
-    Scaffold (topBar = {toolbar(titulo = "Mis cobros")},
-        bottomBar = {
-            BarraNavegacionInferior(onIrAInicio = {},
-                onIrAAgregar = {
-                    navController.navigate(rutas.REGISTRO)
-                })
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet(
+                drawerContainerColor = fondo,
+                modifier = Modifier.width(300.dp)
+            ) {
+                // Encabezado con los colores de tu tema (estados y fondo2)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(160.dp)
+                        .background(estados),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    Column(modifier = Modifier.padding(20.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .size(50.dp)
+                                .clip(CircleShape)
+                                .background(fondo2),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Person,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(30.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text("Zubli", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                        Text("Gestión de Negocio", color = fondo_claro, fontSize = 13.sp)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = "RESPALDOS Y SEGURIDAD",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Gray,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                )
+
+                // Opción 1: Crear copia de seguridad
+                NavigationDrawerItem(
+                    label = { Text("Crear copia de seguridad", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = estados) },
+                    selected = false,
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        launcherExportar.launch("respaldo_zubli_$fechaHoyStr.db")
+                    },
+                    icon = { Text("📂", fontSize = 18.sp) },
+                    colors = NavigationDrawerItemDefaults.colors(
+                        unselectedContainerColor = Color.Transparent
+                    ),
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
+
+                // Opción 2: Restaurar copia de seguridad
+                NavigationDrawerItem(
+                    label = { Text("Restaurar copia de seguridad", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = estados) },
+                    selected = false,
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        launcherImportar.launch(arrayOf("*/*"))
+                    },
+                    icon = { Text("📥", fontSize = 18.sp) },
+                    colors = NavigationDrawerItemDefaults.colors(
+                        unselectedContainerColor = Color.Transparent
+                    ),
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
+            }
         }
-        ){ innerPadding ->
+    ) {
+        Scaffold (
+            topBar = {
+                toolbar(
+                    titulo = "Mis cobros",
+                    onMenuClick = {
+                        scope.launch { drawerState.open() }
+                    }
+                )
+            },
+            bottomBar = {
+                BarraNavegacionInferior(onIrAInicio = {},
+                    onIrAAgregar = {
+                        navController.navigate(rutas.REGISTRO)
+                    })
+            }
+            ){ innerPadding ->
 
         Column (modifier = Modifier.fillMaxSize().padding(innerPadding) .background(fondo))
         {
@@ -216,6 +376,7 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
         }
     }
 }
+}
 
 
 @Composable
@@ -258,12 +419,25 @@ fun BarraNavegacionInferior(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun toolbar(){
-    CenterAlignedTopAppBar( // <-- CAMBIADO PARA CENTRAR EL TÍTULO
-        title = { Text("MIS COBROS", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 24.sp) },
+fun toolbar(
+    titulo: String = "MIS COBROS",
+    onMenuClick: (() -> Unit)? = null
+){
+    CenterAlignedTopAppBar(
+        title = { Text(titulo, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 24.sp) },
+        navigationIcon = {
+            if (onMenuClick != null) {
+                IconButton(onClick = onMenuClick) {
+                    Icon(
+                        imageVector = Icons.Default.Menu,
+                        contentDescription = "Menú de Opciones",
+                        tint = Color.White
+                    )
+                }
+            }
+        },
         colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = fondo2)
     )
-
 }
 
 
