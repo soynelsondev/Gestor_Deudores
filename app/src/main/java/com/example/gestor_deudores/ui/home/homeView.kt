@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.Icon
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -88,6 +89,7 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
     var deudaMaximaPermitida by remember { mutableStateOf(0.0) }
     // --- NUEVOS INTERRUPTORES PARA EL DIALOG ---
     var mostrarDialogoAbono by remember { mutableStateOf(false) }
+    var mostrarDialogoArchivar by remember { mutableStateOf(false) } // <-- NUEVO
     var deudorSeleccionado by remember { mutableStateOf<Deudor?>(null) }
 
     // Si el interruptor está encendido y hay un deudor, dibujamos la ventana por encima de todo
@@ -102,6 +104,28 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
             onConfirmar = { monto ->
                 viewModel.registrarAbono(deudorSeleccionado!!, monto)
                 mostrarDialogoAbono = false
+                deudorSeleccionado = null
+            }
+        )
+    }
+
+    if (mostrarDialogoArchivar && deudorSeleccionado != null) {
+        DialogoConfirmacion(
+            titulo = if (pestañaActual == Pestaña.ARCHIVADOS) "Eliminar definitivamente" else "Archivar cliente",
+            mensaje = if (pestañaActual == Pestaña.ARCHIVADOS) 
+                "¿Estás seguro de eliminar a ${deudorSeleccionado!!.nombre} para siempre? Esta acción NO se puede deshacer."
+                else "Se archivará a ${deudorSeleccionado!!.nombre}. Podrás restaurarlo desde la pestaña Archivados.",
+            onConfirmar = {
+                if (pestañaActual == Pestaña.ARCHIVADOS) {
+                    viewModel.eliminarDeudorDefinitivamente(deudorSeleccionado!!)
+                } else {
+                    viewModel.archivarDeudor(deudorSeleccionado!!)
+                }
+                mostrarDialogoArchivar = false
+                deudorSeleccionado = null
+            },
+            onCancelar = {
+                mostrarDialogoArchivar = false
                 deudorSeleccionado = null
             }
         )
@@ -167,12 +191,16 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
                             mostrarDialogoAbono = true
                         },
                         onEliminarClick = {
-                            viewModel.eliminarHistorialCompleto(paquete.deudor)
+                            deudorSeleccionado = paquete.deudor
+                            mostrarDialogoArchivar = true
+                        },
+                        onRestaurarClick = {
+                            viewModel.restaurarDeudor(paquete.deudor)
                         },
                         onHistorialClick= {
                             navController.navigate(rutas.crearRutaHistorial(paquete.deudor.id))
-                        }
-
+                        },
+                        pestañaActual = pestañaActual
                     )
 
                 }
@@ -274,7 +302,7 @@ fun SelectorPestañas(
         // --- BOTÓN HISTORIAL ---
         Box(
             modifier = Modifier
-                .weight(1f) // Magia: El otro 50% del ancho
+                .weight(1f) // Magia: El otro ancho
                 .clip(RoundedCornerShape(50))
                 .background(
                     // Condición: Si está seleccionada, pintamos el fondo, si no, transparente
@@ -287,8 +315,28 @@ fun SelectorPestañas(
             Text(
                 text = "HISTORIAL",
                 fontWeight = FontWeight.Bold,
-                fontSize = 14.sp,
+                fontSize = 13.sp,
                 color = if (pestañaActual == Pestaña.HISTORIAL) estados else colorTextoInactivo
+            )
+        }
+        
+        // --- BOTÓN ARCHIVADOS ---
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .clip(RoundedCornerShape(50))
+                .background(
+                    if (pestañaActual == Pestaña.ARCHIVADOS) fondo_claro else Color.Transparent
+                )
+                .clickable { onPestañaSeleccionada(Pestaña.ARCHIVADOS) }
+                .padding(vertical = 12.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "ARCHIVADOS",
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                color = if (pestañaActual == Pestaña.ARCHIVADOS) estados else colorTextoInactivo
             )
         }
     }
@@ -347,8 +395,17 @@ fun BuscadorDeudores(
 
 
 @Composable
-fun carDeudores(deudor: Deudor,deuda: Deuda,montoRestante: Double,onEditarClick: () -> Unit,
-                onAbonarClick: () -> Unit, onEliminarClick: () -> Unit, onHistorialClick: () -> Unit ){
+fun carDeudores(
+    deudor: Deudor,
+    deuda: Deuda,
+    montoRestante: Double,
+    pestañaActual: Pestaña,
+    onEditarClick: () -> Unit,
+    onAbonarClick: () -> Unit,
+    onEliminarClick: () -> Unit,
+    onRestaurarClick: () -> Unit,
+    onHistorialClick: () -> Unit 
+){
 
     Card(
         modifier = Modifier
@@ -433,63 +490,95 @@ fun carDeudores(deudor: Deudor,deuda: Deuda,montoRestante: Double,onEditarClick:
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End // Alineamos los botones a la derecha
             ){
-                // --- NUEVO BOTÓN: Ver Historial (Un ícono de lista o menú) ---
-                IconButton(
-                    onClick = { onHistorialClick() },
-                    modifier = Modifier
-                        .size(40.dp)
-                        .background(Color(0xFFE0F7FA), shape = CircleShape)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Info, // O puedes usar Icons.Default.List si lo importas
-                        contentDescription = "Ver Historial",
-                        tint = Color(0xFF00ACC1)
-                    )
-                }
-                Spacer(modifier = Modifier.width(12.dp))
+                if (pestañaActual == Pestaña.ARCHIVADOS) {
+                    // --- BOTÓN RESTAURAR ---
+                    IconButton(
+                        onClick = { onRestaurarClick() },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(Color(0xFFE8F5E9), shape = CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = "Restaurar cliente",
+                            tint = Color(0xFF4CAF50)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    
+                    // --- BOTÓN ELIMINAR DEFINITIVAMENTE ---
+                    IconButton(
+                        onClick = { onEliminarClick() },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(Color(0xFFFFEBEE), shape = CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Eliminar definitivamente",
+                            tint = Color.Red
+                        )
+                    }
+                } else {
+                    // --- BOTÓN VER HISTORIAL ---
+                    IconButton(
+                        onClick = { onHistorialClick() },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(Color(0xFFE0F7FA), shape = CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info, // O puedes usar Icons.Default.List si lo importas
+                            contentDescription = "Ver Historial",
+                            tint = Color(0xFF00ACC1)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
 
-            // --- NUEVO BOTÓN: Eliminar ---
-            IconButton(
-                onClick = { onEliminarClick() },
-                modifier = Modifier
-                    .size(40.dp)
-                    .background(Color(0xFFFFEBEE), shape = CircleShape) // Un fondo rojito claro
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Eliminar cliente",
-                    tint = Color.Red
-                )
-            }
-                Spacer(modifier = Modifier.width(12.dp))
-                // Botón Editar
-                IconButton(
-                    onClick = { onEditarClick() },
-                    modifier = Modifier
-                        .size(40.dp)
-                        .background(fondo2, shape = CircleShape)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Edit,
-                        contentDescription = "Editar cliente",
-                        tint = estados
-                    )
-                }
+                    // --- BOTÓN ARCHIVAR/ELIMINAR ---
+                    IconButton(
+                        onClick = { onEliminarClick() },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(Color(0xFFFFEBEE), shape = CircleShape) // Un fondo rojito claro
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Archivar cliente",
+                            tint = Color.Red
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    
+                    // Botón Editar
+                    IconButton(
+                        onClick = { onEditarClick() },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(fondo2, shape = CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Editar cliente",
+                            tint = estados
+                        )
+                    }
 
-                Spacer(modifier = Modifier.width(12.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
 
-                // Botón Abonar
-                IconButton(
-                    onClick = { onAbonarClick() },
-                    modifier = Modifier
-                        .size(40.dp)
-                        .background(componentes, shape = CircleShape)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add, // Puedes cambiar el icono si deseas
-                        contentDescription = "Abonar a la deuda",
-                        tint = Color.White
-                    )
+                    // Botón Abonar
+                    IconButton(
+                        onClick = { onAbonarClick() },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(componentes, shape = CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Abonar a la deuda",
+                            tint = Color.White
+                        )
+                    }
                 }
             }
         }
@@ -630,4 +719,32 @@ fun TarjetaResumen(totalPersonas: Int, dineroTotal: Double) {
             )
         }
     }
+}
+
+@Composable
+fun DialogoConfirmacion(
+    titulo: String,
+    mensaje: String,
+    onConfirmar: () -> Unit,
+    onCancelar: () -> Unit
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { onCancelar() },
+        title = { Text(titulo, fontWeight = FontWeight.Bold) },
+        text = { Text(mensaje) },
+        confirmButton = {
+            Button(
+                onClick = onConfirmar,
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+            ) {
+                Text("Confirmar", color = Color.White)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancelar) {
+                Text("Cancelar", color = Color.Gray)
+            }
+        },
+        containerColor = fondo
+    )
 }

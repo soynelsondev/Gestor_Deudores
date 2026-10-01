@@ -19,7 +19,8 @@ import java.util.Locale
 
 enum class Pestaña{
     PENDIENTES,
-    HISTORIAL
+    HISTORIAL,
+    ARCHIVADOS
 }
 
 
@@ -42,12 +43,26 @@ class HomeViewModel(private val dao: DeudorDao,private val dao2: DeudaDao) : Vie
     fun actualizarBuscador(nuevoTexto: String){
         _textoBusqueda.value   = nuevoTexto
     }
-    // Esta función va dentro de tu clase HomeViewModel
-    fun eliminarHistorialCompleto(deudor: Deudor) {
+    // Archivar en lugar de borrar
+    fun archivarDeudor(deudor: Deudor) {
         viewModelScope.launch {
-            // 1. Primero borramos todas sus deudas registradas usando la función que acabas de agregar
+            val deudorArchivado = deudor.copy(archivado = true)
+            dao.actualizarDeudor(deudorArchivado)
+        }
+    }
+
+    // Restaurar deudor
+    fun restaurarDeudor(deudor: Deudor) {
+        viewModelScope.launch {
+            val deudorRestaurado = deudor.copy(archivado = false)
+            dao.actualizarDeudor(deudorRestaurado)
+        }
+    }
+
+    // Si de verdad quieres borrar (solo en Archivados)
+    fun eliminarDeudorDefinitivamente(deudor: Deudor) {
+        viewModelScope.launch {
             dao2.eliminarDeudasDeUsuario(deudor.id)
-            // 2. Luego borramos el perfil del deudor
             dao.eliminarDeudor(deudor)
         }
     }
@@ -63,49 +78,56 @@ class HomeViewModel(private val dao: DeudorDao,private val dao2: DeudaDao) : Vie
         dao2.obtenerTodasLasDeudas()
     ){ listaDeDeudores: List<Deudor>, texto: String, pestaña: Pestaña, listaDeDeudas: List<Deuda> -> // <-- ¡LA SOLUCIÓN ESTÁ AQUÍ!
 
-        // 1. Primero filtramos por el buscador de texto
-        val filtradosPorTexto = if (texto.isBlank()) {
-            listaDeDeudores
-        } else {
-            listaDeDeudores.filter { deudor ->
-                deudor.nombre.contains(texto, ignoreCase = true) ||
-                        deudor.apellido.contains(texto, ignoreCase = true)
+        // 1. Primero filtramos por el buscador de texto y por el estado de archivado
+        val filtradosPorTextoYArchivo = listaDeDeudores.filter { deudor ->
+            // Filtro de archivado
+            val coincideArchivo = if (pestaña == Pestaña.ARCHIVADOS) {
+                deudor.archivado // Si estamos en archivados, solo mostramos los archivados
+            } else {
+                !deudor.archivado // Si no, mostramos solo los activos
             }
+            
+            // Filtro de texto
+            val coincideTexto = if (texto.isBlank()) true else {
+                deudor.nombre.contains(texto, ignoreCase = true) ||
+                deudor.apellido.contains(texto, ignoreCase = true)
+            }
+            
+            coincideArchivo && coincideTexto
         }
 
         // 2. Preparamos una lista vacía para guardar nuestras cajas
         val listaListaParaLaUI = mutableListOf<DeudorDetalle>()
 
         // 3. Revisamos deudor por deudor para armar su paquete
-        for (deudor in filtradosPorTexto) {
+        for (deudor in filtradosPorTextoYArchivo) {
 
             // Buscamos sus deudas y calculamos el total
             val deudasDeEstaPersona = listaDeDeudas.filter { it.idDeudor == deudor.id }
             val deudaTotal = deudasDeEstaPersona.sumOf { it.montoRestante }
 
-            // Tomamos la deuda más reciente para mostrar en la tarjeta (ignorando los abonos para que la edición funcione con la deuda real)
+            // Tomamos la deuda más reciente para mostrar en la tarjeta
             val deudaPrincipal = deudasDeEstaPersona.lastOrNull { it.rol != "PAGO" } 
                 ?: deudasDeEstaPersona.lastOrNull()
+            
+            // Si no tiene deuda (ej. recién creado), le creamos una ficticia para que igual se muestre
+            val deudaParaMostrar = deudaPrincipal ?: Deuda(idDeudor = deudor.id, montoInicial = 0.0, montoRestante = 0.0, tipoDeuda = "Sin registro", fecha = "", rol = "CLIENTE", descripcion = "", estado = "")
 
-            // Si la persona tiene al menos una deuda registrada, evaluamos en qué pestaña va
-            if (deudaPrincipal != null) {
+            val perteneceAPestaña = when (pestaña) {
+                Pestaña.PENDIENTES -> deudaTotal > 0.0
+                Pestaña.HISTORIAL -> deudaTotal <= 0.0
+                Pestaña.ARCHIVADOS -> true // En archivados ya filtramos antes
+            }
 
-                val perteneceAPestaña = if (pestaña == Pestaña.PENDIENTES) {
-                    deudaTotal > 0.0
-                } else {
-                    deudaTotal <= 0.0
-                }
-
-                // Si pertenece a la pestaña seleccionada, armamos la caja y la guardamos en la lista
-                if (perteneceAPestaña) {
-                    listaListaParaLaUI.add(
-                        DeudorDetalle(
-                            deudor = deudor,
-                            deuda = deudaPrincipal,
-                            montoRestante = deudaTotal
-                        )
+            // Si pertenece a la pestaña seleccionada, armamos la caja y la guardamos en la lista
+            if (perteneceAPestaña) {
+                listaListaParaLaUI.add(
+                    DeudorDetalle(
+                        deudor = deudor,
+                        deuda = deudaParaMostrar,
+                        montoRestante = deudaTotal
                     )
-                }
+                )
             }
         }
 

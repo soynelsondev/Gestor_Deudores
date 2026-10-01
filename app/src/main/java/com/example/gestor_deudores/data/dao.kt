@@ -20,7 +20,6 @@ interface DeudorDao{
     fun obtenerDeudores(): Flow<List<Deudor>>
 
     // FUNCIONALIDAD FASE 1: Buscador de perfil de deudor
-    // Busca coincidencias tanto en el nombre como en el apellido
     @Query("SELECT * FROM deudores WHERE nombre LIKE '%' || :busqueda || '%' OR apellido LIKE '%' || :busqueda || '%'")
     fun buscarDeudores(busqueda: String): Flow<List<Deudor>>
 

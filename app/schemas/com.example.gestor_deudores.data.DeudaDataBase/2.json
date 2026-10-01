@@ -1,0 +1,178 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 2,
+    "identityHash": "58bfff1b13c453ab2e0dfbf3620eb2b4",
+    "entities": [
+      {
+        "tableName": "deudores",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `nombre` TEXT NOT NULL, `apellido` TEXT NOT NULL, `cedula` TEXT NOT NULL, `telf` TEXT NOT NULL, `archivado` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nombre",
+            "columnName": "nombre",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "apellido",
+            "columnName": "apellido",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cedula",
+            "columnName": "cedula",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "telf",
+            "columnName": "telf",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "archivado",
+            "columnName": "archivado",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "Tabla_Deuda",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `idDeudor` INTEGER NOT NULL, `montoInicial` REAL NOT NULL, `montoRestante` REAL NOT NULL, `tipoDeuda` TEXT NOT NULL, `fecha` TEXT NOT NULL, `rol` TEXT NOT NULL, `descripcion` TEXT NOT NULL, `estado` TEXT NOT NULL, `tipo` TEXT NOT NULL, `numCuotas` INTEGER NOT NULL, `frecuencia` TEXT NOT NULL, `fechaMillis` INTEGER NOT NULL, FOREIGN KEY(`idDeudor`) REFERENCES `deudores`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "idDeudor",
+            "columnName": "idDeudor",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "montoInicial",
+            "columnName": "montoInicial",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "montoRestante",
+            "columnName": "montoRestante",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tipoDeuda",
+            "columnName": "tipoDeuda",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fecha",
+            "columnName": "fecha",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rol",
+            "columnName": "rol",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "descripcion",
+            "columnName": "descripcion",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "estado",
+            "columnName": "estado",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tipo",
+            "columnName": "tipo",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "numCuotas",
+            "columnName": "numCuotas",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "frecuencia",
+            "columnName": "frecuencia",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fechaMillis",
+            "columnName": "fechaMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_Tabla_Deuda_idDeudor",
+            "unique": false,
+            "columnNames": [
+              "idDeudor"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_Tabla_Deuda_idDeudor` ON `${TABLE_NAME}` (`idDeudor`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "deudores",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "idDeudor"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      }
+    ],
+    "views": [],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '58bfff1b13c453ab2e0dfbf3620eb2b4')"
+    ]
+  }
+}

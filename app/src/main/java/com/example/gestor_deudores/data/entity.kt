@@ -8,14 +8,15 @@ import androidx.room.PrimaryKey
 
 
 @Entity(tableName = "deudores")
-    data class  Deudor(
+data class Deudor(
     @PrimaryKey(autoGenerate = true)
-        var id: Int = 0,
-        val nombre: String,
-        val apellido: String,
-        val cedula: String,
-        val telf: String
-    )
+    var id: Int = 0,
+    val nombre: String,
+    val apellido: String,
+    val cedula: String,
+    val telf: String,
+    var archivado: Boolean = false // <-- NUEVO: Para no borrar definitivamente
+)
 
 @Entity(tableName = "Tabla_Deuda",
     foreignKeys = [ForeignKey(entity = Deudor::class,
@@ -35,5 +36,11 @@ data class Deuda(
     val fecha: String,
     val rol: String,
     val descripcion: String,
-    val estado : String
+    val estado : String,
+    
+    // --- NUEVAS COLUMNAS (Versión 2) ---
+    var tipo: String = "CARGO",
+    var numCuotas: Int = 1,
+    var frecuencia: String = "MENSUAL",
+    var fechaMillis: Long = 0L
 )
