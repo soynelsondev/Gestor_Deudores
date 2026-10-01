@@ -47,6 +47,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -79,11 +81,18 @@ fun Principal(viewModel: RegistroDeudorViewModel,onNavegarADeuda: (Int) -> Unit)
 
 
     Scaffold (topBar = {toolbar()}){ innerPadding ->
-        Column (modifier = Modifier.fillMaxSize().padding(innerPadding) .background(fondo))
-        {
-            AvatarUsuario()
-            // Quitamos el btnAceptar de aquí porque necesitamos el estado interno de datos_personales
-            datos_personales(viewModel)
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(innerPadding).background(fondo)
+        ) {
+            item {
+                AvatarUsuario()
+            }
+            item {
+                datos_personales(viewModel)
+            }
+            item {
+                Spacer(modifier = Modifier.height(24.dp))
+            }
         }
     }
 }

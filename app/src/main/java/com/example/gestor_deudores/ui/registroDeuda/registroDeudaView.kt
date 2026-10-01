@@ -112,8 +112,17 @@ fun Principal(viewModel: RDeudaViewModel, onNavegarAtras: () -> Unit) {
 
                 // Segundo elemento: El botón de guardar y un espacio al final
                 item {
-                    btnDeuda { viewModel.GuardarDeuda() }
-                    Spacer(modifier = Modifier.height(24.dp)) // Da respiro visual al final al scrollear
+                    Button(
+                        onClick = { viewModel.GuardarDeuda() },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(70.dp)
+                            .padding(horizontal = 35.dp, vertical = 8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = estados)
+                    ) {
+                        Text("REGISTRAR VENTA", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(modifier = Modifier.height(80.dp)) // <-- AUMENTADO MUCHO EL ESPACIO PARA QUE EL SCROLL LLEGUE MÁS ABAJO Y NO TAPE EL TECLADO
                 }
             }
         }

@@ -45,18 +45,29 @@ class RDeudaViewModel(private val deudaDao: DeudaDao): ViewModel(){
 
     // Esta función es vital: la llamas apenas abres la pantalla para inyectarle el ID del cliente
     fun inicializarIdDeudor(id: Int) {
-        _uiState.update { it.copy(idDeudor = id) }
+        // Al inyectar un nuevo ID de cliente, nos aseguramos de LIMPIAR cualquier
+        // dato residual que haya quedado en memoria de la edición anterior.
+        _uiState.update { 
+            R_DeudaEstado(idDeudor = id) 
+        }
     }
 
     fun cargarDeuda(idDeuda: Int) {
         viewModelScope.launch {
             val deuda = deudaDao.obtenerDeudaPorId(idDeuda)
             if (deuda != null) {
+                // Formateamos el número para quitar el .0 si es entero (ej: 12.0 -> "12")
+                val montoFormateado = if (deuda.montoInicial % 1 == 0.0) {
+                    deuda.montoInicial.toInt().toString()
+                } else {
+                    deuda.montoInicial.toString()
+                }
+
                 _uiState.update {
                     it.copy(
                         idDeudaActual = deuda.id,
                         idDeudor = deuda.idDeudor,
-                        monto = deuda.montoInicial.toString(),
+                        monto = montoFormateado,
                         abonoInicial = "", // Limpiamos el abono para no duplicarlo por error
                         tipoDeuda = deuda.tipoDeuda,
                         fecha = deuda.fecha,
@@ -106,10 +117,22 @@ class RDeudaViewModel(private val deudaDao: DeudaDao): ViewModel(){
     fun GuardarDeuda(){
         val estado = _uiState.value
 
-        val montoLimpio = estado.monto.replace(".", "").replace(",", ".")
+        // 1. Limpiamos el Monto Inicial
+        var montoLimpio = estado.monto.trim()
+        if (montoLimpio.count { it == ',' } == 1 && montoLimpio.indexOf(',') > montoLimpio.length - 4) {
+            montoLimpio = montoLimpio.replace(",", ".") // Es coma decimal
+        } else {
+            montoLimpio = montoLimpio.replace(",", "") // Es coma de miles
+        }
         val monto_Double = montoLimpio.toDoubleOrNull() ?: 0.0
 
-        val abonoLimpio = estado.abonoInicial.replace(".", "").replace(",", ".")
+        // 2. Limpiamos el Abono Inicial
+        var abonoLimpio = estado.abonoInicial.trim()
+        if (abonoLimpio.count { it == ',' } == 1 && abonoLimpio.indexOf(',') > abonoLimpio.length - 4) {
+            abonoLimpio = abonoLimpio.replace(",", ".") // Es coma decimal
+        } else {
+            abonoLimpio = abonoLimpio.replace(",", "") // Es coma de miles
+        }
         val abono_Double = abonoLimpio.toDoubleOrNull() ?: 0.0
 
         if (monto_Double <= 0.0) {
@@ -151,10 +174,18 @@ class RDeudaViewModel(private val deudaDao: DeudaDao): ViewModel(){
                 // MODO EDICIÓN
                 val deudaExistente = deudaDao.obtenerDeudaPorId(estado.idDeudaActual)
                 if (deudaExistente != null) {
-                    val diferencia = monto_Double - deudaExistente.montoInicial
+                    
+                    // Solo actualizamos el montoRestante al nuevo valor si es un cargo normal
+                    // y no un abono. (Si es abono, se edita directo sin calcular diferencia)
+                    val nuevoRestante = if (deudaExistente.rol != "PAGO") {
+                        monto_Double 
+                    } else {
+                        -monto_Double // Los abonos siempre se guardan negativos
+                    }
+
                     val deudaEditada = deudaExistente.copy(
-                        montoInicial = monto_Double,
-                        montoRestante = deudaExistente.montoRestante + diferencia,
+                        montoInicial = if (deudaExistente.rol != "PAGO") monto_Double else 0.0,
+                        montoRestante = nuevoRestante,
                         tipoDeuda = estado.tipoDeuda,
                         fecha = estado.fecha,
                         rol = estado.rol,
