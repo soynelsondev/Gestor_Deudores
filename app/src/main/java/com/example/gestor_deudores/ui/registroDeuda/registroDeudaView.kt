@@ -94,7 +94,7 @@ fun Principal(viewModel: RDeudaViewModel, onNavegarAtras: () -> Unit) {
     Box(modifier = Modifier.fillMaxSize()) {
 
         // 2. Tu diseño normal con la barra superior
-        Scaffold(topBar = { toolbar2() }) { innerPadding ->
+        Scaffold(topBar = { toolbar2("DETALLES DE LA VENTA") }) { innerPadding ->
 
             // --- LA SOLUCIÓN: LazyColumn en lugar de Column ---
             LazyColumn(
@@ -144,9 +144,9 @@ fun Principal(viewModel: RDeudaViewModel, onNavegarAtras: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun toolbar2(){
+fun toolbar2(titulo: String = "DETALLES DE LA VENTA"){
     CenterAlignedTopAppBar( // <-- CAMBIADO PARA CENTRAR EL TÍTULO
-        title = { Text("NUEVO DEUDOR", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 24.sp) },
+        title = { Text(titulo, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 24.sp) },
         colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = estados)
     )
 
@@ -210,17 +210,17 @@ fun datos_prestamo(viewModel: RDeudaViewModel) {
 
 
             Text(
-                text = "DETALLES DEL PRESTAMO",
+                text = "DETALLES DE LA VENTA",
                 fontSize = 25.sp,
                 fontWeight = FontWeight.Bold,
                 color = estados,
                 modifier = Modifier.padding(vertical = 10.dp)
             )
 
-            // 1. MONTO INICIAL ($ a la izquierda)
+            // 1. TOTAL DE LA VENTA ($ a la izquierda)
             textReutilizable(
                 textoActual = estado.monto,
-                textoFondo = "Monto Inicial",
+                textoFondo = "Total de la venta",
                 textoPrefijo = "$ ",
                 tipoTeclado = KeyboardType.Decimal,
                 alEscribir = { entrada ->
@@ -287,7 +287,7 @@ fun datos_prestamo(viewModel: RDeudaViewModel) {
 
             textReutilizable(
                 textoActual = estado.tipoDeuda,
-                textoFondo = "Tipo de Préstamo",
+                textoFondo = "Producto o pedido",
 
                 alEscribir = { viewModel.onTipoDeudaChange(it) }
             )

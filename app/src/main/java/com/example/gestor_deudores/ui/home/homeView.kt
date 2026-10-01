@@ -224,7 +224,7 @@ fun BarraNavegacionInferior(
 @Composable
 fun toolbar(){
     CenterAlignedTopAppBar( // <-- CAMBIADO PARA CENTRAR EL TÍTULO
-        title = { Text("DEUDORES ", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 24.sp) },
+        title = { Text("MIS COBROS", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 24.sp) },
         colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = fondo2)
     )
 
@@ -306,7 +306,7 @@ fun BuscadorDeudores(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
-        placeholder = { Text(text = "Buscar deudor...", color = Color.Gray) },
+        placeholder = { Text(text = "Buscar cliente...", color = Color.Gray) },
 
         // El icono de la lupita a la izquierda
         leadingIcon = {
@@ -417,13 +417,13 @@ fun carDeudores(deudor: Deudor,deuda: Deuda,montoRestante: Double,onEditarClick:
             Spacer(modifier = Modifier.height(8.dp))
 
             // Colocamos el resto de los datos dinámicos concatenando textos
-            Text(text = "Tipo: ${deuda.tipoDeuda}", fontSize = 14.sp, color = Color.DarkGray)
+            Text(text = "Pedido/Producto: ${deuda.tipoDeuda}", fontSize = 14.sp, color = Color.DarkGray)
             Text(text = "Fecha: ${deuda.fecha}", fontSize = 14.sp, color = Color.DarkGray)
             Text(text = "Teléfono: ${deudor.telf}", fontSize = 14.sp, color = Color.DarkGray)
 
             // Validamos que si no hay descripción, no se vea feo
             if (deuda.descripcion.isNotBlank()) {
-                Text(text = "Descripción: ${deuda.descripcion}", fontSize = 14.sp, color = Color.DarkGray)
+                Text(text = "Detalles: ${deuda.descripcion}", fontSize = 14.sp, color = Color.DarkGray)
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -457,7 +457,7 @@ fun carDeudores(deudor: Deudor,deuda: Deuda,montoRestante: Double,onEditarClick:
             ) {
                 Icon(
                     imageVector = Icons.Default.Delete,
-                    contentDescription = "Eliminar deudor",
+                    contentDescription = "Eliminar cliente",
                     tint = Color.Red
                 )
             }
@@ -471,7 +471,7 @@ fun carDeudores(deudor: Deudor,deuda: Deuda,montoRestante: Double,onEditarClick:
                 ) {
                     Icon(
                         imageVector = Icons.Default.Edit,
-                        contentDescription = "Editar deudor",
+                        contentDescription = "Editar cliente",
                         tint = estados
                     )
                 }
