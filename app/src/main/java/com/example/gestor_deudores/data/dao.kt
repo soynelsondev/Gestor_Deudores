@@ -63,4 +63,8 @@ interface DeudaDao {
     // Calcula automáticamente cuánto te debe en total una persona (sumando solo lo que no está cancelado)
     @Query("SELECT SUM(montoRestante) FROM tabla_deuda WHERE idDeudor = :idDelDeudor AND estado != 'Cancelado'")
     fun obtenerSumaDeudasPorDeudor(idDelDeudor: Int): Flow<Double?>
+
+    // Obtener los distintos productos/pedidos registrados para el autocompletado
+    @Query("SELECT DISTINCT tipoDeuda FROM Tabla_Deuda WHERE tipoDeuda != '' ORDER BY tipoDeuda ASC")
+    fun obtenerTiposDeudaUnicos(): Flow<List<String>>
 }

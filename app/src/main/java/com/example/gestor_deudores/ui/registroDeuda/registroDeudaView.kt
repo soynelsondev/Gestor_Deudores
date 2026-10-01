@@ -43,6 +43,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDatePickerState
@@ -67,7 +70,6 @@ import com.example.gestor_deudores.ui.Registro.AvatarUsuario
 import com.example.gestor_deudores.ui.Registro.RegistroDeudorViewModel
 import com.example.gestor_deudores.ui.Registro.btnAceptar
 import com.example.gestor_deudores.ui.Registro.datos_personales
-import com.example.gestor_deudores.ui.Registro.textReutilizable
 import com.example.gestor_deudores.ui.Registro.toolbar
 import com.example.gestor_deudores.ui.theme.estados
 import com.example.gestor_deudores.ui.theme.fondo
@@ -285,12 +287,45 @@ fun datos_prestamo(viewModel: RDeudaViewModel) {
 
 
 
-            textReutilizable(
-                textoActual = estado.tipoDeuda,
-                textoFondo = "Producto o pedido",
+            val sugerencias by viewModel.sugerenciasProductos.collectAsState()
+            var expandido by remember { mutableStateOf(false) }
 
-                alEscribir = { viewModel.onTipoDeudaChange(it) }
-            )
+            ExposedDropdownMenuBox(
+                expanded = expandido,
+                onExpandedChange = { expandido = !expandido },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                textReutilizable(
+                    textoActual = estado.tipoDeuda,
+                    textoFondo = "Producto o pedido",
+                    iconoDerecho = if (expandido) Icons.Default.ArrowDropDown else Icons.Default.ArrowDropDown,
+                    onIconoDerechoClick = { expandido = !expandido },
+                    alEscribir = { viewModel.onTipoDeudaChange(it) },
+                    modifier = Modifier.menuAnchor()
+                )
+                
+                // Mostrar sugerencias filtradas por lo que ha escrito
+                val sugerenciasFiltradas = sugerencias.filter { 
+                    it.contains(estado.tipoDeuda, ignoreCase = true) && it != estado.tipoDeuda 
+                }
+
+                if (sugerenciasFiltradas.isNotEmpty()) {
+                    ExposedDropdownMenu(
+                        expanded = expandido,
+                        onDismissRequest = { expandido = false }
+                    ) {
+                        sugerenciasFiltradas.forEach { sugerencia ->
+                            DropdownMenuItem(
+                                text = { Text(text = sugerencia) },
+                                onClick = {
+                                    viewModel.onTipoDeudaChange(sugerencia)
+                                    expandido = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
 
             Row(modifier = Modifier.fillMaxWidth()) {
                 Box(modifier = Modifier.fillMaxWidth(0.65f)) { // <-- CAJA REDUCIDA PARA EVITAR UNIFORMIDAD
@@ -312,49 +347,6 @@ fun datos_prestamo(viewModel: RDeudaViewModel) {
                 iconoDerecho = Icons.Default.Info,
                 alEscribir = { viewModel.onDescripcionChange(it) }
             )
-
-            Text(
-                text = "ROL",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = estados,
-                modifier = Modifier.padding(start = 8.dp, bottom = 12.dp, top = 12.dp)
-            )
-
-            val opcionesRol = listOf("CLIENTE", "FAMILIAR", "OTRO")
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth() .padding(bottom = 10.dp)
-                    .height(45.dp) // Altura del selector
-                    .clip(RoundedCornerShape(50))
-                    .background(fondo2),
-                    verticalAlignment = Alignment.CenterVertically
-            ){
-                opcionesRol.forEach { opcion ->
-                    val seleccionado = estado.rol == opcion
-
-                    Box(
-                        modifier = Modifier
-                            .weight(1f) // Divide el ancho equitativamente (33% cada uno)
-                            .fillMaxHeight()
-                            .clip(RoundedCornerShape(50))
-                            // Si está seleccionado, se pinta de tu color "estados", si no, transparente
-                            .background(if (seleccionado) estados else Color.Transparent)
-                            .clickable { viewModel.onRolChange(opcion) },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = opcion,
-                            // Texto blanco si está seleccionado, de lo contrario color oscuro
-                            color = if (seleccionado) Color.White else estados,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
-            }
 
             // FRECUENCIA CON LA QUE VAN A CANCELAR
             Text(
@@ -413,6 +405,7 @@ fun datos_prestamo(viewModel: RDeudaViewModel) {
 fun textReutilizable(
     textoActual: String,
     textoFondo: String,
+    modifier: Modifier = Modifier,
     tipoTeclado: KeyboardType = KeyboardType.Text,
     textoPrefijo: String? = null,
     iconoIzquierdo: ImageVector? = null, // El logo normal de la izquierda
@@ -451,7 +444,7 @@ fun textReutilizable(
         } else null,
 
         shape = RoundedCornerShape(18.dp),
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 7.dp, vertical = 7.dp),
         colors = OutlinedTextFieldDefaults.colors(

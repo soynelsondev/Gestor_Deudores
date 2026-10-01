@@ -32,6 +32,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -39,6 +42,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -76,8 +82,8 @@ fun Principal(viewModel: RegistroDeudorViewModel,onNavegarADeuda: (Int) -> Unit)
         Column (modifier = Modifier.fillMaxSize().padding(innerPadding) .background(fondo))
         {
             AvatarUsuario()
+            // Quitamos el btnAceptar de aquí porque necesitamos el estado interno de datos_personales
             datos_personales(viewModel)
-            btnAceptar { viewModel.guardarUsuario() }
         }
     }
 }
@@ -143,6 +149,9 @@ fun datos_personales(viewModel: RegistroDeudorViewModel){
 
 
 
+            // Variables compartidas para la cédula (deben estar al inicio de datos_personales)
+            var tipoCedula by remember { mutableStateOf("V-") }
+
             textReutilizable(
                 textoActual = estado.nombre,
                 textoFondo = "Nombre",
@@ -169,7 +178,7 @@ fun datos_personales(viewModel: RegistroDeudorViewModel){
             // 3. Teléfono: Bloqueo total. Solo pasa si TODOS son números (bloquea puntos y comas)
             textReutilizable(
                 textoActual = estado.telefono,
-                textoFondo = "Telefono",
+                textoFondo = "Telefono (Opcional)",
                 tipoTeclado = KeyboardType.Phone,
                 icono = Icons.Default.Phone,
                 alEscribir = { entrada ->
@@ -179,22 +188,73 @@ fun datos_personales(viewModel: RegistroDeudorViewModel){
                 }
             )
 
-            // 4. Cédula: Solo números
-            Row(modifier = Modifier.fillMaxWidth()) {
-                Box(modifier = Modifier.fillMaxWidth(0.70f)) {
-                    textReutilizable(
-                        textoActual = estado.cedula,
-                        textoFondo = "Cedula",
-                        tipoTeclado = KeyboardType.Number,
-                        textoPrefijo = "V-",
-                        alEscribir = { entrada ->
+            // Si escribe un teléfono, que sea válido
+            if (estado.telefono.isNotEmpty() && estado.telefono.length !in 10..11) {
+                Text(
+                    text = "El teléfono debe tener 10 u 11 dígitos",
+                    color = Color.Red,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(start = 16.dp, top = 2.dp)
+                )
+            }
+
+            // 4. Cédula: Selector V/E/J + Solo números
+            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 7.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                
+                // Selector V/E/J
+                var expandido by remember { mutableStateOf(false) }
+                val tipos = listOf("V-", "E-", "J-")
+
+                Box {
+                    TextButton(onClick = { expandido = true }) {
+                        Text(text = tipoCedula, fontSize = 18.sp, color = estados, fontWeight = FontWeight.Bold)
+                    }
+                    DropdownMenu(
+                        expanded = expandido,
+                        onDismissRequest = { expandido = false }
+                    ) {
+                        tipos.forEach { tipo ->
+                            DropdownMenuItem(
+                                text = { Text(tipo) },
+                                onClick = {
+                                    tipoCedula = tipo
+                                    expandido = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(
+                        value = estado.cedula,
+                        onValueChange = { entrada ->
                             if (entrada.all { it.isDigit() }) {
                                 viewModel.onCedulaChange(entrada)
                             }
-                        }
+                        },
+                        placeholder = { Text("Cedula", fontSize = 20.sp) },
+                        textStyle = TextStyle(fontSize = 18.sp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        shape = RoundedCornerShape(18.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = estados,
+                            unfocusedBorderColor = fondo2,
+                            unfocusedTextColor = Color.Black,
+                            unfocusedContainerColor = Color.Transparent,
+                            focusedContainerColor = Color.Transparent
+                        )
                     )
                 }
             }
+
+            btnAceptar(
+                tipoCedula = tipoCedula,
+                cedulaActual = estado.cedula,
+                onCedulaModificada = { viewModel.onCedulaChange(it) },
+                alPresionar = { viewModel.guardarUsuario() }
+            )
         }
 
     }
@@ -203,10 +263,18 @@ fun datos_personales(viewModel: RegistroDeudorViewModel){
 
 @Composable
 fun btnAceptar(
+    tipoCedula: String,
+    cedulaActual: String,
+    onCedulaModificada: (String) -> Unit,
     alPresionar: () -> Unit
 ){
 
-    Button(onClick = alPresionar, modifier = Modifier.fillMaxWidth()
+    Button(onClick = { 
+        if (cedulaActual.isNotEmpty() && !cedulaActual.startsWith("V-") && !cedulaActual.startsWith("E-") && !cedulaActual.startsWith("J-")) {
+            onCedulaModificada("$tipoCedula$cedulaActual")
+        }
+        alPresionar() 
+    }, modifier = Modifier.fillMaxWidth()
         .height(70.dp) .padding(horizontal = 35.dp, vertical = 8.dp),
         colors = ButtonDefaults.buttonColors(containerColor = estados))
     {

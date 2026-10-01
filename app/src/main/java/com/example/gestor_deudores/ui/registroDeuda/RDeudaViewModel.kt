@@ -5,8 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.example.gestor_deudores.data.Deuda
 import com.example.gestor_deudores.data.DeudaDao
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -33,6 +35,13 @@ class RDeudaViewModel(private val deudaDao: DeudaDao): ViewModel(){
 
     private val _uiState= MutableStateFlow(R_DeudaEstado())
     val uiEstado: StateFlow<R_DeudaEstado> =  _uiState.asStateFlow()
+
+    val sugerenciasProductos: StateFlow<List<String>> = deudaDao.obtenerTiposDeudaUnicos()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
 
     // Esta función es vital: la llamas apenas abres la pantalla para inyectarle el ID del cliente
     fun inicializarIdDeudor(id: Int) {
