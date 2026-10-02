@@ -51,8 +51,8 @@ fun calcularEstadoCobro(deudas: List<Deuda>): EstadoCobro {
             
             // ¡EL ARREGLO! Convertimos la fecha base (que estaba en texto en la UI) a UTC para no perder días.
             // O mejor aún, como fechaMillis ya viene del calendario, solo sumamos los días exactos sin importar la hora local.
-            val cal = Calendar.getInstance().apply { 
-                timeInMillis = cargo.fechaMillis 
+            val cal = Calendar.getInstance().apply {
+                timeInMillis = cargo.fechaMillis
                 // Reseteamos horas para cálculo puro
                 set(Calendar.HOUR_OF_DAY, 12) 
             }
