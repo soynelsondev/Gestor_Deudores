@@ -2,9 +2,9 @@ package com.example.gestor_deudores.ui.pedidos
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.gestor_deudores.data.Pedido
-import com.example.gestor_deudores.data.PedidoConCliente
-import com.example.gestor_deudores.data.PedidoDao
+import com.example.gestor_deudores.data.database.Pedido
+import com.example.gestor_deudores.data.database.PedidoConCliente
+import com.example.gestor_deudores.data.database.PedidoDao
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow

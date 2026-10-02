@@ -2,12 +2,12 @@ package com.example.gestor_deudores.ui.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.gestor_deudores.data.Deuda
-import com.example.gestor_deudores.data.DeudaDao
-import com.example.gestor_deudores.data.Deudor
-import com.example.gestor_deudores.data.DeudorDao
-import com.example.gestor_deudores.data.EstadoCobro
-import com.example.gestor_deudores.data.calcularEstadoCobro
+import com.example.gestor_deudores.data.database.Deuda
+import com.example.gestor_deudores.data.database.DeudaDao
+import com.example.gestor_deudores.data.database.Deudor
+import com.example.gestor_deudores.data.database.DeudorDao
+import com.example.gestor_deudores.data.utils.EstadoCobro
+import com.example.gestor_deudores.data.utils.calcularEstadoCobro
 import android.content.Context
 import com.example.gestor_deudores.data.api.RetrofitClient
 import kotlinx.coroutines.flow.MutableStateFlow

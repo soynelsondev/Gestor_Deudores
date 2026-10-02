@@ -7,7 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import com.example.gestor_deudores.data.DeudaDataBase
+import com.example.gestor_deudores.data.database.DeudaDataBase
 import com.example.gestor_deudores.ui.Registro.RegistroDeudorViewModel
 import com.example.gestor_deudores.ui.registroDeuda.RDeudaViewModel
 // Asegúrate de importar el HomeViewModel

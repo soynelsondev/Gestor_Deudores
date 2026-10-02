@@ -1,4 +1,4 @@
-package com.example.gestor_deudores.data
+package com.example.gestor_deudores.data.database
 
 import androidx.room.Dao
 import androidx.room.Delete

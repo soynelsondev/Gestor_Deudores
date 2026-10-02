@@ -2,8 +2,8 @@ package com.example.gestor_deudores.ui.Registro
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.gestor_deudores.data.Deudor
-import com.example.gestor_deudores.data.DeudorDao
+import com.example.gestor_deudores.data.database.Deudor
+import com.example.gestor_deudores.data.database.DeudorDao
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

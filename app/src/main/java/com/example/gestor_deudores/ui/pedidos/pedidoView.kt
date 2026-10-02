@@ -45,8 +45,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.gestor_deudores.data.PedidoConCliente
-import com.example.gestor_deudores.data.abrirWhatsApp
+import com.example.gestor_deudores.data.database.PedidoConCliente
+import com.example.gestor_deudores.data.utils.abrirWhatsApp
 import com.example.gestor_deudores.ui.theme.componentes
 import com.example.gestor_deudores.ui.theme.estados
 import com.example.gestor_deudores.ui.theme.fondo

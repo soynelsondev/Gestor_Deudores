@@ -1,4 +1,4 @@
-package com.example.gestor_deudores.data
+package com.example.gestor_deudores.data.database
 
 import androidx.room.Entity
 import androidx.room.ForeignKey
@@ -27,7 +27,7 @@ data class Pedido(
     val totalUsd: Double,
     val fechaCreacionMillis: Long = System.currentTimeMillis(),
     val fechaEntregaMillis: Long = 0L,
-    val estado: String = "RECIBIDO", // RECIBIDO, EN_PRODUCCION, LISTO, ENTREGADO
+    val estado: String = "RECIBIDO",
     val notas: String = ""
 )
 
