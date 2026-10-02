@@ -9,8 +9,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 
 @Database(
-    entities = [Deudor::class, Deuda::class],
-    version = 2,
+    entities = [Deudor::class, Deuda::class, Pedido::class],
+    version = 3,
     exportSchema = true
 )
 
@@ -18,6 +18,7 @@ abstract class DeudaDataBase: RoomDatabase(){
 
     abstract fun deudorDao(): DeudorDao
     abstract fun deudaDao(): DeudaDao
+    abstract fun pedidoDao(): PedidoDao
 
     companion object{
         @Volatile
@@ -39,6 +40,28 @@ abstract class DeudaDataBase: RoomDatabase(){
             }
         }
 
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Crear tabla de pedidos
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `pedidos` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `deudorId` INTEGER NOT NULL,
+                        `producto` TEXT NOT NULL,
+                        `cantidad` INTEGER NOT NULL,
+                        `precioUnitarioUsd` REAL NOT NULL,
+                        `totalUsd` REAL NOT NULL,
+                        `fechaCreacionMillis` INTEGER NOT NULL,
+                        `fechaEntregaMillis` INTEGER NOT NULL,
+                        `estado` TEXT NOT NULL,
+                        `notas` TEXT NOT NULL,
+                        FOREIGN KEY(`deudorId`) REFERENCES `deudores`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                """)
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_pedidos_deudorId` ON `pedidos` (`deudorId`)")
+            }
+        }
+
         fun getDatabase(context: Context): DeudaDataBase{
             return   INSTANCE ?: synchronized(this){
                 val instance = Room.databaseBuilder(
@@ -46,7 +69,7 @@ abstract class DeudaDataBase: RoomDatabase(){
                     DeudaDataBase::class.java,
                    "control_deudas_db"
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build()
 
                 INSTANCE = instance
