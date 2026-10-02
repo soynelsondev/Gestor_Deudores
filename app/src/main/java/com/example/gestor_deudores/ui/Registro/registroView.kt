@@ -166,19 +166,19 @@ fun datos_personales(viewModel: RegistroDeudorViewModel){
                 textoFondo = "Nombre",
                 tipoTeclado = KeyboardType.Text,
                 alEscribir = { entrada ->
-                    if (entrada.all { it.isLetter() || it.isWhitespace() }) {
+                    if (entrada.all { it.isLetter() }) {
                         viewModel.onNombreChange(entrada)
                     }
                 }
             )
 
-            // 2. Apellido: Igual que el nombre
+            // 2. Apellido: Igual que el nombre (sin espacios)
             textReutilizable(
                 textoActual = estado.apellido,
                 textoFondo = "Apellido",
                 tipoTeclado = KeyboardType.Text,
                 alEscribir = { entrada ->
-                    if (entrada.all { it.isLetter() || it.isWhitespace() }) {
+                    if (entrada.all { it.isLetter() }) {
                         viewModel.onApellidoChange(entrada)
                     }
                 }

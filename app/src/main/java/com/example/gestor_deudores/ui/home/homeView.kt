@@ -190,7 +190,9 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
     if (mostrarDialogoAbono && deudorSeleccionado != null) {
         DialogoAbono(
             nombreDeudor = deudorSeleccionado!!.nombre,
-            deudaMaxima = deudaMaximaPermitida,
+            deudaMaximaUsd = deudaMaximaPermitida,
+            monedaVista = monedaVista,
+            tasaBCV = precioDolarBCV,
             onDismiss = {
                 mostrarDialogoAbono = false // Apagamos el interruptor
                 deudorSeleccionado = null
@@ -923,13 +925,18 @@ fun avatar(deudor: Deudor){
 @Composable
 fun DialogoAbono(
     nombreDeudor: String,
-    deudaMaxima: Double,
+    deudaMaximaUsd: Double,
+    monedaVista: String,
+    tasaBCV: Double,
     onDismiss: () -> Unit, // Cuando toca fuera de la caja o cancela
-    onConfirmar: (Double) -> Unit // Cuando le da a guardar pasamos el monto
+    onConfirmar: (Double) -> Unit // Cuando le da a guardar pasamos el monto en USD
 ) {
-    // Variable para guardar lo que escribe en el campo de texto de la ventanita
-    var montoAbono by remember { mutableStateOf("") }
+    var monedaAbono by remember { mutableStateOf(if (tasaBCV > 0 && monedaVista == "VES") "VES" else "USD") }
+    var montoAbonoTexto by remember { mutableStateOf("") }
     var mensajeError by remember { mutableStateOf("") }
+
+    val limiteMaximo = if (monedaAbono == "VES" && tasaBCV > 0) deudaMaximaUsd * tasaBCV else deudaMaximaUsd
+
     Dialog(onDismissRequest = { onDismiss() }) {
         Card(
             modifier = Modifier
@@ -950,25 +957,86 @@ fun DialogoAbono(
                     fontWeight = FontWeight.Bold,
                     color = Color.Black
                 )
-                Text(text = "Deuda actual: $deudaMaxima", color = Color.Gray, fontSize = 14.sp)
 
-                Spacer(modifier = Modifier.height(16.dp))
+                val limiteFormateado = if (monedaAbono == "VES" && tasaBCV > 0) 
+                    "Bs. ${"%.2f".format(deudaMaximaUsd * tasaBCV)}" 
+                    else NumberFormat.getCurrencyInstance(Locale("en", "US")).format(deudaMaximaUsd)
+
+                Text(text = "Deuda actual: $limiteFormateado", color = Color.Gray, fontSize = 14.sp)
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Selector de moneda de abono (USD / VES) si hay tasa activa
+                if (tasaBCV > 0) {
+                    Row(
+                        modifier = Modifier
+                            .background(fondo2, shape = RoundedCornerShape(50))
+                            .padding(3.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .background(if (monedaAbono == "USD") estados else Color.Transparent)
+                                .clickable { 
+                                    monedaAbono = "USD"
+                                    montoAbonoTexto = ""
+                                    mensajeError = ""
+                                }
+                                .padding(horizontal = 16.dp, vertical = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("💵 USD", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (monedaAbono == "USD") Color.White else Color.DarkGray)
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .background(if (monedaAbono == "VES") estados else Color.Transparent)
+                                .clickable { 
+                                    monedaAbono = "VES"
+                                    montoAbonoTexto = ""
+                                    mensajeError = ""
+                                }
+                                .padding(horizontal = 16.dp, vertical = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("🇻🇪 Bs.", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (monedaAbono == "VES") Color.White else Color.DarkGray)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
 
                 OutlinedTextField(
-                    value = montoAbono,
-                    onValueChange = { montoAbono = it
-                        mensajeError = ""},
-                    label = { Text("Monto del abono") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    value = montoAbonoTexto,
+                    onValueChange = { 
+                        montoAbonoTexto = it
+                        mensajeError = ""
+                    },
+                    label = { Text("Monto del abono (${if (monedaAbono == "VES") "Bs." else "USD"})") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
-                // Muestra mensaje de error en rojo si se pasa
-                if (mensajeError.isNotEmpty()) {
-                    Text(text = mensajeError, color = Color.Red, fontSize = 12.sp)
+
+                // Muestra equivalencia en vivo
+                val montoIngresado = montoAbonoTexto.replace(",", ".").toDoubleOrNull() ?: 0.0
+                if (montoIngresado > 0.0 && tasaBCV > 0) {
+                    val equivalenciaTexto = if (monedaAbono == "VES") {
+                        val equivUsd = montoIngresado / tasaBCV
+                        "Equivale a $${"%.2f".format(equivUsd)} USD"
+                    } else {
+                        val equivBs = montoIngresado * tasaBCV
+                        "Equivale a Bs. ${"%.2f".format(equivBs)}"
+                    }
+                    Text(text = equivalenciaTexto, color = estados, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                // Muestra mensaje de error en rojo si se pasa
+                if (mensajeError.isNotEmpty()) {
+                    Text(text = mensajeError, color = Color.Red, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -980,12 +1048,20 @@ fun DialogoAbono(
 
                     Button(
                         onClick = {
-                            // Convertimos el texto a número. Si está vacío o da error, ponemos 0.0
-                            val monto = montoAbono.toDoubleOrNull() ?: 0.0
-                            if (monto > deudaMaxima) {
+                            val montoLimpio = montoAbonoTexto.replace(",", ".").toDoubleOrNull() ?: 0.0
+                            
+                            if (montoLimpio <= 0) {
+                                mensajeError = "Ingresa un monto válido"
+                            } else if (montoLimpio > limiteMaximo + 0.01) {
                                 mensajeError = "No puedes abonar más de la deuda"
-                            } else if (monto > 0) {
-                                onConfirmar(monto)
+                            } else {
+                                // Convertir a USD si se ingresó en Bs.
+                                val montoUsdFinal = if (monedaAbono == "VES" && tasaBCV > 0) {
+                                    montoLimpio / tasaBCV
+                                } else {
+                                    montoLimpio
+                                }
+                                onConfirmar(montoUsdFinal)
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = fondo2)
