@@ -1,6 +1,8 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 package com.example.gestor_deudores.ui.cotizador
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -11,8 +13,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.ui.window.Dialog
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,34 +43,76 @@ import java.text.NumberFormat
 import java.util.Locale
 
 // ====================================================================
-// 1. PANTALLA PRINCIPAL DEL COTIZADOR
+// 1. PANTALLA PRINCIPAL DEL COTIZADOR (CATÁLOGO)
 // ====================================================================
 @Composable
 fun CotizadorPrincipal(
     viewModel: CotizadorViewModel, 
     navController: NavController,
-    tasaBcvGlobal: Double // Recibimos la tasa desde el nivel superior
+    tasaBcvGlobal: Double
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val plantillas by viewModel.listaPlantillas.collectAsState()
     
-    // Le pasamos la tasa global al ViewModel apenas entramos
+    // Controlamos qué tarjeta está expandida (guardamos su ID)
+    var idTarjetaExpandida by remember { mutableStateOf<Int?>(null) }
+    
+    // Controlamos si mostramos la ventana modal gigante del formulario
+    var mostrarFormulario by remember { mutableStateOf(false) }
+
     LaunchedEffect(tasaBcvGlobal) {
         viewModel.actualizarTasaBcv(tasaBcvGlobal)
+    }
+
+    // El Formulario Gigante (Oculto por defecto, se abre como un Dialog o BottomSheet)
+    if (mostrarFormulario) {
+        Dialog(onDismissRequest = { 
+            mostrarFormulario = false
+            viewModel.limpiarFormulario()
+        }) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.9f) // Ocupa casi toda la pantalla
+                    .padding(vertical = 16.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = fondo)
+            ) {
+                // Aquí metemos TODO el formulario viejo (LazyColumn original)
+                FormularioCotizacion(
+                    viewModel = viewModel,
+                    uiState = uiState,
+                    onCerrar = { mostrarFormulario = false }
+                )
+            }
+        }
     }
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("COTIZADOR", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 22.sp) },
+                title = { Text("MIS COTIZACIONES", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 22.sp) },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = fondo2)
             )
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { 
+                    viewModel.limpiarFormulario()
+                    mostrarFormulario = true 
+                },
+                containerColor = estados,
+                contentColor = Color.White,
+                shape = CircleShape
+            ) {
+                Icon(imageVector = Icons.Default.Add, contentDescription = "Nueva Plantilla")
+            }
         },
         bottomBar = {
             BarraNavegacionInferior(
                 onIrAInicio = { navController.navigate(rutas.HOME) },
                 onIrAPedidos = { navController.navigate(rutas.PEDIDOS) },
-                onIrACotizar = {} // Ya estamos aquí
+                onIrACotizar = {} 
             )
         }
     ) { paddingValues ->
@@ -76,54 +124,188 @@ fun CotizadorPrincipal(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // --- SECCIÓN 1: CARRUSEL DE PLANTILLAS GUARDADAS ---
+            // Un pequeño aviso sobre la tasa BCV activa
             item {
-                Text("Mis Plantillas Guardadas", fontWeight = FontWeight.Bold, color = estados, fontSize = 16.sp)
-                Spacer(modifier = Modifier.height(8.dp))
-                if (plantillas.isEmpty()) {
-                    Text("No tienes plantillas guardadas aún.", color = Color.Gray, fontSize = 14.sp)
-                } else {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(plantillas) { plantilla ->
-                            TarjetaPlantillaGuardada(
-                                plantilla = plantilla,
-                                seleccionada = uiState.idActual == plantilla.id,
-                                onClick = { viewModel.cargarPlantilla(plantilla) }
-                            )
-                        }
-                    }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Catálogo de Precios", fontWeight = FontWeight.Bold, color = estados, fontSize = 16.sp)
+                    Text("Tasa BCV: Bs. $tasaBcvGlobal", fontSize = 12.sp, color = Color.Gray)
                 }
             }
 
-            // --- SECCIÓN 2: TASA BCV Y NOMBRE DE PLANTILLA ---
-            item {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        value = uiState.nombrePlantilla,
-                        onValueChange = { viewModel.onNombrePlantillaChange(it) },
-                        label = { Text("Nombre de la Plantilla") },
-                        placeholder = { Text("Ej. Taza Mágica") },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
-                        singleLine = true
-                    )
+            if (plantillas.isEmpty()) {
+                item {
+                    Text("Aún no tienes plantillas de cotización creadas.\nToca el botón '+' para crear tu primera fórmula.", color = Color.Gray, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 40.dp))
+                }
+            } else {
+                items(plantillas) { plantilla ->
+                    val estaExpandida = idTarjetaExpandida == plantilla.id
                     
-                    // Mostramos la tasa global de solo lectura (con fondo gris)
-                    OutlinedTextField(
-                        value = "Bs. ${tasaBcvGlobal}",
-                        onValueChange = { },
-                        readOnly = true,
-                        label = { Text("Tasa BCV") },
-                        modifier = Modifier.width(100.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        singleLine = true,
-                        colors = TextFieldDefaults.colors(
-                            unfocusedContainerColor = fondo_claro,
-                            focusedContainerColor = fondo_claro
-                        )
+                    TarjetaPlantillaExpandible(
+                        plantilla = plantilla,
+                        tasaBcvGlobal = tasaBcvGlobal,
+                        expandida = estaExpandida,
+                        onClickTarjeta = {
+                            // Si tocas la que ya está abierta, se cierra. Si tocas otra, se abre esa.
+                            idTarjetaExpandida = if (estaExpandida) null else plantilla.id
+                        },
+                        onEditarClick = {
+                            viewModel.cargarPlantilla(plantilla)
+                            mostrarFormulario = true
+                        }
                     )
                 }
             }
+        }
+    }
+}
+
+// ====================================================================
+// NUEVO COMPONENTE: TARJETA EXPANDIBLE DEL CATÁLOGO
+// ====================================================================
+@Composable
+fun TarjetaPlantillaExpandible(
+    plantilla: PlantillaCotizacion,
+    tasaBcvGlobal: Double,
+    expandida: Boolean,
+    onClickTarjeta: () -> Unit,
+    onEditarClick: () -> Unit
+) {
+    val formatoUSD = NumberFormat.getCurrencyInstance(Locale("en", "US"))
+    
+    // Matemática rápida para mostrar en la tarjeta sin tener que cargarla al ViewModel
+    fun aUsd(valor: Double, moneda: String): Double = if (moneda == "VES") valor / tasaBcvGlobal else valor
+    
+    val costoPZ = aUsd(plantilla.precioPaquetePieza, plantilla.monedaPaquetePieza) / plantilla.cantidadPaquetePieza
+    val costoEmp = aUsd(plantilla.precioPaqueteEmpaque, plantilla.monedaPaqueteEmpaque) / plantilla.cantidadPaqueteEmpaque
+    val costoPapel = aUsd(plantilla.precioPaquetePapel, plantilla.monedaPaquetePapel) / plantilla.cantidadPaquetePapel
+    val costoDtf = aUsd(plantilla.precioTotalDtf, plantilla.monedaDtf) / plantilla.rendimientoDtf
+    val costoTrans = aUsd(plantilla.costoTransporte, plantilla.monedaTransporte) / plantilla.rendimientoTransporte
+    val costoDiseno = aUsd(plantilla.costoDiseno, plantilla.monedaDiseno) / plantilla.rendimientoDiseno
+    
+    val subtotal = costoPZ + costoEmp + costoPapel + costoDtf + costoTrans + costoDiseno
+    val costoTotal = subtotal + (subtotal * (plantilla.porcentajeOperativo / 100.0))
+    
+    val precioDetal = if(plantilla.porcentajeGananciaDetal < 100) costoTotal / (1.0 - (plantilla.porcentajeGananciaDetal / 100.0)) else 0.0
+    val precioMayor = if(plantilla.porcentajeGananciaMayor < 100) costoTotal / (1.0 - (plantilla.porcentajeGananciaMayor / 100.0)) else 0.0
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .animateContentSize() // Hace la animación suave al expandir/contraer
+            .clickable { onClickTarjeta() },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = if (expandida) estados else fondo2),
+        elevation = CardDefaults.cardElevation(if (expandida) 6.dp else 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // Cabecera siempre visible
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(plantilla.nombrePlantilla, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 18.sp)
+                    Text("Detal: ${formatoUSD.format(precioDetal)} | Mayor: ${formatoUSD.format(precioMayor)}", color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
+                }
+                Icon(
+                    imageVector = if (expandida) Icons.Default.Close else Icons.Default.Add, // Solo un icono indicativo
+                    contentDescription = null,
+                    tint = Color.White
+                )
+            }
+
+            // Cuerpo oculto (La Radiografía)
+            AnimatedVisibility(visible = expandida) {
+                Column(modifier = Modifier.padding(top = 16.dp)) {
+                    HorizontalDivider(color = Color.White.copy(alpha = 0.3f), modifier = Modifier.padding(bottom = 8.dp))
+                    
+                    Text("RADIOGRAFÍA FINANCIERA", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 12.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("Costo de Producción Unitario:", color = Color.White, fontSize = 14.sp)
+                        Text(formatoUSD.format(costoTotal), color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    // VENTA AL DETAL
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("VENTA AL DETAL (${plantilla.porcentajeGananciaDetal.toInt()}%):", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Text(formatoUSD.format(precioDetal), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("Ganancia libre por pieza:", color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp)
+                        Text("+ " + formatoUSD.format(precioDetal - costoTotal), color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // VENTA AL MAYOR
+                    Box(modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(Color.Black.copy(alpha = 0.1f)).padding(8.dp)) {
+                        Column {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("VENTA AL MAYOR (${plantilla.porcentajeGananciaMayor.toInt()}%):", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text(formatoUSD.format(precioMayor), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Ganancia libre por pieza:", color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp)
+                                Text("+ " + formatoUSD.format(precioMayor - costoTotal), color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Botón Editar
+                    Button(
+                        onClick = onEditarClick,
+                        colors = ButtonDefaults.buttonColors(containerColor = fondo),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Editar Costos de la Plantilla", color = estados, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ====================================================================
+// 3. EL FORMULARIO GIGANTE DE EDICIÓN (Oculto en un Dialog)
+// ====================================================================
+@Composable
+fun FormularioCotizacion(
+    viewModel: CotizadorViewModel,
+    uiState: CotizadorUiState,
+    onCerrar: () -> Unit
+) {
+    val plantillas by viewModel.listaPlantillas.collectAsState()
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(fondo_claro)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(if (uiState.idActual > 0) "EDITAR PLANTILLA" else "NUEVA PLANTILLA", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = estados)
+                IconButton(onClick = onCerrar) {
+                    Icon(Icons.Default.Close, contentDescription = "Cerrar")
+                }
+            }
+        }
+
+        // --- SECCIÓN 1: NOMBRE DE PLANTILLA ---
+        item {
+            OutlinedTextField(
+                value = uiState.nombrePlantilla,
+                onValueChange = { viewModel.onNombrePlantillaChange(it) },
+                label = { Text("Nombre de la Plantilla") },
+                placeholder = { Text("Ej. Taza Mágica, Franela DTF") },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                singleLine = true
+            )
+        }
 
             // --- SECCIÓN 3: MATERIA PRIMA (Pieza, Empaque y Extras) ---
             item {
@@ -197,7 +379,7 @@ fun CotizadorPrincipal(
                         moneda = uiState.monedaDtf,
                         cantidad = uiState.rendimientoDtf, // Cantidad de piezas que salen
                         labelPrecio = "Costo Total",
-                        labelCantidad = "¿Cuántas piezas salen?",
+                        labelCantidad = "Piezas",
                         onPrecioChange = { viewModel.onPrecioTotalDtfChange(it) },
                         onMonedaChange = { viewModel.onMonedaDtfChange(it) },
                         onCantidadChange = { viewModel.onRendimientoDtfChange(it) }
@@ -211,7 +393,7 @@ fun CotizadorPrincipal(
                         moneda = uiState.monedaTransporte,
                         cantidad = uiState.rendimientoTransporte,
                         labelPrecio = "Costo Total",
-                        labelCantidad = "¿Para cuántas piezas sirvió?",
+                        labelCantidad = "Piezas",
                         onPrecioChange = { viewModel.onCostoTransporteChange(it) },
                         onMonedaChange = { viewModel.onMonedaTransporteChange(it) },
                         onCantidadChange = { viewModel.onRendimientoTransporteChange(it) }
@@ -226,11 +408,47 @@ fun CotizadorPrincipal(
                         moneda = uiState.monedaDiseno,
                         cantidad = uiState.rendimientoDiseno,
                         labelPrecio = "Costo Total",
-                        labelCantidad = "¿Para cuántas piezas sirvió?",
+                        labelCantidad = "Piezas",
                         onPrecioChange = { viewModel.onCostoDisenoChange(it) },
                         onMonedaChange = { viewModel.onMonedaDisenoChange(it) },
                         onCantidadChange = { viewModel.onRendimientoDisenoChange(it) }
                     )
+                    
+                    // --- NUEVO: Insumos Extra (Imán, Resina, etc) ---
+                    Spacer(modifier = Modifier.height(8.dp))
+                    var mostrarExtra by remember { mutableStateOf(uiState.costoExtra.isNotEmpty()) }
+                    
+                    if (mostrarExtra) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("Insumos Extra (Imán, Resina, Ganchos, etc):", fontSize = 12.sp, color = Color.Gray)
+                        CampoMonedaCantidad(
+                            precio = uiState.costoExtra,
+                            moneda = uiState.monedaExtra,
+                            cantidad = uiState.rendimientoExtra,
+                            labelPrecio = "Costo Total",
+                            labelCantidad = "Piezas",
+                            onPrecioChange = { viewModel.onCostoExtraChange(it) },
+                            onMonedaChange = { viewModel.onMonedaExtraChange(it) },
+                            onCantidadChange = { viewModel.onRendimientoExtraChange(it) }
+                        )
+                        TextButton(
+                            onClick = { 
+                                mostrarExtra = false
+                                viewModel.onCostoExtraChange("") // Lo borramos
+                            },
+                            modifier = Modifier.align(Alignment.End)
+                        ) {
+                            Text("Quitar extras", color = Color.Red, fontSize = 11.sp)
+                        }
+                    } else {
+                        TextButton(
+                            onClick = { mostrarExtra = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Text(" Agregar insumos extra (Imanes, etc)")
+                        }
+                    }
                 }
             }
 
@@ -292,7 +510,7 @@ fun CotizadorPrincipal(
 
                     // Botón Guardar / Actualizar
                     Button(
-                        onClick = { viewModel.guardarPlantilla(onExito = { viewModel.limpiarFormulario() }) },
+                        onClick = { viewModel.guardarPlantilla(onExito = onCerrar) },
                         colors = ButtonDefaults.buttonColors(containerColor = estados),
                         enabled = uiState.nombrePlantilla.isNotBlank()
                     ) {
@@ -300,30 +518,13 @@ fun CotizadorPrincipal(
                     }
                 }
                 
-                // Botón "Nuevo" para forzar salir de modo edición
-                if (uiState.idActual > 0) {
-                    TextButton(
-                        onClick = { viewModel.limpiarFormulario() },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = null, tint = estados)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Crear plantilla nueva", color = estados, fontWeight = FontWeight.Bold)
-                    }
-                }
-                
-                Spacer(modifier = Modifier.height(40.dp)) // Espacio final para que el scroll no quede tapado por la barra inferior
+                // Espacio final
+                Spacer(modifier = Modifier.height(40.dp))
             }
         }
     }
-}
 
-
-// ====================================================================
 // 2. COMPONENTES REUTILIZABLES (UI LIMPIA)
-// ====================================================================
-
-// Tarjeta base blanca con sombra suave para agrupar campos
 @Composable
 fun SeccionCard(titulo: String, content: @Composable ColumnScope.() -> Unit) {
     Card(
@@ -376,7 +577,7 @@ fun CampoMonedaCantidad(
     moneda: String,
     cantidad: String,
     labelPrecio: String = "Precio Lote",
-    labelCantidad: String = "¿Cuántos trae?",
+    labelCantidad: String = "Piezas",
     onPrecioChange: (String) -> Unit,
     onMonedaChange: (String) -> Unit,
     onCantidadChange: (String) -> Unit
@@ -498,7 +699,7 @@ fun TarjetaResultadosFinancieros(uiState: CotizadorUiState) {
                 Text("Costo Producción (Pieza + DTF + Luz):", color = Color.White, fontSize = 12.sp)
                 Text(formatoUSD.format(uiState.costoTotalProduccionUsd), color = Color.White, fontWeight = FontWeight.Bold)
             }
-            Divider(color = Color.White.copy(alpha = 0.3f), modifier = Modifier.padding(vertical = 8.dp))
+            HorizontalDivider(color = Color.White.copy(alpha = 0.3f), modifier = Modifier.padding(vertical = 8.dp))
 
             // VENTA AL DETAL
             Text("VENTA AL DETAL (Margen: ${uiState.porcentajeGanancia.toInt()}%)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)

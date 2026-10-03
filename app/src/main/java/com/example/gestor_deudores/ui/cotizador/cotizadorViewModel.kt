@@ -48,6 +48,11 @@ data class CotizadorUiState(
     val monedaDiseno: String = "USD",
     val rendimientoDiseno: String = "1", // <-- NUEVO: ¿Para cuántas piezas te sirvió el diseño?
 
+    // 4.5. Insumos Extras (Imanes, resina, etc)
+    val costoExtra: String = "",
+    val monedaExtra: String = "USD",
+    val rendimientoExtra: String = "1",
+
     // 5. Operatividad y Ganancia (Barras deslizables)
     val porcentajeOperativo: Float = 10f, // 10% por defecto para luz/desgaste
     val porcentajeGanancia: Float = 40f,  // 40% por defecto de margen DETAL
@@ -185,6 +190,21 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
         _uiState.update { it.copy(rendimientoDiseno = valor) }
         calcularResultados()
     }
+    
+    fun onCostoExtraChange(valor: String) {
+        _uiState.update { it.copy(costoExtra = valor) }
+        calcularResultados()
+    }
+
+    fun onMonedaExtraChange(moneda: String) {
+        _uiState.update { it.copy(monedaExtra = moneda) }
+        calcularResultados()
+    }
+    
+    fun onRendimientoExtraChange(valor: String) {
+        _uiState.update { it.copy(rendimientoExtra = valor) }
+        calcularResultados()
+    }
 
     fun onPorcentajeOperativoChange(valor: Float) {
         _uiState.update { it.copy(porcentajeOperativo = valor) }
@@ -234,6 +254,9 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
                 costoDiseno = plantilla.costoDiseno.toString(),
                 monedaDiseno = plantilla.monedaDiseno,
                 rendimientoDiseno = plantilla.rendimientoDiseno.toString(),
+                costoExtra = plantilla.costoExtra.toString(),
+                monedaExtra = plantilla.monedaExtra,
+                rendimientoExtra = plantilla.rendimientoExtra.toString(),
                 porcentajeOperativo = plantilla.porcentajeOperativo,
                 porcentajeGanancia = plantilla.porcentajeGananciaDetal,
                 porcentajeGananciaMayor = plantilla.porcentajeGananciaMayor
@@ -279,6 +302,9 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
             costoDiseno = parseD(estado.costoDiseno),
             monedaDiseno = estado.monedaDiseno,
             rendimientoDiseno = parseCant(estado.rendimientoDiseno),
+            costoExtra = parseD(estado.costoExtra),
+            monedaExtra = estado.monedaExtra,
+            rendimientoExtra = parseCant(estado.rendimientoExtra),
             porcentajeOperativo = estado.porcentajeOperativo,
             porcentajeGananciaDetal = estado.porcentajeGanancia,
             porcentajeGananciaMayor = estado.porcentajeGananciaMayor
@@ -336,7 +362,10 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
         val totalDiseno = aUsd(parseD(estado.costoDiseno), estado.monedaDiseno)
         val disenoPorPieza = totalDiseno / parseCant(estado.rendimientoDiseno)
 
-        val subtotalMateriales = costoUnitarioPieza + costoUnitarioEmpaque + costoUnitarioPapel + dtfPorPieza + transportePorPieza + disenoPorPieza
+        val totalExtra = aUsd(parseD(estado.costoExtra), estado.monedaExtra)
+        val extraPorPieza = totalExtra / parseCant(estado.rendimientoExtra)
+
+        val subtotalMateriales = costoUnitarioPieza + costoUnitarioEmpaque + costoUnitarioPapel + dtfPorPieza + transportePorPieza + disenoPorPieza + extraPorPieza
         val costoOperativo = subtotalMateriales * (estado.porcentajeOperativo / 100.0)
         val costoTotalProduccion = subtotalMateriales + costoOperativo
 

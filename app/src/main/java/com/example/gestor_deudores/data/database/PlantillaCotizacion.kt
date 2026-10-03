@@ -38,6 +38,11 @@ data class PlantillaCotizacion(
     val monedaDiseno: String,
     val rendimientoDiseno: Int,
 
+    // 4.5 Extras (Imanes, resina, ganchos, etc)
+    val costoExtra: Double,
+    val monedaExtra: String,
+    val rendimientoExtra: Int,
+
     // 5. Operatividad y Ganancia
     val porcentajeOperativo: Float,
     val porcentajeGananciaDetal: Float,
