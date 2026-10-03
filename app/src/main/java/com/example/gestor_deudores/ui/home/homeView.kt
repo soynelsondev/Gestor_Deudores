@@ -330,8 +330,8 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
                     onIrAPedidos = {
                         navController.navigate(rutas.PEDIDOS)
                     },
-                    onIrAAgregar = {
-                        navController.navigate(rutas.REGISTRO_EXPRESS)
+                    onIrACotizar = {
+                        navController.navigate(rutas.COTIZADOR)
                     }
                 )
             }
@@ -431,10 +431,9 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
 
 @Composable
 fun BarraNavegacionInferior(
-    // Pasamos funciones para que la barra avise a dónde quiere viajar el usuario
     onIrAInicio: () -> Unit,
     onIrAPedidos: () -> Unit,
-    onIrAAgregar: () -> Unit
+    onIrACotizar: () -> Unit
 ) {
     NavigationBar(
         containerColor = fondo2, // El color base de tu barra
@@ -464,10 +463,10 @@ fun BarraNavegacionInferior(
             )
         )
 
-        // Ítem 3: Cotizar (Reemplaza a Agregar)
+        // Ítem 3: Cotizar
         NavigationBarItem(
             selected = false,
-            onClick = { onIrAAgregar() }, // Por ahora usa la función que recibe para navegar, luego se cambiará el nombre de la variable si hace falta
+            onClick = { onIrACotizar() },
             icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Cotizar") },
             label = { Text("Cotizar") },
             colors = NavigationBarItemDefaults.colors(

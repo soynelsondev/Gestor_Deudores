@@ -1,8 +1,8 @@
 {
   "formatVersion": 1,
   "database": {
-    "version": 4,
-    "identityHash": "75eeffa6567a32f56a11b95c83d925bf",
+    "version": 6,
+    "identityHash": "6dc0aa4fb4a98fd60a369794ec571d69",
     "entities": [
       {
         "tableName": "deudores",
@@ -266,7 +266,7 @@
       },
       {
         "tableName": "plantillas_cotizacion",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `nombrePlantilla` TEXT NOT NULL, `precioPaquetePieza` REAL NOT NULL, `monedaPaquetePieza` TEXT NOT NULL, `cantidadPaquetePieza` INTEGER NOT NULL, `precioPaqueteEmpaque` REAL NOT NULL, `monedaPaqueteEmpaque` TEXT NOT NULL, `cantidadPaqueteEmpaque` INTEGER NOT NULL, `precioTotalDtf` REAL NOT NULL, `monedaDtf` TEXT NOT NULL, `rendimientoDtf` INTEGER NOT NULL, `costoTransporte` REAL NOT NULL, `monedaTransporte` TEXT NOT NULL, `rendimientoTransporte` INTEGER NOT NULL, `costoDiseno` REAL NOT NULL, `monedaDiseno` TEXT NOT NULL, `rendimientoDiseno` INTEGER NOT NULL, `porcentajeOperativo` REAL NOT NULL, `porcentajeGananciaDetal` REAL NOT NULL, `porcentajeGananciaMayor` REAL NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `nombrePlantilla` TEXT NOT NULL, `precioPaquetePieza` REAL NOT NULL, `monedaPaquetePieza` TEXT NOT NULL, `cantidadPaquetePieza` INTEGER NOT NULL, `precioPaqueteEmpaque` REAL NOT NULL, `monedaPaqueteEmpaque` TEXT NOT NULL, `cantidadPaqueteEmpaque` INTEGER NOT NULL, `precioPaquetePapel` REAL NOT NULL, `monedaPaquetePapel` TEXT NOT NULL, `cantidadPaquetePapel` INTEGER NOT NULL, `precioTotalDtf` REAL NOT NULL, `monedaDtf` TEXT NOT NULL, `rendimientoDtf` INTEGER NOT NULL, `costoTransporte` REAL NOT NULL, `monedaTransporte` TEXT NOT NULL, `rendimientoTransporte` INTEGER NOT NULL, `costoDiseno` REAL NOT NULL, `monedaDiseno` TEXT NOT NULL, `rendimientoDiseno` INTEGER NOT NULL, `porcentajeOperativo` REAL NOT NULL, `porcentajeGananciaDetal` REAL NOT NULL, `porcentajeGananciaMayor` REAL NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
@@ -313,6 +313,24 @@
           {
             "fieldPath": "cantidadPaqueteEmpaque",
             "columnName": "cantidadPaqueteEmpaque",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "precioPaquetePapel",
+            "columnName": "precioPaquetePapel",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "monedaPaquetePapel",
+            "columnName": "monedaPaquetePapel",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cantidadPaquetePapel",
+            "columnName": "cantidadPaquetePapel",
             "affinity": "INTEGER",
             "notNull": true
           },
@@ -402,7 +420,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '75eeffa6567a32f56a11b95c83d925bf')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '6dc0aa4fb4a98fd60a369794ec571d69')"
     ]
   }
 }

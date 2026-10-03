@@ -47,6 +47,9 @@ class HomeViewModel(private val dao: DeudorDao,private val dao2: DeudaDao) : Vie
     // --- ESTADOS Y LÓGICA DE TASA BCV Y MONEDA DE VISTA ---
     private val _precioDolarBCV = MutableStateFlow(0.0)
     val precioDolarBCV = _precioDolarBCV.asStateFlow()
+    
+    // Alias para la tasa global
+    val tasaBcvActual = _precioDolarBCV.asStateFlow()
 
     private val _monedaVista = MutableStateFlow("USD") // "USD" o "VES"
     val monedaVista = _monedaVista.asStateFlow()

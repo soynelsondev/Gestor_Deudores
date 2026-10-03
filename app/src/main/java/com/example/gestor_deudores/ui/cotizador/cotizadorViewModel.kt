@@ -28,6 +28,11 @@ data class CotizadorUiState(
     val precioPaqueteEmpaque: String = "",
     val monedaPaqueteEmpaque: String = "USD",
     val cantidadPaqueteEmpaque: String = "1",
+    
+    // 2.5. Materiales (Papel de Sublimación Opcional)
+    val precioPaquetePapel: String = "",
+    val monedaPaquetePapel: String = "USD",
+    val cantidadPaquetePapel: String = "100", // Generalmente es una resma de 100
 
     // 3. Servicios Directos (DTF)
     val precioTotalDtf: String = "",
@@ -37,8 +42,11 @@ data class CotizadorUiState(
     // 4. Servicios Extras
     val costoTransporte: String = "",
     val monedaTransporte: String = "USD",
+    val rendimientoTransporte: String = "1", // <-- NUEVO: ¿Para cuántas piezas te sirvió el pasaje/flete?
+    
     val costoDiseno: String = "",
     val monedaDiseno: String = "USD",
+    val rendimientoDiseno: String = "1", // <-- NUEVO: ¿Para cuántas piezas te sirvió el diseño?
 
     // 5. Operatividad y Ganancia (Barras deslizables)
     val porcentajeOperativo: Float = 10f, // 10% por defecto para luz/desgaste
@@ -117,6 +125,21 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
         _uiState.update { it.copy(cantidadPaqueteEmpaque = valor) }
         calcularResultados()
     }
+    
+    fun onPrecioPaquetePapelChange(valor: String) {
+        _uiState.update { it.copy(precioPaquetePapel = valor) }
+        calcularResultados()
+    }
+
+    fun onMonedaPaquetePapelChange(moneda: String) {
+        _uiState.update { it.copy(monedaPaquetePapel = moneda) }
+        calcularResultados()
+    }
+
+    fun onCantidadPaquetePapelChange(valor: String) {
+        _uiState.update { it.copy(cantidadPaquetePapel = valor) }
+        calcularResultados()
+    }
 
     fun onPrecioTotalDtfChange(valor: String) {
         _uiState.update { it.copy(precioTotalDtf = valor) }
@@ -142,6 +165,11 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
         _uiState.update { it.copy(monedaTransporte = moneda) }
         calcularResultados()
     }
+    
+    fun onRendimientoTransporteChange(valor: String) {
+        _uiState.update { it.copy(rendimientoTransporte = valor) }
+        calcularResultados()
+    }
 
     fun onCostoDisenoChange(valor: String) {
         _uiState.update { it.copy(costoDiseno = valor) }
@@ -150,6 +178,11 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
 
     fun onMonedaDisenoChange(moneda: String) {
         _uiState.update { it.copy(monedaDiseno = moneda) }
+        calcularResultados()
+    }
+    
+    fun onRendimientoDisenoChange(valor: String) {
+        _uiState.update { it.copy(rendimientoDiseno = valor) }
         calcularResultados()
     }
 
@@ -189,13 +222,18 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
                 precioPaqueteEmpaque = plantilla.precioPaqueteEmpaque.toString(),
                 monedaPaqueteEmpaque = plantilla.monedaPaqueteEmpaque,
                 cantidadPaqueteEmpaque = plantilla.cantidadPaqueteEmpaque.toString(),
+                precioPaquetePapel = plantilla.precioPaquetePapel.toString(),
+                monedaPaquetePapel = plantilla.monedaPaquetePapel,
+                cantidadPaquetePapel = plantilla.cantidadPaquetePapel.toString(),
                 precioTotalDtf = plantilla.precioTotalDtf.toString(),
                 monedaDtf = plantilla.monedaDtf,
                 rendimientoDtf = plantilla.rendimientoDtf.toString(),
                 costoTransporte = plantilla.costoTransporte.toString(),
                 monedaTransporte = plantilla.monedaTransporte,
+                rendimientoTransporte = plantilla.rendimientoTransporte.toString(),
                 costoDiseno = plantilla.costoDiseno.toString(),
                 monedaDiseno = plantilla.monedaDiseno,
+                rendimientoDiseno = plantilla.rendimientoDiseno.toString(),
                 porcentajeOperativo = plantilla.porcentajeOperativo,
                 porcentajeGanancia = plantilla.porcentajeGananciaDetal,
                 porcentajeGananciaMayor = plantilla.porcentajeGananciaMayor
@@ -229,13 +267,18 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
             precioPaqueteEmpaque = parseD(estado.precioPaqueteEmpaque),
             monedaPaqueteEmpaque = estado.monedaPaqueteEmpaque,
             cantidadPaqueteEmpaque = parseCant(estado.cantidadPaqueteEmpaque),
+            precioPaquetePapel = parseD(estado.precioPaquetePapel),
+            monedaPaquetePapel = estado.monedaPaquetePapel,
+            cantidadPaquetePapel = parseCant(estado.cantidadPaquetePapel),
             precioTotalDtf = parseD(estado.precioTotalDtf),
             monedaDtf = estado.monedaDtf,
             rendimientoDtf = parseCant(estado.rendimientoDtf),
             costoTransporte = parseD(estado.costoTransporte),
             monedaTransporte = estado.monedaTransporte,
+            rendimientoTransporte = parseCant(estado.rendimientoTransporte),
             costoDiseno = parseD(estado.costoDiseno),
             monedaDiseno = estado.monedaDiseno,
+            rendimientoDiseno = parseCant(estado.rendimientoDiseno),
             porcentajeOperativo = estado.porcentajeOperativo,
             porcentajeGananciaDetal = estado.porcentajeGanancia,
             porcentajeGananciaMayor = estado.porcentajeGananciaMayor
@@ -279,15 +322,21 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
 
         val costoEmpaqueBruto = parseD(estado.precioPaqueteEmpaque) / parseCant(estado.cantidadPaqueteEmpaque)
         val costoUnitarioEmpaque = aUsd(costoEmpaqueBruto, estado.monedaPaqueteEmpaque)
+        
+        val costoPapelBruto = parseD(estado.precioPaquetePapel) / parseCant(estado.cantidadPaquetePapel)
+        val costoUnitarioPapel = aUsd(costoPapelBruto, estado.monedaPaquetePapel)
 
         // 2. Sumamos los servicios logísticos en USD
         val precioTotalDtf = aUsd(parseD(estado.precioTotalDtf), estado.monedaDtf)
         val dtfPorPieza = precioTotalDtf / parseCant(estado.rendimientoDtf)
         
-        val transporte = aUsd(parseD(estado.costoTransporte), estado.monedaTransporte)
-        val diseno = aUsd(parseD(estado.costoDiseno), estado.monedaDiseno)
+        val totalTransporte = aUsd(parseD(estado.costoTransporte), estado.monedaTransporte)
+        val transportePorPieza = totalTransporte / parseCant(estado.rendimientoTransporte)
+        
+        val totalDiseno = aUsd(parseD(estado.costoDiseno), estado.monedaDiseno)
+        val disenoPorPieza = totalDiseno / parseCant(estado.rendimientoDiseno)
 
-        val subtotalMateriales = costoUnitarioPieza + costoUnitarioEmpaque + dtfPorPieza + transporte + diseno
+        val subtotalMateriales = costoUnitarioPieza + costoUnitarioEmpaque + costoUnitarioPapel + dtfPorPieza + transportePorPieza + disenoPorPieza
         val costoOperativo = subtotalMateriales * (estado.porcentajeOperativo / 100.0)
         val costoTotalProduccion = subtotalMateriales + costoOperativo
 

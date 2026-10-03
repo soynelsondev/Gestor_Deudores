@@ -1,6 +1,8 @@
 package com.example.gestor_deudores
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.navigation.NavType
@@ -15,6 +17,8 @@ import com.example.gestor_deudores.ui.Registro.Principal as PantallaRegistroDeud
 import com.example.gestor_deudores.ui.Registro.RegistroDeudorViewModel
 import com.example.gestor_deudores.ui.home.HistorialDeudorView
 import com.example.gestor_deudores.ui.home.HomeViewModel
+import com.example.gestor_deudores.ui.cotizador.CotizadorViewModel
+import com.example.gestor_deudores.ui.cotizador.CotizadorPrincipal
 import com.example.gestor_deudores.ui.home.homePrincipal
 import com.example.gestor_deudores.ui.pedidos.PedidoViewModel
 import com.example.gestor_deudores.ui.pedidos.PedidosPrincipal
@@ -27,7 +31,8 @@ fun NavegacionPrincipal(
     viewModelRegistro: RegistroDeudorViewModel,
     viewModelDeuda: RDeudaViewModel,
     viewModelHome: HomeViewModel,
-    viewModelPedido: PedidoViewModel
+    viewModelPedido: PedidoViewModel,
+    viewModelCotizador: CotizadorViewModel
 ) {
     val navController = rememberNavController()
 
@@ -84,14 +89,12 @@ fun NavegacionPrincipal(
         // PANTALLAS EN CONSTRUCCIÓN (COTIZADOR Y RESUMEN)
         // ==========================================
         composable(rutas.COTIZADOR) {
-            androidx.compose.material3.Scaffold { padding ->
-                androidx.compose.foundation.layout.Box(
-                    modifier = androidx.compose.ui.Modifier.fillMaxSize().padding(padding),
-                    contentAlignment = androidx.compose.ui.Alignment.Center
-                ) {
-                    androidx.compose.material3.Text("Cotizador en construcción 🛠️")
-                }
-            }
+            val tasaBcvActual by viewModelHome.tasaBcvActual.collectAsState()
+            CotizadorPrincipal(
+                viewModel = viewModelCotizador, 
+                navController = navController,
+                tasaBcvGlobal = tasaBcvActual
+            )
         }
 
         composable(rutas.RESUMEN) {

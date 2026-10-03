@@ -83,6 +83,7 @@ import com.example.gestor_deudores.ui.theme.componentes
 import com.example.gestor_deudores.ui.theme.estados
 import com.example.gestor_deudores.ui.theme.fondo
 import com.example.gestor_deudores.ui.theme.fondo2
+import com.example.gestor_deudores.ui.home.BarraNavegacionInferior
 import com.example.gestor_deudores.ui.theme.fondo_claro
 import com.example.gestor_deudores.ui.theme.textoInactivo
 import com.example.gestor_deudores.ui.theme.verdeWhatsapp
@@ -124,54 +125,11 @@ fun PedidosPrincipal(viewModel: PedidoViewModel, navController: NavController) {
             }
         },
         bottomBar = {
-            NavigationBar(
-                containerColor = fondo2,
-            ) {
-                NavigationBarItem(
-                    selected = false,
-                    onClick = { navController.navigate(rutas.HOME) },
-                    icon = { Icon(Icons.Default.Home, contentDescription = "Inicio") },
-                    label = { Text("Inicio") },
-                    colors = NavigationBarItemDefaults.colors(
-                        unselectedIconColor = Color.Gray,
-                        unselectedTextColor = Color.Gray
-                    )
-                )
-
-                NavigationBarItem(
-                    selected = true,
-                    onClick = { },
-                    icon = { Icon(Icons.Default.ShoppingCart, contentDescription = "Pedidos") },
-                    label = { Text("Pedidos") },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = estados,
-                        selectedTextColor = estados,
-                        indicatorColor = Color.White
-                    )
-                )
-
-                NavigationBarItem(
-                    selected = false,
-                    onClick = { navController.navigate(rutas.COTIZADOR) }, // Temporariamente usaremos la misma constante que crearemos en rutas
-                    icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Cotizar") },
-                    label = { Text("Cotizar") },
-                    colors = NavigationBarItemDefaults.colors(
-                        unselectedIconColor = Color.Gray,
-                        unselectedTextColor = Color.Gray
-                    )
-                )
-                
-                NavigationBarItem(
-                    selected = false,
-                    onClick = { navController.navigate(rutas.RESUMEN) }, // Temporariamente usaremos la misma constante que crearemos en rutas
-                    icon = { Icon(Icons.Default.Star, contentDescription = "Resumen") },
-                    label = { Text("Resumen") },
-                    colors = NavigationBarItemDefaults.colors(
-                        unselectedIconColor = Color.Gray,
-                        unselectedTextColor = Color.Gray
-                    )
-                )
-            }
+            BarraNavegacionInferior(
+                onIrAInicio = { navController.navigate(rutas.HOME) },
+                onIrAPedidos = {}, // Ya estamos aquí
+                onIrACotizar = { navController.navigate(rutas.COTIZADOR) }
+            )
         }
     ) { innerPadding ->
         Column(

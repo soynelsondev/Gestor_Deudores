@@ -12,6 +12,7 @@ import com.example.gestor_deudores.ui.Registro.RegistroDeudorViewModel
 import com.example.gestor_deudores.ui.registroDeuda.RDeudaViewModel
 // Asegúrate de importar el HomeViewModel
 import com.example.gestor_deudores.ui.home.HomeViewModel
+import com.example.gestor_deudores.ui.cotizador.CotizadorViewModel
 import com.example.gestor_deudores.ui.pedidos.PedidoViewModel
 
 class MainActivity : ComponentActivity() {
@@ -45,6 +46,10 @@ class MainActivity : ComponentActivity() {
                         baseDeDatos.deudaDao()
                     ) as T
                 }
+                if (modelClass.isAssignableFrom(CotizadorViewModel::class.java)) {
+                    @Suppress("UNCHECKED_CAST")
+                    return CotizadorViewModel(baseDeDatos.plantillaDao()) as T
+                }
                 throw IllegalArgumentException("Clase ViewModel desconocida")
             }
         }
@@ -54,13 +59,15 @@ class MainActivity : ComponentActivity() {
         // --- NUEVO: Instanciamos el HomeViewModel ---
         val viewModelHome by viewModels<HomeViewModel> { viewModelFactory }
         val viewModelPedido by viewModels<PedidoViewModel> { viewModelFactory }
+        val viewModelCotizador by viewModels<CotizadorViewModel> { viewModelFactory }
 
         setContent {
             NavegacionPrincipal(
                 viewModelRegistro = viewModelRegistro,
                 viewModelDeuda = viewModelDeuda,
                 viewModelHome = viewModelHome, // Lo enviamos a la navegación
-                viewModelPedido = viewModelPedido
+                viewModelPedido = viewModelPedido,
+                viewModelCotizador = viewModelCotizador
             )
         }
     }

@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [Deudor::class, Deuda::class, Pedido::class, PlantillaCotizacion::class],
-    version = 4,
+    version = 6, // <--- CAMBIO DE VERSIÓN A 6
     exportSchema = true
 )
 abstract class DeudaDataBase : RoomDatabase() {
@@ -67,18 +67,39 @@ abstract class DeudaDataBase : RoomDatabase() {
                         `precioPaqueteEmpaque` REAL NOT NULL,
                         `monedaPaqueteEmpaque` TEXT NOT NULL,
                         `cantidadPaqueteEmpaque` INTEGER NOT NULL,
+                        `precioPaquetePapel` REAL NOT NULL,
+                        `monedaPaquetePapel` TEXT NOT NULL,
+                        `cantidadPaquetePapel` INTEGER NOT NULL,
                         `precioTotalDtf` REAL NOT NULL,
                         `monedaDtf` TEXT NOT NULL,
                         `rendimientoDtf` INTEGER NOT NULL,
                         `costoTransporte` REAL NOT NULL,
                         `monedaTransporte` TEXT NOT NULL,
+                        `rendimientoTransporte` INTEGER NOT NULL,
                         `costoDiseno` REAL NOT NULL,
                         `monedaDiseno` TEXT NOT NULL,
+                        `rendimientoDiseno` INTEGER NOT NULL,
                         `porcentajeOperativo` REAL NOT NULL,
                         `porcentajeGananciaDetal` REAL NOT NULL,
                         `porcentajeGananciaMayor` REAL NOT NULL
                     )
                 """)
+            }
+        }
+
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Agregar las columnas que faltaban a la tabla plantillas_cotizacion
+                db.execSQL("ALTER TABLE plantillas_cotizacion ADD COLUMN rendimientoTransporte INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE plantillas_cotizacion ADD COLUMN rendimientoDiseno INTEGER NOT NULL DEFAULT 1")
+            }
+        }
+
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE plantillas_cotizacion ADD COLUMN precioPaquetePapel REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE plantillas_cotizacion ADD COLUMN monedaPaquetePapel TEXT NOT NULL DEFAULT 'USD'")
+                db.execSQL("ALTER TABLE plantillas_cotizacion ADD COLUMN cantidadPaquetePapel INTEGER NOT NULL DEFAULT 100")
             }
         }
 
@@ -89,7 +110,7 @@ abstract class DeudaDataBase : RoomDatabase() {
                     DeudaDataBase::class.java,
                     "control_deudas_db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .build()
 
                 INSTANCE = instance
