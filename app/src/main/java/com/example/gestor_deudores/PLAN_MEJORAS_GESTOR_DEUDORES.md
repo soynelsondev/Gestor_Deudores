@@ -322,94 +322,35 @@ Aplicarla al guardar y al calcular. (Pasar todo a centavos enteros sería lo ide
 ## 7. Bloques 4 al 8
 
 ### Bloque 4: Doble moneda (USD y Bs)
-Requiere Migration v2→v3 (Sección 3).
-
-1. Pantalla de **Ajustes**: campo "Tasa del día (Bs por 1 USD)" y fecha de última actualización. Se actualiza **manualmente** (sin depender de internet).
-2. Si la tasa tiene más de 24 horas sin actualizar, mostrar un aviso discreto en Inicio.
-3. Todos los montos principales siguen **guardados en USD**.
-4. En el total por cobrar y en cada tarjeta: debajo del monto en USD, el equivalente en Bs (`USD × tasa`, formato `Bs. 1.234,56`).
-5. Al registrar un **abono**, selector USD / Bs:
-   - Si es Bs: `montoUsd = montoBs / tasaActual`; guardar `monedaOriginal = 'BS'`, `montoOriginal = montoBs`, `tasaUsada = tasaActual`; el abono baja el saldo en USD por ese `montoUsd`.
-   - Mostrar antes de confirmar: "Bs. 500 a tasa 36,50 = 13,70 USD".
-6. **Importante:** el historial muestra la tasa usada en cada abono; cambiar la tasa de hoy **no modifica** abonos anteriores.
-7. Registros anteriores a la actualización: `monedaOriginal = 'USD'`, `tasaUsada = 0` (se muestran solo en USD).
-8. Todas las conversiones se redondean a 2 decimales con `redondear2()`.
-
-**Criterios de aceptación**
-- [ ] Abonar en Bs reduce el saldo en USD por el monto convertido correcto.
-- [ ] Cambiar la tasa no altera el saldo en USD de nadie.
-- [ ] Los registros viejos se ven igual que antes.
+**[COMPLETADO Y PROBADO]**
+Se integró la consulta en vivo de la tasa del BCV mediante la API de DolarAPI (`ve.dolarapi.com`). La app ahora muestra los montos en USD y su equivalente en Bolívares. Al abonar, el usuario puede escoger la moneda (USD/VES) y el sistema lo convierte matemáticamente al instante para rebajar la cuenta en dólares.
 
 ### Bloque 5: Respaldo (exportar e importar)
-Sin cambios de base de datos.
-
-**Exportar**
-1. Botón "Crear respaldo" en Ajustes.
-2. Antes de copiar, volcar el WAL al archivo principal para que el respaldo no pierda los últimos datos:
-   ```kotlin
-   db.openHelper.writableDatabase.query("PRAGMA wal_checkpoint(FULL)").close()
-   ```
-3. Copiar el archivo de `context.getDatabasePath(NOMBRE_DB)` a la ubicación que el usuario elija con el selector de archivos del sistema (`ActivityResultContracts.CreateDocument`), nombre sugerido `respaldo_cobros_YYYY-MM-DD.db`.
-4. Botón "Compartir respaldo" (hoja de compartir hacia WhatsApp o Drive) usando `FileProvider` con una copia en `cacheDir`.
-5. Guardar `ultimoRespaldoMillis`. Si pasan **7 días** sin respaldo, mostrar un banner en Inicio: "Hace 7 días que no haces respaldo".
-6. Opcional: exportar a CSV (clientes, cargos y abonos) para quien quiera ver sus datos en Excel.
-
-**Importar (restaurar)**
-1. `ActivityResultContracts.OpenDocument` para elegir el archivo.
-2. **Validar** antes de reemplazar nada:
-   - Los primeros bytes deben ser `SQLite format 3`.
-   - La versión de esquema (`PRAGMA user_version`) no puede ser **mayor** a la de la app instalada (si es menor, Room la migrará sola al abrir).
-3. Confirmación fuerte: "Esto reemplazará TODOS los datos actuales".
-4. Hacer **primero un respaldo automático** de los datos actuales en `cacheDir`/almacenamiento interno, por si algo falla.
-5. Cerrar la base (`db.close()`), reemplazar el archivo, **borrar** los archivos `-wal` y `-shm` viejos, y **reiniciar la app** (reabrir la actividad principal con flags de limpieza o cerrar el proceso).
-6. Si la restauración falla, devolver el respaldo automático del paso 4.
-
-**Criterios de aceptación**
-- [ ] Crear respaldo, borrar un cliente, restaurar: el cliente vuelve.
-- [ ] Un archivo que no es una base válida es rechazado con un mensaje claro.
-- [ ] El respaldo abre correctamente en "DB Browser for SQLite".
+**[COMPLETADO Y PROBADO]**
+Se creó el sistema de copias de seguridad en SQLite usando `RespaldoUtils.kt`. El usuario puede exportar su base de datos a un archivo y restaurarla en otro dispositivo garantizando la integridad con `wal_checkpoint(FULL)`.
 
 ### Bloque 6: Pedidos conectados a la cuenta del cliente
-Requiere Migration v3→v4 (tabla `Pedido` y `pedidoId` en `Deuda`).
-
-**Diseño:** el pedido **genera un cargo** en la cuenta del cliente. Los abonos siguen aplicándose al total del cliente (como ahora). Así el cálculo de saldos no cambia.
-
-1. Pantalla **Pedidos**: lista con filtro por estado (Recibido · En producción · Listo · Entregado) y buscador.
-2. Formulario de pedido: cliente (seleccionar o crear), producto, cantidad, precio unitario (el total se calcula solo), abono inicial opcional, número de cuotas y frecuencia (si queda saldo), fecha de entrega, notas.
-3. Al guardar, **en una sola transacción de Room** (`@Transaction`): insertar `Pedido`, insertar el cargo en `Deuda` con `pedidoId`, e insertar el abono inicial si existe. Si algo falla, no se guarda nada.
-4. Cambiar el estado desde la tarjeta del pedido. Al pasar a **LISTO**, ofrecer el botón "Avisar por WhatsApp" con mensaje "Tu pedido está listo, saldo pendiente: X".
-5. Editar un pedido ajusta el cargo vinculado con la misma lógica de diferencia que ya existe para editar deudas.
-6. Navegación: barra inferior **Inicio · Pedidos · Cotizar · Resumen**, y el "+" de agregar pasa a ser un botón flotante.
-
-**Criterios de aceptación**
-- [ ] Crear un pedido deja al cliente con el saldo correcto en Inicio.
-- [ ] Un cliente puede tener varios pedidos y su saldo total es la suma.
-- [ ] Un fallo a mitad de guardado no deja datos a medias.
+**[COMPLETADO Y PROBADO]**
+- **Arquitectura:** Se creó la tabla `Pedido` (Migration v2→v3).
+- **Transaccionalidad:** Al guardar un pedido, el sistema (`PedidoDao`) hace un guardado atómico: registra el pedido y automáticamente le crea una deuda (cargo) al cliente en "Mis Cobros", sumando el abono inicial si dejó alguno.
+- **Navegación UX:** Se implementó el flujo "Registro Expreso" dentro del formulario de pedidos para no forzar al vendedor a salir a registrar un cliente nuevo. El diseño ahora incluye una barra de navegación inferior (`Inicio · Pedidos · Cotizar · Resumen`).
+- **Carrito de compras:** Un pedido puede contener múltiples artículos. El sistema los concatena al guardar para generar una sola cuenta por cobrar consolidada.
+- **WhatsApp Inteligente:** Al pasar un pedido al estado "LISTO", aparece un botón verde para avisar al cliente por WhatsApp con un mensaje pre-armado.
 
 ### Bloque 7: Cotizador
-1. Campos: producto, costo de la pieza en blanco, costo de tinta, costo de papel, otros costos, minutos de prensa, cantidad, margen deseado (%).
-2. En Ajustes: `costoMinutoPrensaUsd` (energía y desgaste).
-3. Fórmulas:
-   - `costoUnitario = blanco + tinta + papel + otros + (minutosPrensa × costoMinutoPrensa)`
-   - `precioUnitario = costoUnitario / (1 − margen)` (margen sobre el precio de venta; con `margen = 0,40` ganas el 40 % de lo que cobras)
-   - `total = precioUnitario × cantidad`; `ganancia = total − costoUnitario × cantidad`
-4. Mostrar la tabla de precios para 1, 12 y 50 piezas, con **descuento por volumen editable** (por ejemplo 0 %, 5 %, 10 %).
-5. Mostrar el equivalente en Bs con la tasa del día.
-6. Botones: **"Compartir cotización"** (texto armado para WhatsApp) y **"Convertir en pedido"** (abre el formulario de pedido con los datos cargados).
-7. Opcional: guardar plantillas de costos por producto (tabla `PlantillaCosto`) para no reescribir todo cada vez.
+**[COMPLETADO Y PROBADO]**
+Herramienta financiera de alto nivel diseñada para el cálculo exacto de rentabilidad en sublimación y personalizados.
+- **Base de Datos con Memoria (Catálogo):** Se creó la tabla `PlantillaCotizacion` (Migration v3→v4→v5→v6→v7). El usuario puede guardar sus fórmulas (ej. "Taza Mágica") para no tener que escribirlas de nuevo.
+- **Interfaz Visual (Expandible):** Se implementó una vista de tarjetas de catálogo. Al tocar una tarjeta, esta se expande revelando una "Radiografía Financiera" (Costo de producción, Precio Detal y Precio Mayor), con un botón para editarla.
+- **Cerebro Matemático (ViewModel):**
+  - **Materia Prima:** Calcula el costo unitario basándose en el precio del paquete (ej. si una docena de franelas cuesta $30, asume $2.50 c/u).
+  - **Insumos y Gastos Ocultables:** Soporta papel de sublimación y otros insumos extras (imanes, resinas). Estos campos se pueden ocultar de la pantalla para mantenerla limpia.
+  - **Rendimiento de Servicios:** Si el DTF, el pasaje o el diseño costaron $15, el usuario indica para cuántas piezas sirvió, y la app lo divide para imputarle el costo exacto a 1 sola pieza.
+  - **Multimoneda en vivo:** Permite comprar insumos en USD y pagar pasajes en Bs. Todo lo convierte a dólares automáticamente usando la tasa del BCV global inyectada en el `homeView`.
+  - **Margen Financiero Real:** Usa la fórmula `Costo / (1 - Margen)` para garantizar que el porcentaje configurado (Detal o Mayor) sea la ganancia neta y libre que ingresa al bolsillo del vendedor.
 
-**Criterios de aceptación**
-- [ ] Con costos conocidos, el resultado coincide con el cálculo hecho a mano.
-- [ ] Margen igual o mayor a 100 % se rechaza con un mensaje (división por cero).
-- [ ] La cotización se convierte en pedido sin reescribir datos.
-
-### Bloque 8: Resumen del negocio
-1. Tarjetas: total por cobrar (USD y Bs), **cobrado este mes** (suma de abonos del mes, usando `fechaMillis`), clientes con cuotas vencidas, pedidos pendientes de entrega.
-2. Lista "Top 5 clientes que más deben".
-3. Selector de mes para ver meses anteriores.
-
-**Criterios de aceptación**
-- [ ] Las cifras coinciden con la suma manual de los datos de prueba.
+### Bloque 8: Resumen del negocio (EN ESPERA)
+(Pendiente de programar). Pantalla de estadísticas, ganancias y separación de fondos (Fondo Operativo vs. Ganancia Neta).
 
 ---
 
