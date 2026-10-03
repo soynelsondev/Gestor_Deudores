@@ -1,19 +1,28 @@
 package com.example.gestor_deudores.ui.cotizador
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.gestor_deudores.data.database.PlantillaCotizacion
+import com.example.gestor_deudores.data.database.PlantillaDao
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import java.math.BigDecimal
 import java.math.RoundingMode
 
-// Estado completo de la pantalla del Cotizador
+// Estado completo del Formulario de Edición/Creación de Plantilla
 data class CotizadorUiState(
+    val idActual: Int = 0,
+    val nombrePlantilla: String = "",
+    
     // 1. Materiales (Pieza Base)
     val precioPaquetePieza: String = "",
     val monedaPaquetePieza: String = "USD", // "USD" o "VES"
-    val cantidadPaquetePieza: String = "1",
+    val cantidadPaquetePieza: String = "1", // Por defecto 1 para evitar división por cero
     
     // 2. Materiales (Empaque)
     val precioPaqueteEmpaque: String = "",
@@ -34,7 +43,7 @@ data class CotizadorUiState(
     val porcentajeGananciaMayor: Float = 25f, // 25% por defecto de margen al MAYOR
 
     // ==========================================
-    // RESULTADOS MATEMÁTICOS (Calculados automáticamente)
+    // RESULTADOS MATEMÁTICOS (Calculados en vivo)
     // ==========================================
     val costoTotalProduccionUsd: Double = 0.0,
     
@@ -42,17 +51,39 @@ data class CotizadorUiState(
     val precioSugeridoUsd: Double = 0.0,
     val gananciaNetaUsd: Double = 0.0,
     
-    // Resultados al Mayor (Ej. a partir de 6 piezas)
+    // Resultados al Mayor
     val precioSugeridoMayorUsd: Double = 0.0,
     val gananciaNetaMayorUsd: Double = 0.0
 )
 
-class CotizadorViewModel : ViewModel() {
+class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CotizadorUiState())
     val uiState: StateFlow<CotizadorUiState> = _uiState.asStateFlow()
 
-    // --- FUNCIONES PARA ACTUALIZAR CADA CAMPO DESDE LA PANTALLA ---
+    // El catálogo completo de plantillas guardadas, conectado a la base de datos
+    val listaPlantillas: StateFlow<List<PlantillaCotizacion>> = plantillaDao.obtenerTodasLasPlantillas()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    // Variable reactiva para saber la tasa de cambio actual que haya introducido el usuario
+    private var tasaBcvActual: Double = 1.0
+
+    fun actualizarTasaBcv(tasa: Double) {
+        if (tasa > 0) {
+            tasaBcvActual = tasa
+            calcularResultados() // Recalcula los USD en pantalla si cambia la tasa
+        }
+    }
+
+    // --- FUNCIONES PARA ACTUALIZAR CADA CAMPO DESDE EL FORMULARIO ---
+
+    fun onNombrePlantillaChange(valor: String) {
+        _uiState.update { it.copy(nombrePlantilla = valor) }
+    }
 
     fun onPrecioPaquetePiezaChange(valor: String) {
         _uiState.update { it.copy(precioPaquetePieza = valor) }
@@ -131,77 +162,140 @@ class CotizadorViewModel : ViewModel() {
         calcularResultados()
     }
 
-    fun limpiarCotizador() {
+    // ==========================================
+    // CARGAR Y LIMPIAR PLANTILLAS
+    // ==========================================
+
+    fun limpiarFormulario() {
         _uiState.value = CotizadorUiState()
     }
 
-    // ==========================================
-    // EL CEREBRO MATEMÁTICO
-    // ==========================================
-    // Ahora recibe la tasa del BCV actual para hacer conversiones en vivo
-    fun calcularResultados(tasaBCV: Double = 1.0) {
-        val estado = _uiState.value
-        val tasaActiva = if (tasaBCV > 0.0) tasaBCV else 1.0
+    fun cargarPlantilla(plantilla: PlantillaCotizacion) {
+        _uiState.update {
+            it.copy(
+                idActual = plantilla.id,
+                nombrePlantilla = plantilla.nombrePlantilla,
+                precioPaquetePieza = plantilla.precioPaquetePieza.toString(),
+                monedaPaquetePieza = plantilla.monedaPaquetePieza,
+                cantidadPaquetePieza = plantilla.cantidadPaquetePieza.toString(),
+                precioPaqueteEmpaque = plantilla.precioPaqueteEmpaque.toString(),
+                monedaPaqueteEmpaque = plantilla.monedaPaqueteEmpaque,
+                cantidadPaqueteEmpaque = plantilla.cantidadPaqueteEmpaque.toString(),
+                costoDtf = plantilla.costoDtf.toString(),
+                monedaDtf = plantilla.monedaDtf,
+                costoTransporte = plantilla.costoTransporte.toString(),
+                monedaTransporte = plantilla.monedaTransporte,
+                costoDiseno = plantilla.costoDiseno.toString(),
+                monedaDiseno = plantilla.monedaDiseno,
+                porcentajeOperativo = plantilla.porcentajeOperativo,
+                porcentajeGanancia = plantilla.porcentajeGananciaDetal,
+                porcentajeGananciaMayor = plantilla.porcentajeGananciaMayor
+            )
+        }
+        calcularResultados() // Para que refresque los USD en vivo con la tasa actual
+    }
 
-        // Función auxiliar para convertir String a Double seguro
+    // ==========================================
+    // GUARDADO EN LA BASE DE DATOS
+    // ==========================================
+
+    fun guardarPlantilla(onExito: () -> Unit) {
+        val estado = _uiState.value
+        
+        // Validación básica
+        if (estado.nombrePlantilla.isBlank()) return
+
+        fun parseD(texto: String): Double = texto.replace(",", ".").toDoubleOrNull() ?: 0.0
+        fun parseCant(texto: String): Int {
+            val num = texto.toIntOrNull() ?: 1
+            return if (num > 0) num else 1
+        }
+
+        val nuevaPlantilla = PlantillaCotizacion(
+            id = estado.idActual, // Si es 0 se crea nueva, si es > 0 se edita
+            nombrePlantilla = estado.nombrePlantilla,
+            precioPaquetePieza = parseD(estado.precioPaquetePieza),
+            monedaPaquetePieza = estado.monedaPaquetePieza,
+            cantidadPaquetePieza = parseCant(estado.cantidadPaquetePieza),
+            precioPaqueteEmpaque = parseD(estado.precioPaqueteEmpaque),
+            monedaPaqueteEmpaque = estado.monedaPaqueteEmpaque,
+            cantidadPaqueteEmpaque = parseCant(estado.cantidadPaqueteEmpaque),
+            costoDtf = parseD(estado.costoDtf),
+            monedaDtf = estado.monedaDtf,
+            costoTransporte = parseD(estado.costoTransporte),
+            monedaTransporte = estado.monedaTransporte,
+            costoDiseno = parseD(estado.costoDiseno),
+            monedaDiseno = estado.monedaDiseno,
+            porcentajeOperativo = estado.porcentajeOperativo,
+            porcentajeGananciaDetal = estado.porcentajeGanancia,
+            porcentajeGananciaMayor = estado.porcentajeGananciaMayor
+        )
+
+        viewModelScope.launch {
+            if (estado.idActual > 0) {
+                plantillaDao.actualizarPlantilla(nuevaPlantilla)
+            } else {
+                plantillaDao.agregarPlantilla(nuevaPlantilla)
+            }
+            onExito()
+        }
+    }
+
+    fun eliminarPlantilla(plantilla: PlantillaCotizacion) {
+        viewModelScope.launch {
+            plantillaDao.eliminarPlantilla(plantilla)
+        }
+    }
+
+    // ==========================================
+    // EL CEREBRO MATEMÁTICO EN VIVO
+    // ==========================================
+    private fun calcularResultados() {
+        val estado = _uiState.value
+        val tasaActiva = if (tasaBcvActual > 0.0) tasaBcvActual else 1.0
+
         fun parseD(texto: String): Double = texto.replace(",", ".").toDoubleOrNull() ?: 0.0
         fun parseCant(texto: String): Double {
             val num = texto.toDoubleOrNull() ?: 1.0
-            return if (num > 0) num else 1.0 // Nunca dividir por 0
+            return if (num > 0) num else 1.0
         }
 
-        // Función auxiliar para homogeneizar TODO a Dólares
-        // Si el usuario ingresó el costo en Bolívares (VES), lo dividimos entre la tasa para saber su valor en USD
         fun aUsd(valor: Double, moneda: String): Double {
             return if (moneda == "VES") valor / tasaActiva else valor
         }
 
-        // 1. Calculamos el costo unitario de los materiales en USD
         val costoPiezaBruto = parseD(estado.precioPaquetePieza) / parseCant(estado.cantidadPaquetePieza)
         val costoUnitarioPieza = aUsd(costoPiezaBruto, estado.monedaPaquetePieza)
 
         val costoEmpaqueBruto = parseD(estado.precioPaqueteEmpaque) / parseCant(estado.cantidadPaqueteEmpaque)
         val costoUnitarioEmpaque = aUsd(costoEmpaqueBruto, estado.monedaPaqueteEmpaque)
 
-        // 2. Sumamos los servicios logísticos en USD
         val dtf = aUsd(parseD(estado.costoDtf), estado.monedaDtf)
         val transporte = aUsd(parseD(estado.costoTransporte), estado.monedaTransporte)
         val diseno = aUsd(parseD(estado.costoDiseno), estado.monedaDiseno)
 
-        // 3. Subtotal de materia prima pura
         val subtotalMateriales = costoUnitarioPieza + costoUnitarioEmpaque + dtf + transporte + diseno
-
-        // 4. Calculamos la operatividad (Luz, tinta, desgaste)
-        // Ejemplo: Si el subtotal es $10 y operatividad es 10%, sumamos $1 por luz/tinta.
         val costoOperativo = subtotalMateriales * (estado.porcentajeOperativo / 100.0)
-
-        // ESTE ES TU COSTO REAL FINAL POR PIEZA
         val costoTotalProduccion = subtotalMateriales + costoOperativo
 
-        // 5. Fórmula Financiera de Rentabilidad Real: Precio = Costo / (1 - Margen)
         var precioVentaSug = 0.0
         var ganancia = 0.0
-        
         var precioVentaMayorSug = 0.0
         var gananciaMayor = 0.0
 
         if (costoTotalProduccion > 0.0) {
-            // Cálculo al Detal
             val margenDecimal = estado.porcentajeGanancia / 100.0
             precioVentaSug = costoTotalProduccion / (1.0 - margenDecimal)
             ganancia = precioVentaSug - costoTotalProduccion
             
-            // Cálculo al Mayor
             val margenMayorDecimal = estado.porcentajeGananciaMayor / 100.0
             precioVentaMayorSug = costoTotalProduccion / (1.0 - margenMayorDecimal)
             gananciaMayor = precioVentaMayorSug - costoTotalProduccion
         }
 
-        // 6. Redondeamos todo a 2 decimales para la pantalla
         fun redondear2(valor: Double): Double = 
             BigDecimal.valueOf(valor).setScale(2, RoundingMode.HALF_UP).toDouble()
 
-        // 7. Actualizamos el Estado de la Interfaz
         _uiState.update {
             it.copy(
                 costoTotalProduccionUsd = redondear2(costoTotalProduccion),
