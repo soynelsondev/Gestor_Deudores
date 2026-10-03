@@ -14,6 +14,8 @@ import com.example.gestor_deudores.ui.Registro.RegistroDeudorViewModel
 import com.example.gestor_deudores.ui.home.HistorialDeudorView
 import com.example.gestor_deudores.ui.home.HomeViewModel
 import com.example.gestor_deudores.ui.home.homePrincipal
+import com.example.gestor_deudores.ui.pedidos.PedidoViewModel
+import com.example.gestor_deudores.ui.pedidos.PedidosPrincipal
 import com.example.gestor_deudores.ui.registroDeuda.Principal as PantallaRegistroDeuda
 import com.example.gestor_deudores.ui.registroDeuda.RDeudaViewModel
 import com.example.gestor_deudores.ui.rutas
@@ -22,7 +24,8 @@ import com.example.gestor_deudores.ui.rutas
 fun NavegacionPrincipal(
     viewModelRegistro: RegistroDeudorViewModel,
     viewModelDeuda: RDeudaViewModel,
-    viewModelHome : HomeViewModel
+    viewModelHome: HomeViewModel,
+    viewModelPedido: PedidoViewModel
 ) {
     val navController = rememberNavController()
 
@@ -38,17 +41,41 @@ fun NavegacionPrincipal(
         }
 
         // ==========================================
-        // 1. PANTALLA: REGISTRO DE DEUDOR
+        // 1. PANTALLA: REGISTRO DE DEUDOR (DESDE MIS COBROS)
         // ==========================================
         composable(rutas.REGISTRO) {
             viewModelRegistro.limpiarFormulario()
             PantallaRegistroDeudor(
                 viewModel = viewModelRegistro,
+                tituloPantalla = "NUEVO CLIENTE / VENTA",
                 onNavegarADeuda = { idGenerado ->
-                    // Usamos tu función constructora de rutas
-                    navController.navigate(rutas.crearRutaRegistroDeuda(idGenerado))
+                    // Usamos tu función constructora de rutas para saltar a crear deuda (Flujo Venta Rápida)
+                    navController.navigate(rutas.crearRutaRegistroDeuda(idGenerado)) {
+                        popUpTo(rutas.HOME) // Para que si da atrás no vuelva al registro
+                    }
                 }
             )
+        }
+
+        // ==========================================
+        // NUEVO: REGISTRO DE DEUDOR EXPRESS (DESDE BARRA INFERIOR O PEDIDOS)
+        // ==========================================
+        composable(rutas.REGISTRO_EXPRESS) {
+            viewModelRegistro.limpiarFormulario()
+            PantallaRegistroDeudor(
+                viewModel = viewModelRegistro,
+                tituloPantalla = "NUEVO CLIENTE",
+                onNavegarADeuda = { 
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        // ==========================================
+        // PANTALLA: PEDIDOS
+        // ==========================================
+        composable(rutas.PEDIDOS) {
+            PedidosPrincipal(viewModel = viewModelPedido, navController = navController)
         }
 
         composable(

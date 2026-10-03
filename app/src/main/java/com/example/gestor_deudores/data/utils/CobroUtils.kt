@@ -86,15 +86,19 @@ fun calcularEstadoCobro(deudas: List<Deuda>): EstadoCobro {
                 set(Calendar.HOUR_OF_DAY, 12)
             }
 
-            for (i in 1..cuotaActual) {
-                when (cargo.frecuencia.uppercase()) {
-                    "SEMANAL" -> cal.add(Calendar.DAY_OF_YEAR, 7)
-                    "QUINCENAL" -> cal.add(Calendar.DAY_OF_YEAR, 15)
-                    "MENSUAL" -> cal.add(Calendar.MONTH, 1)
-                    else -> cal.add(Calendar.MONTH, 1)
+            if (cargo.frecuencia.uppercase() == "AL_ENTREGAR") {
+                proximoVencimiento = fechaCargoValida
+            } else {
+                for (i in 1..cuotaActual) {
+                    when (cargo.frecuencia.uppercase()) {
+                        "SEMANAL" -> cal.add(Calendar.DAY_OF_YEAR, 7)
+                        "QUINCENAL" -> cal.add(Calendar.DAY_OF_YEAR, 15)
+                        "MENSUAL" -> cal.add(Calendar.MONTH, 1)
+                        else -> cal.add(Calendar.MONTH, 1)
+                    }
                 }
+                proximoVencimiento = cal.timeInMillis
             }
-            proximoVencimiento = cal.timeInMillis
 
             val calHoy = Calendar.getInstance().apply {
                 timeInMillis = hoyMillis

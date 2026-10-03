@@ -3,6 +3,8 @@ package com.example.gestor_deudores.ui
 object rutas {
     const val HOME = "pantalla_Principal"
     const val REGISTRO = "pantalla_registro_deudor"
+    const val REGISTRO_EXPRESS = "pantalla_registro_express"
+    const val PEDIDOS = "pantalla_pedidos"
 
     // --- NUEVO: Rutas para editar un deudor existente ---
     const val EDITAR_DEUDOR_TEMPLATE = "$REGISTRO/{id}/{idDeuda}"

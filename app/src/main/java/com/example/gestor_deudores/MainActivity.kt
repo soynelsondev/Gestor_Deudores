@@ -12,6 +12,7 @@ import com.example.gestor_deudores.ui.Registro.RegistroDeudorViewModel
 import com.example.gestor_deudores.ui.registroDeuda.RDeudaViewModel
 // Asegúrate de importar el HomeViewModel
 import com.example.gestor_deudores.ui.home.HomeViewModel
+import com.example.gestor_deudores.ui.pedidos.PedidoViewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -36,6 +37,14 @@ class MainActivity : ComponentActivity() {
                     // Ojo: el HomeViewModel necesita ambos DAOs
                     return HomeViewModel(baseDeDatos.deudorDao(), baseDeDatos.deudaDao()) as T
                 }
+                if (modelClass.isAssignableFrom(PedidoViewModel::class.java)) {
+                    @Suppress("UNCHECKED_CAST")
+                    return PedidoViewModel(
+                        baseDeDatos.pedidoDao(),
+                        baseDeDatos.deudorDao(),
+                        baseDeDatos.deudaDao()
+                    ) as T
+                }
                 throw IllegalArgumentException("Clase ViewModel desconocida")
             }
         }
@@ -44,12 +53,14 @@ class MainActivity : ComponentActivity() {
         val viewModelDeuda by viewModels<RDeudaViewModel> { viewModelFactory }
         // --- NUEVO: Instanciamos el HomeViewModel ---
         val viewModelHome by viewModels<HomeViewModel> { viewModelFactory }
+        val viewModelPedido by viewModels<PedidoViewModel> { viewModelFactory }
 
         setContent {
             NavegacionPrincipal(
                 viewModelRegistro = viewModelRegistro,
                 viewModelDeuda = viewModelDeuda,
-                viewModelHome = viewModelHome // Lo enviamos a la navegación
+                viewModelHome = viewModelHome, // Lo enviamos a la navegación
+                viewModelPedido = viewModelPedido
             )
         }
     }

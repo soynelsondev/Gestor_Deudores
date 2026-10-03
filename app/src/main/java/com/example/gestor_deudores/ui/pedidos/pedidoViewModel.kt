@@ -2,6 +2,9 @@ package com.example.gestor_deudores.ui.pedidos
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.gestor_deudores.data.database.DeudaDao
+import com.example.gestor_deudores.data.database.Deudor
+import com.example.gestor_deudores.data.database.DeudorDao
 import com.example.gestor_deudores.data.database.Pedido
 import com.example.gestor_deudores.data.database.PedidoConCliente
 import com.example.gestor_deudores.data.database.PedidoDao
@@ -21,7 +24,11 @@ enum class FiltroEstadoPedido {
     ENTREGADO
 }
 
-class PedidoViewModel(private val pedidoDao: PedidoDao) : ViewModel() {
+class PedidoViewModel(
+    private val pedidoDao: PedidoDao,
+    private val deudorDao: DeudorDao,
+    private val deudaDao: DeudaDao
+) : ViewModel() {
 
     private val _textoBusqueda = MutableStateFlow("")
     val textoBusqueda: StateFlow<String> = _textoBusqueda.asStateFlow()
@@ -29,13 +36,27 @@ class PedidoViewModel(private val pedidoDao: PedidoDao) : ViewModel() {
     private val _filtroEstado = MutableStateFlow(FiltroEstadoPedido.TODOS)
     val filtroEstado: StateFlow<FiltroEstadoPedido> = _filtroEstado.asStateFlow()
 
+    // Lista de clientes disponibles para el selector del formulario
+    val listaClientes: StateFlow<List<Deudor>> = deudorDao.obtenerDeudores()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val sugerenciasProductos: StateFlow<List<String>> = deudaDao.obtenerTiposDeudaUnicos()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
     val listaPedidos: StateFlow<List<PedidoConCliente>> = combine(
         pedidoDao.obtenerPedidosConCliente(),
         _textoBusqueda,
         _filtroEstado
     ) { pedidos, texto, estadoFiltro ->
         pedidos.filter { item ->
-            // Filtro por Estado
             val coincideEstado = when (estadoFiltro) {
                 FiltroEstadoPedido.TODOS -> true
                 FiltroEstadoPedido.RECIBIDO -> item.estado == "RECIBIDO"
@@ -44,7 +65,6 @@ class PedidoViewModel(private val pedidoDao: PedidoDao) : ViewModel() {
                 FiltroEstadoPedido.ENTREGADO -> item.estado == "ENTREGADO"
             }
 
-            // Filtro por Buscador (Producto o Nombre del cliente)
             val coincideTexto = if (texto.isBlank()) true else {
                 item.producto.contains(texto, ignoreCase = true) ||
                 item.clienteNombre.contains(texto, ignoreCase = true) ||
@@ -82,6 +102,44 @@ class PedidoViewModel(private val pedidoDao: PedidoDao) : ViewModel() {
                 notas = pedidoConCliente.notas
             )
             pedidoDao.actualizarPedido(pedidoEditado)
+        }
+    }
+
+    // --- GUARDADO TRANSACCIONAL DEL PEDIDO COMPLETO ---
+    fun crearNuevoPedido(
+        deudorId: Int,
+        producto: String,
+        cantidad: Int,
+        precioUnitarioUsd: Double,
+        abonoInicialUsd: Double,
+        numCuotas: Int,
+        frecuencia: String,
+        fechaEntregaMillis: Long,
+        notas: String,
+        onExito: () -> Unit
+    ) {
+        val totalUsd = cantidad * precioUnitarioUsd
+        val nuevoPedido = Pedido(
+            deudorId = deudorId,
+            producto = producto,
+            cantidad = cantidad,
+            precioUnitarioUsd = precioUnitarioUsd,
+            totalUsd = totalUsd,
+            fechaCreacionMillis = System.currentTimeMillis(),
+            fechaEntregaMillis = fechaEntregaMillis,
+            estado = "RECIBIDO",
+            notas = notas
+        )
+
+        viewModelScope.launch {
+            pedidoDao.guardarPedidoCompleto(
+                pedido = nuevoPedido,
+                deudaDao = deudaDao,
+                abonoInicial = abonoInicialUsd,
+                numCuotas = numCuotas,
+                frecuencia = frecuencia
+            )
+            onExito()
         }
     }
 }

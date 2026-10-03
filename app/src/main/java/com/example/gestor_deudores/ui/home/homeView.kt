@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.NavigationDrawerItem
@@ -57,6 +58,7 @@ import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -310,11 +312,26 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
                     }
                 )
             },
+            floatingActionButton = {
+                FloatingActionButton(
+                    onClick = { navController.navigate(rutas.REGISTRO) },
+                    containerColor = estados,
+                    contentColor = Color.White,
+                    shape = CircleShape
+                ) {
+                    Icon(imageVector = Icons.Default.Add, contentDescription = "Nuevo Cliente / Deuda")
+                }
+            },
             bottomBar = {
-                BarraNavegacionInferior(onIrAInicio = {},
+                BarraNavegacionInferior(
+                    onIrAInicio = {},
+                    onIrAPedidos = {
+                        navController.navigate(rutas.PEDIDOS)
+                    },
                     onIrAAgregar = {
-                        navController.navigate(rutas.REGISTRO)
-                    })
+                        navController.navigate(rutas.REGISTRO_EXPRESS)
+                    }
+                )
             }
             ){ innerPadding ->
 
@@ -414,6 +431,7 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
 fun BarraNavegacionInferior(
     // Pasamos funciones para que la barra avise a dónde quiere viajar el usuario
     onIrAInicio: () -> Unit,
+    onIrAPedidos: () -> Unit,
     onIrAAgregar: () -> Unit
 ) {
     NavigationBar(
@@ -427,24 +445,34 @@ fun BarraNavegacionInferior(
             label = { Text("Inicio") },
             colors = NavigationBarItemDefaults.colors(
                 selectedIconColor = estados,
-                selectedTextColor =estados,
+                selectedTextColor = estados,
                 indicatorColor = Color.White // El circulito que marca donde estás
             )
         )
 
-        // Ítem 2: Agregar (El que te llevará a la pantalla de registro)
+        // Ítem 2: Pedidos
         NavigationBarItem(
             selected = false,
-            onClick = { onIrAAgregar() },
-            icon = { Icon(Icons.Default.Add, contentDescription = "Agregar") },
-            label = { Text("Agregar") },
+            onClick = { onIrAPedidos() },
+            icon = { Icon(Icons.Default.ShoppingCart, contentDescription = "Pedidos") },
+            label = { Text("Pedidos") },
             colors = NavigationBarItemDefaults.colors(
                 unselectedIconColor = Color.Gray,
                 unselectedTextColor = Color.Gray
             )
         )
 
-
+        // Ítem 3: Agregar (El que te llevará a la pantalla de registro)
+        NavigationBarItem(
+            selected = false,
+            onClick = { onIrAAgregar() },
+            icon = { Icon(Icons.Default.Person, contentDescription = "Cliente") },
+            label = { Text("Cliente") },
+            colors = NavigationBarItemDefaults.colors(
+                unselectedIconColor = Color.Gray,
+                unselectedTextColor = Color.Gray
+            )
+        )
     }
 }
 

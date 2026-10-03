@@ -65,7 +65,11 @@ import com.example.gestor_deudores.ui.theme.fondo2
 
 
 @Composable
-fun Principal(viewModel: RegistroDeudorViewModel,onNavegarADeuda: (Int) -> Unit){
+fun Principal(
+    viewModel: RegistroDeudorViewModel,
+    tituloPantalla: String = "NUEVO DEUDOR",
+    onNavegarADeuda: (Int) -> Unit
+){
 
     val estado by viewModel.uiState.collectAsState()
     LaunchedEffect(estado.nuevoDeudorId) {
@@ -80,7 +84,7 @@ fun Principal(viewModel: RegistroDeudorViewModel,onNavegarADeuda: (Int) -> Unit)
     }
 
 
-    Scaffold (topBar = {toolbar()}){ innerPadding ->
+    Scaffold (topBar = {toolbar(titulo = tituloPantalla)}){ innerPadding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(innerPadding).background(fondo)
         ) {
