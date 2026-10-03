@@ -8,8 +8,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [Deudor::class, Deuda::class, Pedido::class],
-    version = 3,
+    entities = [Deudor::class, Deuda::class, Pedido::class, PlantillaCotizacion::class],
+    version = 4,
     exportSchema = true
 )
 abstract class DeudaDataBase : RoomDatabase() {
@@ -17,6 +17,7 @@ abstract class DeudaDataBase : RoomDatabase() {
     abstract fun deudorDao(): DeudorDao
     abstract fun deudaDao(): DeudaDao
     abstract fun pedidoDao(): PedidoDao
+    abstract fun plantillaDao(): PlantillaDao
 
     companion object {
         @Volatile
@@ -54,6 +55,32 @@ abstract class DeudaDataBase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `plantillas_cotizacion` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `nombrePlantilla` TEXT NOT NULL,
+                        `precioPaquetePieza` REAL NOT NULL,
+                        `monedaPaquetePieza` TEXT NOT NULL,
+                        `cantidadPaquetePieza` INTEGER NOT NULL,
+                        `precioPaqueteEmpaque` REAL NOT NULL,
+                        `monedaPaqueteEmpaque` TEXT NOT NULL,
+                        `cantidadPaqueteEmpaque` INTEGER NOT NULL,
+                        `costoDtf` REAL NOT NULL,
+                        `monedaDtf` TEXT NOT NULL,
+                        `costoTransporte` REAL NOT NULL,
+                        `monedaTransporte` TEXT NOT NULL,
+                        `costoDiseno` REAL NOT NULL,
+                        `monedaDiseno` TEXT NOT NULL,
+                        `porcentajeOperativo` REAL NOT NULL,
+                        `porcentajeGananciaDetal` REAL NOT NULL,
+                        `porcentajeGananciaMayor` REAL NOT NULL
+                    )
+                """)
+            }
+        }
+
         fun getDatabase(context: Context): DeudaDataBase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -61,7 +88,7 @@ abstract class DeudaDataBase : RoomDatabase() {
                     DeudaDataBase::class.java,
                     "control_deudas_db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .build()
 
                 INSTANCE = instance
