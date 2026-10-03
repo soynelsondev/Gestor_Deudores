@@ -29,15 +29,18 @@ data class CotizadorUiState(
     val monedaPaqueteEmpaque: String = "USD",
     val cantidadPaqueteEmpaque: String = "1",
 
-    // 3. Servicios Directos
-    val costoDtf: String = "",
+    // 3. Servicios Directos (DTF)
+    val precioTotalDtf: String = "",
     val monedaDtf: String = "USD",
+    val rendimientoDtf: String = "1", // Cuántas piezas salen de ese metro/impresión
+    
+    // 4. Servicios Extras
     val costoTransporte: String = "",
     val monedaTransporte: String = "USD",
     val costoDiseno: String = "",
     val monedaDiseno: String = "USD",
 
-    // 4. Operatividad y Ganancia (Barras deslizables)
+    // 5. Operatividad y Ganancia (Barras deslizables)
     val porcentajeOperativo: Float = 10f, // 10% por defecto para luz/desgaste
     val porcentajeGanancia: Float = 40f,  // 40% por defecto de margen DETAL
     val porcentajeGananciaMayor: Float = 25f, // 25% por defecto de margen al MAYOR
@@ -115,13 +118,18 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
         calcularResultados()
     }
 
-    fun onCostoDtfChange(valor: String) {
-        _uiState.update { it.copy(costoDtf = valor) }
+    fun onPrecioTotalDtfChange(valor: String) {
+        _uiState.update { it.copy(precioTotalDtf = valor) }
         calcularResultados()
     }
 
     fun onMonedaDtfChange(moneda: String) {
         _uiState.update { it.copy(monedaDtf = moneda) }
+        calcularResultados()
+    }
+    
+    fun onRendimientoDtfChange(valor: String) {
+        _uiState.update { it.copy(rendimientoDtf = valor) }
         calcularResultados()
     }
 
@@ -181,8 +189,9 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
                 precioPaqueteEmpaque = plantilla.precioPaqueteEmpaque.toString(),
                 monedaPaqueteEmpaque = plantilla.monedaPaqueteEmpaque,
                 cantidadPaqueteEmpaque = plantilla.cantidadPaqueteEmpaque.toString(),
-                costoDtf = plantilla.costoDtf.toString(),
+                precioTotalDtf = plantilla.precioTotalDtf.toString(),
                 monedaDtf = plantilla.monedaDtf,
+                rendimientoDtf = plantilla.rendimientoDtf.toString(),
                 costoTransporte = plantilla.costoTransporte.toString(),
                 monedaTransporte = plantilla.monedaTransporte,
                 costoDiseno = plantilla.costoDiseno.toString(),
@@ -220,8 +229,9 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
             precioPaqueteEmpaque = parseD(estado.precioPaqueteEmpaque),
             monedaPaqueteEmpaque = estado.monedaPaqueteEmpaque,
             cantidadPaqueteEmpaque = parseCant(estado.cantidadPaqueteEmpaque),
-            costoDtf = parseD(estado.costoDtf),
+            precioTotalDtf = parseD(estado.precioTotalDtf),
             monedaDtf = estado.monedaDtf,
+            rendimientoDtf = parseCant(estado.rendimientoDtf),
             costoTransporte = parseD(estado.costoTransporte),
             monedaTransporte = estado.monedaTransporte,
             costoDiseno = parseD(estado.costoDiseno),
@@ -270,11 +280,14 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
         val costoEmpaqueBruto = parseD(estado.precioPaqueteEmpaque) / parseCant(estado.cantidadPaqueteEmpaque)
         val costoUnitarioEmpaque = aUsd(costoEmpaqueBruto, estado.monedaPaqueteEmpaque)
 
-        val dtf = aUsd(parseD(estado.costoDtf), estado.monedaDtf)
+        // 2. Sumamos los servicios logísticos en USD
+        val precioTotalDtf = aUsd(parseD(estado.precioTotalDtf), estado.monedaDtf)
+        val dtfPorPieza = precioTotalDtf / parseCant(estado.rendimientoDtf)
+        
         val transporte = aUsd(parseD(estado.costoTransporte), estado.monedaTransporte)
         val diseno = aUsd(parseD(estado.costoDiseno), estado.monedaDiseno)
 
-        val subtotalMateriales = costoUnitarioPieza + costoUnitarioEmpaque + dtf + transporte + diseno
+        val subtotalMateriales = costoUnitarioPieza + costoUnitarioEmpaque + dtfPorPieza + transporte + diseno
         val costoOperativo = subtotalMateriales * (estado.porcentajeOperativo / 100.0)
         val costoTotalProduccion = subtotalMateriales + costoOperativo
 

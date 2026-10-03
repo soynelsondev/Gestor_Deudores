@@ -19,15 +19,18 @@ data class PlantillaCotizacion(
     val monedaPaqueteEmpaque: String,
     val cantidadPaqueteEmpaque: Int,
 
-    // 3. Servicios Directos
-    val costoDtf: Double,
+    // 3. Servicios Directos (DTF)
+    val precioTotalDtf: Double,
     val monedaDtf: String,
+    val rendimientoDtf: Int, // En cuántas piezas dividimos ese costo total
+    
+    // 4. Servicios Extras
     val costoTransporte: Double,
     val monedaTransporte: String,
     val costoDiseno: Double,
     val monedaDiseno: String,
 
-    // 4. Operatividad y Ganancia
+    // 5. Operatividad y Ganancia
     val porcentajeOperativo: Float,
     val porcentajeGananciaDetal: Float,
     val porcentajeGananciaMayor: Float

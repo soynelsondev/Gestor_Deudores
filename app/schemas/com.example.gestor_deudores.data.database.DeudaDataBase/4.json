@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 4,
-    "identityHash": "c63ee3cbc5a9d443c52075d48819e31f",
+    "identityHash": "be3512e1fdd1d0d40ac092c257be2737",
     "entities": [
       {
         "tableName": "deudores",
@@ -266,7 +266,7 @@
       },
       {
         "tableName": "plantillas_cotizacion",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `nombrePlantilla` TEXT NOT NULL, `precioPaquetePieza` REAL NOT NULL, `monedaPaquetePieza` TEXT NOT NULL, `cantidadPaquetePieza` INTEGER NOT NULL, `precioPaqueteEmpaque` REAL NOT NULL, `monedaPaqueteEmpaque` TEXT NOT NULL, `cantidadPaqueteEmpaque` INTEGER NOT NULL, `costoDtf` REAL NOT NULL, `monedaDtf` TEXT NOT NULL, `costoTransporte` REAL NOT NULL, `monedaTransporte` TEXT NOT NULL, `costoDiseno` REAL NOT NULL, `monedaDiseno` TEXT NOT NULL, `porcentajeOperativo` REAL NOT NULL, `porcentajeGananciaDetal` REAL NOT NULL, `porcentajeGananciaMayor` REAL NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `nombrePlantilla` TEXT NOT NULL, `precioPaquetePieza` REAL NOT NULL, `monedaPaquetePieza` TEXT NOT NULL, `cantidadPaquetePieza` INTEGER NOT NULL, `precioPaqueteEmpaque` REAL NOT NULL, `monedaPaqueteEmpaque` TEXT NOT NULL, `cantidadPaqueteEmpaque` INTEGER NOT NULL, `precioTotalDtf` REAL NOT NULL, `monedaDtf` TEXT NOT NULL, `rendimientoDtf` INTEGER NOT NULL, `costoTransporte` REAL NOT NULL, `monedaTransporte` TEXT NOT NULL, `costoDiseno` REAL NOT NULL, `monedaDiseno` TEXT NOT NULL, `porcentajeOperativo` REAL NOT NULL, `porcentajeGananciaDetal` REAL NOT NULL, `porcentajeGananciaMayor` REAL NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
@@ -317,8 +317,8 @@
             "notNull": true
           },
           {
-            "fieldPath": "costoDtf",
-            "columnName": "costoDtf",
+            "fieldPath": "precioTotalDtf",
+            "columnName": "precioTotalDtf",
             "affinity": "REAL",
             "notNull": true
           },
@@ -326,6 +326,12 @@
             "fieldPath": "monedaDtf",
             "columnName": "monedaDtf",
             "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rendimientoDtf",
+            "columnName": "rendimientoDtf",
+            "affinity": "INTEGER",
             "notNull": true
           },
           {
@@ -384,7 +390,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'c63ee3cbc5a9d443c52075d48819e31f')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'be3512e1fdd1d0d40ac092c257be2737')"
     ]
   }
 }
