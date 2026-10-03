@@ -29,12 +29,14 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.NavigationDrawerItem
@@ -462,12 +464,24 @@ fun BarraNavegacionInferior(
             )
         )
 
-        // Ítem 3: Agregar (El que te llevará a la pantalla de registro)
+        // Ítem 3: Cotizar (Reemplaza a Agregar)
         NavigationBarItem(
             selected = false,
-            onClick = { onIrAAgregar() },
-            icon = { Icon(Icons.Default.Person, contentDescription = "Cliente") },
-            label = { Text("Cliente") },
+            onClick = { onIrAAgregar() }, // Por ahora usa la función que recibe para navegar, luego se cambiará el nombre de la variable si hace falta
+            icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Cotizar") },
+            label = { Text("Cotizar") },
+            colors = NavigationBarItemDefaults.colors(
+                unselectedIconColor = Color.Gray,
+                unselectedTextColor = Color.Gray
+            )
+        )
+
+        // Ítem 4: Resumen
+        NavigationBarItem(
+            selected = false,
+            onClick = { /* Navegar a Resumen */ },
+            icon = { Icon(Icons.Default.Star, contentDescription = "Resumen") },
+            label = { Text("Resumen") },
             colors = NavigationBarItemDefaults.colors(
                 unselectedIconColor = Color.Gray,
                 unselectedTextColor = Color.Gray

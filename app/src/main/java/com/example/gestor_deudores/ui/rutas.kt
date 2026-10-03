@@ -5,6 +5,8 @@ object rutas {
     const val REGISTRO = "pantalla_registro_deudor"
     const val REGISTRO_EXPRESS = "pantalla_registro_express"
     const val PEDIDOS = "pantalla_pedidos"
+    const val COTIZADOR = "pantalla_cotizador"
+    const val RESUMEN = "pantalla_resumen"
 
     // --- NUEVO: Rutas para editar un deudor existente ---
     const val EDITAR_DEUDOR_TEMPLATE = "$REGISTRO/{id}/{idDeuda}"

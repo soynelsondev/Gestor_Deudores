@@ -1,6 +1,8 @@
 package com.example.gestor_deudores
 
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -76,6 +78,31 @@ fun NavegacionPrincipal(
         // ==========================================
         composable(rutas.PEDIDOS) {
             PedidosPrincipal(viewModel = viewModelPedido, navController = navController)
+        }
+
+        // ==========================================
+        // PANTALLAS EN CONSTRUCCIÓN (COTIZADOR Y RESUMEN)
+        // ==========================================
+        composable(rutas.COTIZADOR) {
+            androidx.compose.material3.Scaffold { padding ->
+                androidx.compose.foundation.layout.Box(
+                    modifier = androidx.compose.ui.Modifier.fillMaxSize().padding(padding),
+                    contentAlignment = androidx.compose.ui.Alignment.Center
+                ) {
+                    androidx.compose.material3.Text("Cotizador en construcción 🛠️")
+                }
+            }
+        }
+
+        composable(rutas.RESUMEN) {
+            androidx.compose.material3.Scaffold { padding ->
+                androidx.compose.foundation.layout.Box(
+                    modifier = androidx.compose.ui.Modifier.fillMaxSize().padding(padding),
+                    contentAlignment = androidx.compose.ui.Alignment.Center
+                ) {
+                    androidx.compose.material3.Text("Resumen en construcción 📊")
+                }
+            }
         }
 
         composable(

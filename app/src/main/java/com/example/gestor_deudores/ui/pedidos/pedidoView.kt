@@ -34,6 +34,8 @@ import com.example.gestor_deudores.ui.rutas
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -59,6 +61,7 @@ import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -149,9 +152,20 @@ fun PedidosPrincipal(viewModel: PedidoViewModel, navController: NavController) {
 
                 NavigationBarItem(
                     selected = false,
-                    onClick = { navController.navigate(rutas.REGISTRO_EXPRESS) },
-                    icon = { Icon(Icons.Default.Person, contentDescription = "Cliente") },
-                    label = { Text("Cliente") },
+                    onClick = { navController.navigate(rutas.COTIZADOR) }, // Temporariamente usaremos la misma constante que crearemos en rutas
+                    icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Cotizar") },
+                    label = { Text("Cotizar") },
+                    colors = NavigationBarItemDefaults.colors(
+                        unselectedIconColor = Color.Gray,
+                        unselectedTextColor = Color.Gray
+                    )
+                )
+                
+                NavigationBarItem(
+                    selected = false,
+                    onClick = { navController.navigate(rutas.RESUMEN) }, // Temporariamente usaremos la misma constante que crearemos en rutas
+                    icon = { Icon(Icons.Default.Star, contentDescription = "Resumen") },
+                    label = { Text("Resumen") },
                     colors = NavigationBarItemDefaults.colors(
                         unselectedIconColor = Color.Gray,
                         unselectedTextColor = Color.Gray
@@ -431,6 +445,22 @@ fun DialogoCrearPedido(
     var deudorSeleccionado by remember { mutableStateOf<Deudor?>(null) }
     var expandidoClientes by remember { mutableStateOf(false) }
 
+    // Variable de búsqueda
+    var busquedaCliente by remember { mutableStateOf("") }
+    
+    // Lista filtrada en base a la búsqueda
+    val clientesFiltrados = clientes.filter {
+        it.nombre.contains(busquedaCliente, ignoreCase = true) ||
+        it.apellido.contains(busquedaCliente, ignoreCase = true)
+    }
+
+    // Efecto para actualizar el texto si el usuario elige uno del menú
+    LaunchedEffect(deudorSeleccionado) {
+        if (deudorSeleccionado != null) {
+            busquedaCliente = "${deudorSeleccionado!!.nombre} ${deudorSeleccionado!!.apellido}"
+        }
+    }
+
     // --- NUEVA LISTA DINÁMICA DE ARTÍCULOS ---
     val listaArticulos = remember { mutableStateListOf(ArticuloPedido()) }
 
@@ -510,25 +540,36 @@ fun DialogoCrearPedido(
                             modifier = Modifier.weight(1f)
                         ) {
                             OutlinedTextField(
-                                value = if (deudorSeleccionado != null) "${deudorSeleccionado!!.nombre} ${deudorSeleccionado!!.apellido}" else "Selecciona un cliente",
-                                onValueChange = {},
-                                readOnly = true,
+                                value = busquedaCliente,
+                                onValueChange = { 
+                                    busquedaCliente = it
+                                    // Si empieza a escribir, asume que cambió de cliente
+                                    if (deudorSeleccionado != null && "${deudorSeleccionado!!.nombre} ${deudorSeleccionado!!.apellido}" != it) {
+                                        deudorSeleccionado = null
+                                    }
+                                    expandidoClientes = true
+                                },
+                                placeholder = { Text("Buscar cliente...") },
+                                readOnly = false, // <-- AHORA PUEDES ESCRIBIR
                                 trailingIcon = { Icon(Icons.Default.ArrowDropDown, null) },
                                 modifier = Modifier.fillMaxWidth().menuAnchor(),
                                 shape = RoundedCornerShape(12.dp)
                             )
-                            ExposedDropdownMenu(
-                                expanded = expandidoClientes,
-                                onDismissRequest = { expandidoClientes = false }
-                            ) {
-                                clientes.forEach { cliente ->
-                                    DropdownMenuItem(
-                                        text = { Text("${cliente.nombre} ${cliente.apellido}") },
-                                        onClick = {
-                                            deudorSeleccionado = cliente
-                                            expandidoClientes = false
-                                        }
-                                    )
+                            if (clientesFiltrados.isNotEmpty()) {
+                                ExposedDropdownMenu(
+                                    expanded = expandidoClientes,
+                                    onDismissRequest = { expandidoClientes = false }
+                                ) {
+                                    clientesFiltrados.forEach { cliente ->
+                                        DropdownMenuItem(
+                                            text = { Text("${cliente.nombre} ${cliente.apellido}") },
+                                            onClick = {
+                                                deudorSeleccionado = cliente
+                                                busquedaCliente = "${cliente.nombre} ${cliente.apellido}"
+                                                expandidoClientes = false
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }
