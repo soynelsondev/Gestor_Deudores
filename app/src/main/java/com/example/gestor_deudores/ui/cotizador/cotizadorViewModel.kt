@@ -374,7 +374,7 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
         }
 
         fun redondear2(valor: Double): Double = 
-            BigDecimal.valueOf(valor).setScale(2, RoundingMode.HALF_UP).toDouble()
+            java.math.BigDecimal.valueOf(valor).setScale(2, java.math.RoundingMode.HALF_UP).toDouble()
 
         return ResultadoPlantilla(
             costoTotalProduccionUsd = redondear2(costoTotalProduccion),

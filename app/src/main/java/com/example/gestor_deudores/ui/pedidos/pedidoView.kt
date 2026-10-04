@@ -619,17 +619,15 @@ fun DialogoCrearPedido(
                                                     }
                                                 },
                                                 onClick = {
-                                                    // 1. Extraemos los costos matemáticos de esta plantilla
+                                                    // 1. Extraemos TODOS los costos matemáticos usando el mismo método del cotizador
+                                                    val costoProdBase = plantilla.calcularCostoProduccionBase()
+                                                    
+                                                    // Calculamos cada parte como se hace internamente
                                                     val costoPieza = plantilla.precioPaquetePieza / if (plantilla.cantidadPaquetePieza > 0) plantilla.cantidadPaquetePieza else 1
-                                                    val costoDtf = plantilla.precioTotalDtf / if (plantilla.rendimientoDtf > 0) plantilla.rendimientoDtf else 1
-                                                    val costoExtra = plantilla.costoExtra / if (plantilla.rendimientoExtra > 0) plantilla.rendimientoExtra else 1
                                                     val costoPasaje = plantilla.costoTransporte / if (plantilla.rendimientoTransporte > 0) plantilla.rendimientoTransporte else 1
-                                                    val costoDiseno = plantilla.costoDiseno / if (plantilla.rendimientoDiseno > 0) plantilla.rendimientoDiseno else 1
-                                                    val costoEmpaque = plantilla.precioPaqueteEmpaque / if (plantilla.cantidadPaqueteEmpaque > 0) plantilla.cantidadPaqueteEmpaque else 1
-                                                    val costoPapel = plantilla.precioPaquetePapel / if (plantilla.cantidadPaquetePapel > 0) plantilla.cantidadPaquetePapel else 1
-
-                                                    // Agrupamos costos para la Radiografía
-                                                    val costoInsumosTotal = costoDtf + costoExtra + costoDiseno + costoEmpaque + costoPapel
+                                                    
+                                                    // Todo lo demás (DTF, Extra, Diseño, Empaque, Papel, Operatividad) va al sobre de "Insumos"
+                                                    val costoInsumosTotal = costoProdBase - costoPieza - costoPasaje
 
                                                     // 2. Autocompletamos y pegamos los costos
                                                     listaArticulos[index] = articulo.copy(
