@@ -28,7 +28,12 @@ data class Pedido(
     val fechaCreacionMillis: Long = System.currentTimeMillis(),
     val fechaEntregaMillis: Long = 0L,
     val estado: String = "RECIBIDO",
-    val notas: String = ""
+    val notas: String = "",
+    // Costos reales guardados en el momento de la venta
+    val costoPiezaBaseUsd: Double = 0.0, // Antes era costoTextilUsd
+    val costoPasajeUsd: Double = 0.0,
+    val costoInsumosUsd: Double = 0.0,
+    val nombrePiezaBase: String = "Insumo Base" // Ej: "Camisa", "Taza Mágica", "Cuadro"
 )
 
 data class PedidoConCliente(
@@ -42,6 +47,10 @@ data class PedidoConCliente(
     val fechaEntregaMillis: Long,
     val estado: String,
     val notas: String,
+    val costoPiezaBaseUsd: Double = 0.0,
+    val costoPasajeUsd: Double = 0.0,
+    val costoInsumosUsd: Double = 0.0,
+    val nombrePiezaBase: String = "Insumo Base",
     val clienteNombre: String,
     val clienteApellido: String,
     val clienteTelefono: String

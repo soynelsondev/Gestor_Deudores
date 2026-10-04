@@ -100,14 +100,12 @@ fun NavegacionPrincipal(
         }
 
         composable(rutas.RESUMEN) {
-            androidx.compose.material3.Scaffold { padding ->
-                androidx.compose.foundation.layout.Box(
-                    modifier = androidx.compose.ui.Modifier.fillMaxSize().padding(padding),
-                    contentAlignment = androidx.compose.ui.Alignment.Center
-                ) {
-                    androidx.compose.material3.Text("Resumen en construcción 📊")
-                }
-            }
+            val tasaBcvActual by viewModelHome.tasaBcvActual.collectAsState()
+            viewModelResumen.actualizarTasaBcv(tasaBcvActual)
+            com.example.gestor_deudores.ui.Resumen.ResumenPrincipal(
+                viewModel = viewModelResumen,
+                navController = navController
+            )
         }
 
         composable(

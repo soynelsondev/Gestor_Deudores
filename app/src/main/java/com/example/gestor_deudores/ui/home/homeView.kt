@@ -326,12 +326,16 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
             },
             bottomBar = {
                 BarraNavegacionInferior(
+                    rutaActual = rutas.HOME,
                     onIrAInicio = {},
                     onIrAPedidos = {
                         navController.navigate(rutas.PEDIDOS)
                     },
                     onIrACotizar = {
                         navController.navigate(rutas.COTIZADOR)
+                    },
+                    onIrAResumen = {
+                        navController.navigate(rutas.RESUMEN)
                     }
                 )
             }
@@ -366,26 +370,6 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
             LazyColumn(
                 modifier = Modifier.fillMaxSize()
             ) {
-                // --- NUEVO: CÁLCULO Y TARJETA DE RESUMEN ---
-                // Solo lo mostramos si estamos en la pestaña de pendientes
-                if (pestañaActual == Pestaña.PENDIENTES) {
-                    item {
-                        // 1. Calculamos las personas (tamaño de la lista)
-                        val totalPersonas = listaDeudores.size
-
-                        // 2. Sumamos todo el dinero restante de la lista
-                        val dineroTotal = listaDeudores.sumOf { it.montoRestante }
-
-                        // 3. Pintamos la tarjeta
-                        TarjetaResumen(
-                            totalPersonas = totalPersonas,
-                            dineroTotalUsd = dineroTotal,
-                            tasaBCV = precioDolarBCV,
-                            monedaVista = monedaVista
-                        )
-                    }
-                }
-
                 // Iteramos sobre la lista de "paquetes" que nos mandó el ViewModel
                 items(listaDeudores) { paquete ->
 
@@ -431,59 +415,64 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
 
 @Composable
 fun BarraNavegacionInferior(
+    rutaActual: String = rutas.HOME,
     onIrAInicio: () -> Unit,
     onIrAPedidos: () -> Unit,
-    onIrACotizar: () -> Unit
+    onIrACotizar: () -> Unit,
+    onIrAResumen: () -> Unit
 ) {
     NavigationBar(
-        containerColor = fondo2, // El color base de tu barra
+        containerColor = fondo2,
     ) {
         // Ítem 1: Inicio
         NavigationBarItem(
-            selected = true, // Aquí luego pondremos lógica para saber si estamos en home
+            selected = (rutaActual == rutas.HOME),
             onClick = { onIrAInicio() },
             icon = { Icon(Icons.Default.Home, contentDescription = "Inicio") },
             label = { Text("Inicio") },
             colors = NavigationBarItemDefaults.colors(
                 selectedIconColor = estados,
                 selectedTextColor = estados,
-                indicatorColor = Color.White // El circulito que marca donde estás
+                indicatorColor = Color.White
             )
         )
 
         // Ítem 2: Pedidos
         NavigationBarItem(
-            selected = false,
+            selected = (rutaActual == rutas.PEDIDOS),
             onClick = { onIrAPedidos() },
             icon = { Icon(Icons.Default.ShoppingCart, contentDescription = "Pedidos") },
             label = { Text("Pedidos") },
             colors = NavigationBarItemDefaults.colors(
-                unselectedIconColor = Color.Gray,
-                unselectedTextColor = Color.Gray
+                selectedIconColor = estados,
+                selectedTextColor = estados,
+                indicatorColor = Color.White
             )
         )
 
         // Ítem 3: Cotizar
         NavigationBarItem(
-            selected = false,
+            selected = (rutaActual == rutas.COTIZADOR),
             onClick = { onIrACotizar() },
             icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Cotizar") },
             label = { Text("Cotizar") },
             colors = NavigationBarItemDefaults.colors(
-                unselectedIconColor = Color.Gray,
-                unselectedTextColor = Color.Gray
+                selectedIconColor = estados,
+                selectedTextColor = estados,
+                indicatorColor = Color.White
             )
         )
 
         // Ítem 4: Resumen
         NavigationBarItem(
-            selected = false,
-            onClick = { /* Navegar a Resumen */ },
+            selected = (rutaActual == rutas.RESUMEN),
+            onClick = { onIrAResumen() },
             icon = { Icon(Icons.Default.Star, contentDescription = "Resumen") },
             label = { Text("Resumen") },
             colors = NavigationBarItemDefaults.colors(
-                unselectedIconColor = Color.Gray,
-                unselectedTextColor = Color.Gray
+                selectedIconColor = estados,
+                selectedTextColor = estados,
+                indicatorColor = Color.White
             )
         )
     }

@@ -110,9 +110,11 @@ fun CotizadorPrincipal(
         },
         bottomBar = {
             BarraNavegacionInferior(
+                rutaActual = rutas.COTIZADOR,
                 onIrAInicio = { navController.navigate(rutas.HOME) },
                 onIrAPedidos = { navController.navigate(rutas.PEDIDOS) },
-                onIrACotizar = {} 
+                onIrACotizar = {},
+                onIrAResumen = { navController.navigate(rutas.RESUMEN) }
             )
         }
     ) { paddingValues ->

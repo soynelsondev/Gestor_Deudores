@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [Deudor::class, Deuda::class, Pedido::class, PlantillaCotizacion::class, CuentaBancaria::class],
-    version = 8,
+    version = 9,
     exportSchema = true
 )
 abstract class DeudaDataBase : RoomDatabase() {
@@ -142,6 +142,17 @@ abstract class DeudaDataBase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Room espera la creación limpia de la columna nombrePiezaBase en un orden o string específico, 
+                // pero si la DB ya estaba instalada, usaremos ADD COLUMN simple con literales simples
+                db.execSQL("ALTER TABLE pedidos ADD COLUMN costoPiezaBaseUsd REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE pedidos ADD COLUMN costoPasajeUsd REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE pedidos ADD COLUMN costoInsumosUsd REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE pedidos ADD COLUMN nombrePiezaBase TEXT NOT NULL DEFAULT 'Insumo Base'")
+            }
+        }
+
         fun getDatabase(context: Context): DeudaDataBase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -149,7 +160,7 @@ abstract class DeudaDataBase : RoomDatabase() {
                     DeudaDataBase::class.java,
                     "control_deudas_db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
                     .build()
 
                 INSTANCE = instance

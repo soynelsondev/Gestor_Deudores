@@ -126,9 +126,11 @@ fun PedidosPrincipal(viewModel: PedidoViewModel, navController: NavController) {
         },
         bottomBar = {
             BarraNavegacionInferior(
+                rutaActual = rutas.PEDIDOS,
                 onIrAInicio = { navController.navigate(rutas.HOME) },
                 onIrAPedidos = {}, // Ya estamos aquí
-                onIrACotizar = { navController.navigate(rutas.COTIZADOR) }
+                onIrACotizar = { navController.navigate(rutas.COTIZADOR) },
+                onIrAResumen = { navController.navigate(rutas.RESUMEN) }
             )
         }
     ) { innerPadding ->
@@ -388,7 +390,12 @@ fun TarjetaPedido(
 data class ArticuloPedido(
     var producto: String = "",
     var cantidadTexto: String = "1",
-    var precioUnitarioTexto: String = ""
+    var precioUnitarioTexto: String = "",
+    // Costos reales arrastrados del cotizador para la radiografía
+    var costoPiezaBaseUnitario: Double = 0.0,
+    var nombrePiezaBase: String = "Insumo Base",
+    var costoPasajeUnitario: Double = 0.0,
+    var costoInsumosUnitario: Double = 0.0
 )
 
 @Composable
@@ -398,7 +405,7 @@ fun DialogoCrearPedido(
     onDismiss: () -> Unit
 ) {
     val clientes by viewModel.listaClientes.collectAsState()
-    val sugerencias by viewModel.sugerenciasProductos.collectAsState()
+    val plantillasCotizador by viewModel.listaPlantillas.collectAsState()
 
     var deudorSeleccionado by remember { mutableStateOf<Deudor?>(null) }
     var expandidoClientes by remember { mutableStateOf(false) }
@@ -582,23 +589,57 @@ fun DialogoCrearPedido(
                                 OutlinedTextField(
                                     value = articulo.producto,
                                     onValueChange = { 
-                                        listaArticulos[index] = articulo.copy(producto = it) 
+                                        listaArticulos[index] = articulo.copy(
+                                            producto = it,
+                                            costoPiezaBaseUnitario = 0.0,
+                                            costoPasajeUnitario = 0.0,
+                                            costoInsumosUnitario = 0.0,
+                                            nombrePiezaBase = "Insumo Base"
+                                        ) 
                                     },
-                                    placeholder = { Text("Ej. Taza Mágica, Franela") },
+                                    placeholder = { Text("Ej. Cuadro, Franela") },
+                                    label = { Text("Buscar Plantilla Cotizador") },
                                     modifier = Modifier.fillMaxWidth().menuAnchor(),
                                     shape = RoundedCornerShape(12.dp)
                                 )
-                                val sugFiltradas = sugerencias.filter { it.contains(articulo.producto, ignoreCase = true) && it != articulo.producto }
+                                val sugFiltradas = plantillasCotizador.filter { 
+                                    it.nombrePlantilla.contains(articulo.producto, ignoreCase = true) 
+                                }
                                 if (sugFiltradas.isNotEmpty()) {
                                     ExposedDropdownMenu(
                                         expanded = expandidoProductos,
                                         onDismissRequest = { expandidoProductos = false }
                                     ) {
-                                        sugFiltradas.forEach { sug ->
+                                        sugFiltradas.forEach { plantilla ->
                                             DropdownMenuItem(
-                                                text = { Text(sug) },
+                                                text = { 
+                                                    Column {
+                                                        Text(plantilla.nombrePlantilla, fontWeight = FontWeight.Bold)
+                                                        Text("Venta Sugerida: $${String.format(java.util.Locale.US, "%.2f", plantilla.calcularPrecioDetalUsd())}", fontSize = 10.sp, color = Color.Gray)
+                                                    }
+                                                },
                                                 onClick = {
-                                                    listaArticulos[index] = articulo.copy(producto = sug)
+                                                    // 1. Extraemos los costos matemáticos de esta plantilla
+                                                    val costoPieza = plantilla.precioPaquetePieza / if (plantilla.cantidadPaquetePieza > 0) plantilla.cantidadPaquetePieza else 1
+                                                    val costoDtf = plantilla.precioTotalDtf / if (plantilla.rendimientoDtf > 0) plantilla.rendimientoDtf else 1
+                                                    val costoExtra = plantilla.costoExtra / if (plantilla.rendimientoExtra > 0) plantilla.rendimientoExtra else 1
+                                                    val costoPasaje = plantilla.costoTransporte / if (plantilla.rendimientoTransporte > 0) plantilla.rendimientoTransporte else 1
+                                                    val costoDiseno = plantilla.costoDiseno / if (plantilla.rendimientoDiseno > 0) plantilla.rendimientoDiseno else 1
+                                                    val costoEmpaque = plantilla.precioPaqueteEmpaque / if (plantilla.cantidadPaqueteEmpaque > 0) plantilla.cantidadPaqueteEmpaque else 1
+                                                    val costoPapel = plantilla.precioPaquetePapel / if (plantilla.cantidadPaquetePapel > 0) plantilla.cantidadPaquetePapel else 1
+
+                                                    // Agrupamos costos para la Radiografía
+                                                    val costoInsumosTotal = costoDtf + costoExtra + costoDiseno + costoEmpaque + costoPapel
+
+                                                    // 2. Autocompletamos y pegamos los costos
+                                                    listaArticulos[index] = articulo.copy(
+                                                        producto = plantilla.nombrePlantilla,
+                                                        precioUnitarioTexto = String.format(java.util.Locale.US, "%.2f", plantilla.calcularPrecioDetalUsd()),
+                                                        costoPiezaBaseUnitario = costoPieza,
+                                                        nombrePiezaBase = plantilla.nombrePlantilla,
+                                                        costoPasajeUnitario = costoPasaje,
+                                                        costoInsumosUnitario = costoInsumosTotal
+                                                    )
                                                     expandidoProductos = false
                                                 }
                                             )
@@ -780,16 +821,40 @@ fun DialogoCrearPedido(
                                     // Consolidar la lista de productos en un solo String para la base de datos
                                     val nombresProductos = listaArticulos.joinToString(", ") { "${it.producto} (x${it.cantidadTexto})" }
                                     
+                                    // 3. Promediamos o sumamos los costos reales consolidados del pedido
+                                    val costoBaseTotal = listaArticulos.sumOf { 
+                                        val c = it.cantidadTexto.toIntOrNull() ?: 1
+                                        it.costoPiezaBaseUnitario * c 
+                                    }
+                                    val costoPasajeTotal = listaArticulos.sumOf { 
+                                        val c = it.cantidadTexto.toIntOrNull() ?: 1
+                                        it.costoPasajeUnitario * c 
+                                    }
+                                    val costoInsumosTotal = listaArticulos.sumOf { 
+                                        val c = it.cantidadTexto.toIntOrNull() ?: 1
+                                        it.costoInsumosUnitario * c 
+                                    }
+                                    
+                                    // Al ser multi-producto, calculamos el costo unitario "promedio consolidado"
+                                    val cantidadTotalGral = listaArticulos.sumOf { it.cantidadTexto.toIntOrNull() ?: 1 }
+                                    val unitarioBaseGral = if(cantidadTotalGral > 0) costoBaseTotal / cantidadTotalGral else 0.0
+                                    val unitarioPasajeGral = if(cantidadTotalGral > 0) costoPasajeTotal / cantidadTotalGral else 0.0
+                                    val unitarioInsumosGral = if(cantidadTotalGral > 0) costoInsumosTotal / cantidadTotalGral else 0.0
+
                                     viewModel.crearNuevoPedido(
                                         deudorId = deudorSeleccionado!!.id,
                                         producto = nombresProductos,
-                                        cantidad = 1, // En el historial queda como 1 paquete consolidado
-                                        precioUnitarioUsd = totalUsd, // El precio unitario de este paquete consolidado es el total
+                                        cantidad = cantidadTotalGral, // En el historial queda como 1 paquete consolidado
+                                        precioUnitarioUsd = totalUsd / (if(cantidadTotalGral > 0) cantidadTotalGral else 1), // El precio unitario de este paquete consolidado es el total
                                         abonoInicialUsd = abonoInicial,
                                         numCuotas = numCuotas,
                                         frecuencia = frecuenciaSeleccionada,
                                         fechaEntregaMillis = fechaEntregaMillis,
                                         notas = notas,
+                                        costoPiezaBaseUnitario = unitarioBaseGral,
+                                        nombrePiezaBase = if(listaArticulos.size == 1) listaArticulos[0].nombrePiezaBase else "Múltiples Productos",
+                                        costoPasajeUnitario = unitarioPasajeGral,
+                                        costoInsumosUnitario = unitarioInsumosGral,
                                         onExito = onDismiss
                                     )
                                 }

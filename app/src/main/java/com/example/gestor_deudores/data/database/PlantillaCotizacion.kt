@@ -7,29 +7,24 @@ import androidx.room.PrimaryKey
 data class PlantillaCotizacion(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
-    val nombrePlantilla: String, // Ej: "Franela Algodón + DTF"
+    val nombrePlantilla: String,
     
-    // 1. Materiales (Pieza Base)
     val precioPaquetePieza: Double,
     val monedaPaquetePieza: String,
     val cantidadPaquetePieza: Int,
     
-    // 2. Materiales (Empaque)
     val precioPaqueteEmpaque: Double,
     val monedaPaqueteEmpaque: String,
     val cantidadPaqueteEmpaque: Int,
     
-    // 2.5 Materiales (Papel Opcional)
     val precioPaquetePapel: Double,
     val monedaPaquetePapel: String,
     val cantidadPaquetePapel: Int,
 
-    // 3. Servicios Directos (DTF)
     val precioTotalDtf: Double,
     val monedaDtf: String,
-    val rendimientoDtf: Int, // En cuántas piezas dividimos ese costo total
+    val rendimientoDtf: Int,
     
-    // 4. Servicios Extras
     val costoTransporte: Double,
     val monedaTransporte: String,
     val rendimientoTransporte: Int,
@@ -38,13 +33,33 @@ data class PlantillaCotizacion(
     val monedaDiseno: String,
     val rendimientoDiseno: Int,
 
-    // 4.5 Extras (Imanes, resina, ganchos, etc)
     val costoExtra: Double,
     val monedaExtra: String,
     val rendimientoExtra: Int,
 
-    // 5. Operatividad y Ganancia
     val porcentajeOperativo: Float,
     val porcentajeGananciaDetal: Float,
     val porcentajeGananciaMayor: Float
-)
+) {
+    // Calculamos el costo base sumando todo
+    fun calcularCostoProduccionBase(): Double {
+        val costoPieza = precioPaquetePieza / if (cantidadPaquetePieza > 0) cantidadPaquetePieza else 1
+        val costoEmpaque = precioPaqueteEmpaque / if (cantidadPaqueteEmpaque > 0) cantidadPaqueteEmpaque else 1
+        val costoPapel = precioPaquetePapel / if (cantidadPaquetePapel > 0) cantidadPaquetePapel else 1
+        val costoDtf = precioTotalDtf / if (rendimientoDtf > 0) rendimientoDtf else 1
+        val costoTransp = costoTransporte / if (rendimientoTransporte > 0) rendimientoTransporte else 1
+        val costoDis = costoDiseno / if (rendimientoDiseno > 0) rendimientoDiseno else 1
+        val costoExt = costoExtra / if (rendimientoExtra > 0) rendimientoExtra else 1
+
+        val costoBase = costoPieza + costoEmpaque + costoPapel + costoDtf + costoTransp + costoDis + costoExt
+        val margenOp = porcentajeOperativo / 100f
+        return costoBase / (1 - margenOp)
+    }
+
+    // Calcula el precio de Venta Sugerida al Detal para Auto-completarlo en Pedidos
+    fun calcularPrecioDetalUsd(): Double {
+        val costoProd = calcularCostoProduccionBase()
+        val margen = porcentajeGananciaDetal / 100f
+        return costoProd / (1 - margen)
+    }
+}

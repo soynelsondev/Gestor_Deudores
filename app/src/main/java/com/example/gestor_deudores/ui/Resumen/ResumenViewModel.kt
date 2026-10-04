@@ -47,6 +47,7 @@ data class DesglosePagoItem(
 )
 
 data class DesglosePagoIndividual(
+    val idDeuda: Int, // -1 para Consolidado Total
     val clienteNombre: String,
     val montoTotalAbonoUsd: Double,
     val fechaStr: String,
@@ -57,6 +58,13 @@ data class AlertaFinanciera(
     val titulo: String,
     val mensaje: String,
     val nivel: String // "INFO", "WARNING", "DANGER"
+)
+
+data class ConfiguracionCostos(
+    val pctTextil: Float = 32.5f,  // Ej: $3.90 en $12
+    val pctPasaje: Float = 8.3f,   // Ej: $1.00 en $12
+    val pctInsumos: Float = 15.0f, // Ej: $1.80 en $12
+    val pctGanancia: Float = 44.2f  // Ej: $5.30 en $12
 )
 
 data class ResumenUiState(
@@ -70,14 +78,21 @@ data class ResumenUiState(
     val porCobrarUsd: Double = 0.0,
     val fondosInsumos: List<FondoInsumoItem> = emptyList(),
     val cuentasBancarias: List<CuentaBancaria> = emptyList(),
-    val ultimoAbonoDesglose: DesglosePagoIndividual? = null,
+    val listaAbonosDesglose: List<DesglosePagoIndividual> = emptyList(),
+    val abonoSeleccionadoIndex: Int = 0,
+    val configuracionCostos: ConfiguracionCostos = ConfiguracionCostos(),
     val pedidosRecibidosCount: Int = 0,
     val pedidosProduccionCount: Int = 0,
     val pedidosListosCount: Int = 0,
     val pedidosEntregadosCount: Int = 0,
     val alertasFinancieras: List<AlertaFinanciera> = emptyList(),
     val topProductos: List<Pair<String, Int>> = emptyList()
-)
+) {
+    val abonoSeleccionado: DesglosePagoIndividual?
+        get() = if (listaAbonosDesglose.isNotEmpty() && abonoSeleccionadoIndex in listaAbonosDesglose.indices) {
+            listaAbonosDesglose[abonoSeleccionadoIndex]
+        } else null
+}
 
 private data class DatosDbCombinados(
     val deudas: List<Deuda>,
@@ -90,7 +105,9 @@ private data class DatosDbCombinados(
 private data class FiltrosUiCombinados(
     val periodo: PeriodoFiltro,
     val moneda: String,
-    val tasa: Double
+    val tasa: Double,
+    val abonoIdx: Int,
+    val configCostos: ConfiguracionCostos
 )
 
 class ResumenViewModel(
@@ -110,16 +127,36 @@ class ResumenViewModel(
     private val _tasaBcv = MutableStateFlow(0.0)
     val tasaBcv = _tasaBcv.asStateFlow()
 
+    private val _abonoSeleccionadoIndex = MutableStateFlow(0)
+    val abonoSeleccionadoIndex = _abonoSeleccionadoIndex.asStateFlow()
+
+    private val _configuracionCostos = MutableStateFlow(ConfiguracionCostos())
+    val configuracionCostos = _configuracionCostos.asStateFlow()
+
     fun actualizarTasaBcv(tasa: Double) {
         _tasaBcv.value = tasa
     }
 
     fun cambiarPeriodo(nuevoPeriodo: PeriodoFiltro) {
         _periodoSeleccionado.value = nuevoPeriodo
+        _abonoSeleccionadoIndex.value = 0
     }
 
     fun cambiarMonedaVista(nuevaMoneda: String) {
         _monedaVista.value = nuevaMoneda
+    }
+
+    fun seleccionarAbono(index: Int) {
+        _abonoSeleccionadoIndex.value = index
+    }
+
+    fun guardarConfiguracionCostos(pctTextil: Float, pctPasaje: Float, pctInsumos: Float, pctGanancia: Float) {
+        _configuracionCostos.value = ConfiguracionCostos(
+            pctTextil = pctTextil.coerceIn(1f, 90f),
+            pctPasaje = pctPasaje.coerceIn(0f, 50f),
+            pctInsumos = pctInsumos.coerceIn(0f, 50f),
+            pctGanancia = pctGanancia.coerceIn(1f, 90f)
+        )
     }
 
     // --- ACCIONES DE GESTIÓN DE CUENTAS BANCARIAS / BILLETERAS ---
@@ -135,9 +172,10 @@ class ResumenViewModel(
         }
     }
 
-    fun actualizarCuentaBancaria(cuenta: CuentaBancaria) {
+    fun actualizarSaldoCuenta(cuenta: CuentaBancaria, nuevoSaldo: Double) {
         viewModelScope.launch {
-            cuentaBancariaDao.actualizarCuenta(cuenta)
+            val cuentaActualizada = cuenta.copy(saldoActual = nuevoSaldo.redondear2())
+            cuentaBancariaDao.actualizarCuenta(cuentaActualizada)
         }
     }
 
@@ -162,9 +200,11 @@ class ResumenViewModel(
     private val filtrosUiFlow = combine(
         _periodoSeleccionado,
         _monedaVista,
-        _tasaBcv
-    ) { periodo, moneda, tasa ->
-        FiltrosUiCombinados(periodo, moneda, tasa)
+        _tasaBcv,
+        _abonoSeleccionadoIndex,
+        _configuracionCostos
+    ) { periodo, moneda, tasa, abonoIdx, config ->
+        FiltrosUiCombinados(periodo, moneda, tasa, abonoIdx, config)
     }
 
     // Combined Flow Final: Cerebro de cálculo completo
@@ -181,6 +221,8 @@ class ResumenViewModel(
         val periodo = filtros.periodo
         val moneda = filtros.moneda
         val tasa = filtros.tasa
+        val abonoIdx = filtros.abonoIdx
+        val config = filtros.configCostos
 
         val rangoMillis = calcularRangoMillis(periodo)
         val inicioMillis = rangoMillis.first
@@ -202,58 +244,76 @@ class ResumenViewModel(
         val totalAbonosHistoricosUsd = deudas.filter { it.tipo == "ABONO" }.sumOf { Math.abs(it.montoRestante) }.redondear2()
         val porCobrarUsd = (totalCargosUsd - totalAbonosHistoricosUsd).coerceAtLeast(0.0).redondear2()
 
-        // 4. Estimación de Fondo de Reposición vs Ganancia Neta
-        val costoPromedioPorcentaje = if (plantillas.isNotEmpty()) {
-            val promedioOp = plantillas.map { it.porcentajeOperativo.toDouble() }.average().toFloat()
-            if (promedioOp > 0) (promedioOp / 100f).coerceIn(0.2f, 0.7f) else 0.45f
-        } else {
-            0.45f // 45% costo estimado por defecto en sublimación
+        // 4. Estimación de Fondo de Reposición vs Ganancia Neta usando la FOTOGRAFÍA del Pedido
+        // Buscamos los pedidos vinculados a los abonos del período para extraer sus costos exactos
+        var fondoReposicionTextilUsd = 0.0
+        var fondoReposicionPasajesUsd = 0.0
+        var fondoReposicionInsumosUsd = 0.0
+
+        for (abono in abonosEnPeriodo) {
+            val montoAbono = Math.abs(abono.montoRestante)
+            val cargoOriginal = cargosActivos.find { it.idDeudor == abono.idDeudor && it.tipoDeuda != "Abono / Pago Parcial" }
+            
+            if (cargoOriginal != null) {
+                // Buscamos si existe un pedido fotográfico asociado a este cargo
+                // (Para esto nos guiaremos por el monto, fecha o cliente, idealmente en la BD habría un pedidoId en Deuda)
+                // Como aproximación, buscamos el pedido del cliente que coincida en monto o fecha cercana
+                val pedidoFotografia = pedidos.find { it.deudorId == abono.idDeudor && it.totalUsd == cargoOriginal.montoInicial }
+                
+                if (pedidoFotografia != null && (pedidoFotografia.costoPiezaBaseUsd > 0 || pedidoFotografia.costoInsumosUsd > 0)) {
+                    // Usar Fotografía Histórica del Pedido
+                    val proporcionAbono = if (pedidoFotografia.totalUsd > 0) montoAbono / pedidoFotografia.totalUsd else 1.0
+                    fondoReposicionTextilUsd += (pedidoFotografia.costoPiezaBaseUsd * proporcionAbono)
+                    fondoReposicionPasajesUsd += (pedidoFotografia.costoPasajeUsd * proporcionAbono)
+                    fondoReposicionInsumosUsd += (pedidoFotografia.costoInsumosUsd * proporcionAbono)
+                } else {
+                    // Si es un pedido viejo sin fotografía o registro suelto, usamos el config base
+                    fondoReposicionTextilUsd += (montoAbono * (config.pctTextil / 100.0))
+                    fondoReposicionPasajesUsd += (montoAbono * (config.pctPasaje / 100.0))
+                    fondoReposicionInsumosUsd += (montoAbono * (config.pctInsumos / 100.0))
+                }
+            } else {
+                fondoReposicionTextilUsd += (montoAbono * (config.pctTextil / 100.0))
+                fondoReposicionPasajesUsd += (montoAbono * (config.pctPasaje / 100.0))
+                fondoReposicionInsumosUsd += (montoAbono * (config.pctInsumos / 100.0))
+            }
         }
 
-        val fondoReposicionUsd = (ingresosCobradosUsd * costoPromedioPorcentaje).redondear2()
-        val gananciaNetaUsd = (ingresosCobradosUsd - fondoReposicionUsd).coerceAtLeast(0.0).redondear2()
+        val fondoReposicionTotalUsd = (fondoReposicionTextilUsd + fondoReposicionPasajesUsd + fondoReposicionInsumosUsd).redondear2()
+        val gananciaNetaUsd = (ingresosCobradosUsd - fondoReposicionTotalUsd).coerceAtLeast(0.0).redondear2()
 
         // 5. Construcción del Carrusel de Sobres / Fondos de Insumos
         val totalFondos = if (ingresosCobradosUsd > 0) ingresosCobradosUsd else 1.0
 
-        val fondoTextil = (ingresosCobradosUsd * 0.20).redondear2()
-        val fondoCeramica = (ingresosCobradosUsd * 0.15).redondear2()
-        val fondoTintasPapel = (ingresosCobradosUsd * 0.10).redondear2()
-        val fondoPasajes = (ingresosCobradosUsd * 0.05).redondear2()
+        val fondoTextil = fondoReposicionTextilUsd.redondear2()
+        val fondoPasajes = fondoReposicionPasajesUsd.redondear2()
+        val fondoTintasPapel = fondoReposicionInsumosUsd.redondear2()
         val fondoGanancia = gananciaNetaUsd
 
         val fondosInsumos = listOf(
             FondoInsumoItem(
                 id = "textil",
-                nombre = "Insumos Textiles (Franelas / Gorras)",
+                nombre = "Material Base (Textiles, Rígidos)",
                 montoUsd = fondoTextil,
                 porcentajeDelTotal = (fondoTextil / totalFondos * 100).toFloat(),
-                icono = "👕",
+                icono = "📦",
                 colorHex = "#2196F3"
             ),
             FondoInsumoItem(
-                id = "ceramica",
-                nombre = "Cerámica & Rígidos (Tazas / Mugs)",
-                montoUsd = fondoCeramica,
-                porcentajeDelTotal = (fondoCeramica / totalFondos * 100).toFloat(),
-                icono = "☕",
-                colorHex = "#FF9800"
-            ),
-            FondoInsumoItem(
-                id = "tintas",
-                nombre = "Tintas, Papel & Prensa",
-                montoUsd = fondoTintasPapel,
-                porcentajeDelTotal = (fondoTintasPapel / totalFondos * 100).toFloat(),
-                icono = "🖨️",
-                colorHex = "#9C27B0"
-            ),
-            FondoInsumoItem(
                 id = "pasaje",
-                nombre = "Pasajes, Fletes & Envíos",
+                nombre = "Pasajes & Transporte Logístico",
                 montoUsd = fondoPasajes,
                 porcentajeDelTotal = (fondoPasajes / totalFondos * 100).toFloat(),
                 icono = "🚚",
                 colorHex = "#4CAF50"
+            ),
+            FondoInsumoItem(
+                id = "tintas",
+                nombre = "Tintas, Papel & Insumos",
+                montoUsd = fondoTintasPapel,
+                porcentajeDelTotal = (fondoTintasPapel / totalFondos * 100).toFloat(),
+                icono = "🖨️",
+                colorHex = "#9C27B0"
             ),
             FondoInsumoItem(
                 id = "ganancia",
@@ -265,32 +325,72 @@ class ResumenViewModel(
             )
         )
 
-        // 6. Radiografía del Último Pago / Abono Individual
-        val ultimoAbono = deudas.filter { it.tipo == "ABONO" }.maxByOrNull { obtenerFechaMillisValida(it) }
-        val ultimoAbonoDesglose = if (ultimoAbono != null) {
-            val cliente = deudores.find { it.id == ultimoAbono.idDeudor }
-            val clienteNombre = if (cliente != null) "${cliente.nombre} ${cliente.apellido}" else "Cliente"
-            val montoAbono = Math.abs(ultimoAbono.montoRestante).redondear2()
+        // 6. Radiografía de Abonos Recibidos (Opción 0: CONSOLIDADO TOTAL DE TODOS LOS CLIENTES)
+        val listaAbonosDesglose = mutableListOf<DesglosePagoIndividual>()
 
-            val textilAbono = (montoAbono * 0.20).redondear2()
-            val ceramicaAbono = (montoAbono * 0.15).redondear2()
-            val tintasAbono = (montoAbono * 0.10).redondear2()
-            val pasajesAbono = (montoAbono * 0.05).redondear2()
-            val gananciaAbono = (montoAbono - (textilAbono + ceramicaAbono + tintasAbono + pasajesAbono)).coerceAtLeast(0.0).redondear2()
-
-            DesglosePagoIndividual(
-                clienteNombre = clienteNombre,
-                montoTotalAbonoUsd = montoAbono,
-                fechaStr = ultimoAbono.fecha,
-                desgloseItems = listOf(
-                    DesglosePagoItem("Insumo Textil", textilAbono, 20f),
-                    DesglosePagoItem("Cerámica/Tazas", ceramicaAbono, 15f),
-                    DesglosePagoItem("Tintas & Papel", tintasAbono, 10f),
-                    DesglosePagoItem("Pasaje / Logística", pasajesAbono, 5f),
-                    DesglosePagoItem("Ganancia Neta", gananciaAbono, 50f)
+        // Opción 0: Consolidado de todos los abonos del período
+        if (ingresosCobradosUsd > 0) {
+            listaAbonosDesglose.add(
+                DesglosePagoIndividual(
+                    idDeuda = -1,
+                    clienteNombre = "📊 TODOS LOS CLIENTES (${abonosEnPeriodo.size} pagos)",
+                    montoTotalAbonoUsd = ingresosCobradosUsd,
+                    fechaStr = "Consolidado Período",
+                    desgloseItems = listOf(
+                        DesglosePagoItem("Material Base (Textil/Rígido)", fondoTextil, (fondoTextil / totalFondos * 100).toFloat()),
+                        DesglosePagoItem("Pasajes & Transporte", fondoPasajes, (fondoPasajes / totalFondos * 100).toFloat()),
+                        DesglosePagoItem("Tintas, Papel & Insumos", fondoTintasPapel, (fondoTintasPapel / totalFondos * 100).toFloat()),
+                        DesglosePagoItem("Ganancia Neta Libre", fondoGanancia, (fondoGanancia / totalFondos * 100).toFloat())
+                    )
                 )
             )
-        } else null
+        }
+
+        // Siguientes Opciones: Abonos individuales por cliente
+        val abonosOrdenados = abonosEnPeriodo.sortedByDescending { obtenerFechaMillisValida(it) }.take(15)
+        for (abono in abonosOrdenados) {
+            val cliente = deudores.find { it.id == abono.idDeudor }
+            val clienteNombre = if (cliente != null) "${cliente.nombre} ${cliente.apellido}" else "Cliente"
+            val montoAbono = Math.abs(abono.montoRestante).redondear2()
+
+            val cargoOriginal = cargosActivos.find { it.idDeudor == abono.idDeudor && it.tipoDeuda != "Abono / Pago Parcial" }
+            val pedidoFotografia = pedidos.find { it.deudorId == abono.idDeudor && it.totalUsd == cargoOriginal?.montoInicial }
+
+            val pTextil: Double
+            val pPasaje: Double
+            val pInsumo: Double
+            val pGanancia: Double
+            var nombreInsumoReal = "Insumo Base / Textil"
+
+            if (pedidoFotografia != null && (pedidoFotografia.costoPiezaBaseUsd > 0 || pedidoFotografia.costoInsumosUsd > 0)) {
+                val proporcion = if (pedidoFotografia.totalUsd > 0) montoAbono / pedidoFotografia.totalUsd else 1.0
+                pTextil = (pedidoFotografia.costoPiezaBaseUsd * proporcion).redondear2()
+                pPasaje = (pedidoFotografia.costoPasajeUsd * proporcion).redondear2()
+                pInsumo = (pedidoFotografia.costoInsumosUsd * proporcion).redondear2()
+                pGanancia = (montoAbono - (pTextil + pPasaje + pInsumo)).coerceAtLeast(0.0).redondear2()
+                nombreInsumoReal = "Pieza Base: ${pedidoFotografia.nombrePiezaBase}"
+            } else {
+                pTextil = (montoAbono * (config.pctTextil / 100.0)).redondear2()
+                pPasaje = (montoAbono * (config.pctPasaje / 100.0)).redondear2()
+                pInsumo = (montoAbono * (config.pctInsumos / 100.0)).redondear2()
+                pGanancia = (montoAbono - (pTextil + pPasaje + pInsumo)).coerceAtLeast(0.0).redondear2()
+            }
+
+            listaAbonosDesglose.add(
+                DesglosePagoIndividual(
+                    idDeuda = abono.id,
+                    clienteNombre = clienteNombre,
+                    montoTotalAbonoUsd = montoAbono,
+                    fechaStr = abono.fecha,
+                    desgloseItems = listOf(
+                        DesglosePagoItem(nombreInsumoReal, pTextil, (pTextil / montoAbono * 100).toFloat()),
+                        DesglosePagoItem("Pasajes & Transporte", pPasaje, (pPasaje / montoAbono * 100).toFloat()),
+                        DesglosePagoItem("Tintas & Papel", pInsumo, (pInsumo / montoAbono * 100).toFloat()),
+                        DesglosePagoItem("Ganancia Neta Libre", pGanancia, (pGanancia / montoAbono * 100).toFloat())
+                    )
+                )
+            )
+        }
 
         // 7. Estadísticas de Estado de Pedidos
         val pedidosEnPeriodo = pedidos.filter { it.fechaCreacionMillis in inicioMillis..finMillis }
@@ -343,12 +443,14 @@ class ResumenViewModel(
             monedaVista = moneda,
             tasaBcv = tasa,
             ingresosCobradosUsd = ingresosCobradosUsd,
-            fondoReposicionUsd = fondoReposicionUsd,
+            fondoReposicionUsd = fondoReposicionTotalUsd,
             gananciaNetaUsd = gananciaNetaUsd,
             porCobrarUsd = porCobrarUsd,
             fondosInsumos = fondosInsumos,
             cuentasBancarias = cuentas,
-            ultimoAbonoDesglose = ultimoAbonoDesglose,
+            listaAbonosDesglose = listaAbonosDesglose,
+            abonoSeleccionadoIndex = abonoIdx.coerceIn(0, (listaAbonosDesglose.size - 1).coerceAtLeast(0)),
+            configuracionCostos = config,
             pedidosRecibidosCount = recCount,
             pedidosProduccionCount = prodCount,
             pedidosListosCount = lisCount,

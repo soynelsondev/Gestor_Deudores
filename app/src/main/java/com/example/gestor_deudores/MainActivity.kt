@@ -43,7 +43,8 @@ class MainActivity : ComponentActivity() {
                     return PedidoViewModel(
                         baseDeDatos.pedidoDao(),
                         baseDeDatos.deudorDao(),
-                        baseDeDatos.deudaDao()
+                        baseDeDatos.deudaDao(),
+                        baseDeDatos.plantillaDao()
                     ) as T
                 }
                 if (modelClass.isAssignableFrom(CotizadorViewModel::class.java)) {

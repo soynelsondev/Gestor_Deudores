@@ -8,6 +8,8 @@ import com.example.gestor_deudores.data.database.DeudorDao
 import com.example.gestor_deudores.data.database.Pedido
 import com.example.gestor_deudores.data.database.PedidoConCliente
 import com.example.gestor_deudores.data.database.PedidoDao
+import com.example.gestor_deudores.data.database.PlantillaCotizacion
+import com.example.gestor_deudores.data.database.PlantillaDao
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -27,7 +29,8 @@ enum class FiltroEstadoPedido {
 class PedidoViewModel(
     private val pedidoDao: PedidoDao,
     private val deudorDao: DeudorDao,
-    private val deudaDao: DeudaDao
+    private val deudaDao: DeudaDao,
+    private val plantillaDao: PlantillaDao
 ) : ViewModel() {
 
     private val _textoBusqueda = MutableStateFlow("")
@@ -38,6 +41,14 @@ class PedidoViewModel(
 
     // Lista de clientes disponibles para el selector del formulario
     val listaClientes: StateFlow<List<Deudor>> = deudorDao.obtenerDeudores()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    // Todas las plantillas del cotizador disponibles
+    val listaPlantillas: StateFlow<List<PlantillaCotizacion>> = plantillaDao.obtenerTodasLasPlantillas()
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -99,13 +110,17 @@ class PedidoViewModel(
                 fechaCreacionMillis = pedidoConCliente.fechaCreacionMillis,
                 fechaEntregaMillis = pedidoConCliente.fechaEntregaMillis,
                 estado = nuevoEstado,
-                notas = pedidoConCliente.notas
+                notas = pedidoConCliente.notas,
+                costoPiezaBaseUsd = pedidoConCliente.costoPiezaBaseUsd,
+                costoPasajeUsd = pedidoConCliente.costoPasajeUsd,
+                costoInsumosUsd = pedidoConCliente.costoInsumosUsd,
+                nombrePiezaBase = pedidoConCliente.nombrePiezaBase
             )
             pedidoDao.actualizarPedido(pedidoEditado)
         }
     }
 
-    // --- GUARDADO TRANSACCIONAL DEL PEDIDO COMPLETO ---
+    // --- GUARDADO TRANSACCIONAL DEL PEDIDO COMPLETO (SOLUCIÓN ELEGANTE) ---
     fun crearNuevoPedido(
         deudorId: Int,
         producto: String,
@@ -116,9 +131,19 @@ class PedidoViewModel(
         frecuencia: String,
         fechaEntregaMillis: Long,
         notas: String,
+        costoPiezaBaseUnitario: Double = 0.0,
+        nombrePiezaBase: String = "Insumo Base",
+        costoPasajeUnitario: Double = 0.0,
+        costoInsumosUnitario: Double = 0.0,
         onExito: () -> Unit
     ) {
         val totalUsd = cantidad * precioUnitarioUsd
+        
+        // Fotografía de costos: Multiplicamos el costo unitario por la cantidad pedida
+        val costoPiezaBaseTotal = costoPiezaBaseUnitario * cantidad
+        val costoPasajeTotal = costoPasajeUnitario * cantidad
+        val costoInsumosTotal = costoInsumosUnitario * cantidad
+        
         val nuevoPedido = Pedido(
             deudorId = deudorId,
             producto = producto,
@@ -128,7 +153,11 @@ class PedidoViewModel(
             fechaCreacionMillis = System.currentTimeMillis(),
             fechaEntregaMillis = fechaEntregaMillis,
             estado = "RECIBIDO",
-            notas = notas
+            notas = notas,
+            costoPiezaBaseUsd = costoPiezaBaseTotal,
+            costoPasajeUsd = costoPasajeTotal,
+            costoInsumosUsd = costoInsumosTotal,
+            nombrePiezaBase = nombrePiezaBase
         )
 
         viewModelScope.launch {
