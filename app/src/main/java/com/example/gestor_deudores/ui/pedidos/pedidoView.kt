@@ -615,28 +615,21 @@ fun DialogoCrearPedido(
                                                 text = { 
                                                     Column {
                                                         Text(plantilla.nombrePlantilla, fontWeight = FontWeight.Bold)
-                                                        Text("Venta Sugerida: $${String.format(java.util.Locale.US, "%.2f", plantilla.calcularPrecioDetalUsd())}", fontSize = 10.sp, color = Color.Gray)
+                                                        Text("Venta Sugerida: $${String.format(java.util.Locale.US, "%.2f", com.example.gestor_deudores.data.utils.calcularCostosPlantilla(plantilla).precioSugeridoDetalUsd)}", fontSize = 10.sp, color = Color.Gray)
                                                     }
                                                 },
                                                 onClick = {
-                                                    // 1. Extraemos TODOS los costos matemáticos usando el mismo método del cotizador
-                                                    val costoProdBase = plantilla.calcularCostoProduccionBase()
-                                                    
-                                                    // Calculamos cada parte como se hace internamente
-                                                    val costoPieza = plantilla.precioPaquetePieza / if (plantilla.cantidadPaquetePieza > 0) plantilla.cantidadPaquetePieza else 1
-                                                    val costoPasaje = plantilla.costoTransporte / if (plantilla.rendimientoTransporte > 0) plantilla.rendimientoTransporte else 1
-                                                    
-                                                    // Todo lo demás (DTF, Extra, Diseño, Empaque, Papel, Operatividad) va al sobre de "Insumos"
-                                                    val costoInsumosTotal = costoProdBase - costoPieza - costoPasaje
+                                                    // 1. Llamamos al Cerebro Matemático Central
+                                                    val costosDesglosados = com.example.gestor_deudores.data.utils.calcularCostosPlantilla(plantilla)
 
                                                     // 2. Autocompletamos y pegamos los costos
                                                     listaArticulos[index] = articulo.copy(
                                                         producto = plantilla.nombrePlantilla,
-                                                        precioUnitarioTexto = String.format(java.util.Locale.US, "%.2f", plantilla.calcularPrecioDetalUsd()),
-                                                        costoPiezaBaseUnitario = costoPieza,
+                                                        precioUnitarioTexto = String.format(java.util.Locale.US, "%.2f", costosDesglosados.precioSugeridoDetalUsd),
+                                                        costoPiezaBaseUnitario = costosDesglosados.costoPiezaBaseUsd,
                                                         nombrePiezaBase = plantilla.nombrePlantilla,
-                                                        costoPasajeUnitario = costoPasaje,
-                                                        costoInsumosUnitario = costoInsumosTotal
+                                                        costoPasajeUnitario = costosDesglosados.costoPasajeUsd,
+                                                        costoInsumosUnitario = costosDesglosados.costoInsumosUsd
                                                     )
                                                     expandidoProductos = false
                                                 }

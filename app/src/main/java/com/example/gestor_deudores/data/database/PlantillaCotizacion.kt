@@ -40,26 +40,5 @@ data class PlantillaCotizacion(
     val porcentajeOperativo: Float,
     val porcentajeGananciaDetal: Float,
     val porcentajeGananciaMayor: Float
-) {
-    // Calculamos el costo base sumando todo
-    fun calcularCostoProduccionBase(): Double {
-        val costoPieza = precioPaquetePieza / if (cantidadPaquetePieza > 0) cantidadPaquetePieza else 1
-        val costoEmpaque = precioPaqueteEmpaque / if (cantidadPaqueteEmpaque > 0) cantidadPaqueteEmpaque else 1
-        val costoPapel = precioPaquetePapel / if (cantidadPaquetePapel > 0) cantidadPaquetePapel else 1
-        val costoDtf = precioTotalDtf / if (rendimientoDtf > 0) rendimientoDtf else 1
-        val costoTransp = costoTransporte / if (rendimientoTransporte > 0) rendimientoTransporte else 1
-        val costoDis = costoDiseno / if (rendimientoDiseno > 0) rendimientoDiseno else 1
-        val costoExt = costoExtra / if (rendimientoExtra > 0) rendimientoExtra else 1
+)
 
-        val costoBase = costoPieza + costoEmpaque + costoPapel + costoDtf + costoTransp + costoDis + costoExt
-        val margenOp = porcentajeOperativo / 100f
-        return costoBase / (1 - margenOp)
-    }
-
-    // Calcula el precio de Venta Sugerida al Detal para Auto-completarlo en Pedidos
-    fun calcularPrecioDetalUsd(): Double {
-        val costoProd = calcularCostoProduccionBase()
-        val margen = porcentajeGananciaDetal / 100f
-        return costoProd / (1 - margen)
-    }
-}
