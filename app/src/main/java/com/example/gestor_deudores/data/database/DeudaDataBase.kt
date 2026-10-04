@@ -8,8 +8,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [Deudor::class, Deuda::class, Pedido::class, PlantillaCotizacion::class],
-    version = 7, // <--- CAMBIO DE VERSIÓN A 7
+    entities = [Deudor::class, Deuda::class, Pedido::class, PlantillaCotizacion::class, CuentaBancaria::class],
+    version = 8,
     exportSchema = true
 )
 abstract class DeudaDataBase : RoomDatabase() {
@@ -18,6 +18,7 @@ abstract class DeudaDataBase : RoomDatabase() {
     abstract fun deudaDao(): DeudaDao
     abstract fun pedidoDao(): PedidoDao
     abstract fun plantillaDao(): PlantillaDao
+    abstract fun cuentaBancariaDao(): CuentaBancariaDao
 
     companion object {
         @Volatile
@@ -124,6 +125,23 @@ abstract class DeudaDataBase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `cuentas_bancarias` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `nombre` TEXT NOT NULL,
+                        `tipo` TEXT NOT NULL,
+                        `moneda` TEXT NOT NULL,
+                        `saldoActual` REAL NOT NULL
+                    )
+                """)
+                db.execSQL("INSERT INTO `cuentas_bancarias` (`nombre`, `tipo`, `moneda`, `saldoActual`) VALUES ('Efectivo Caja Chica', 'EFECTIVO', 'USD', 0.0)")
+                db.execSQL("INSERT INTO `cuentas_bancarias` (`nombre`, `tipo`, `moneda`, `saldoActual`) VALUES ('Zelle / Dólares Digitales', 'BILLETERA', 'USD', 0.0)")
+                db.execSQL("INSERT INTO `cuentas_bancarias` (`nombre`, `tipo`, `moneda`, `saldoActual`) VALUES ('Pago Móvil / Banco', 'BANCO', 'VES', 0.0)")
+            }
+        }
+
         fun getDatabase(context: Context): DeudaDataBase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -131,7 +149,7 @@ abstract class DeudaDataBase : RoomDatabase() {
                     DeudaDataBase::class.java,
                     "control_deudas_db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
                     .build()
 
                 INSTANCE = instance

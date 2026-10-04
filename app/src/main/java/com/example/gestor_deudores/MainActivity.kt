@@ -10,10 +10,10 @@ import androidx.lifecycle.ViewModelProvider
 import com.example.gestor_deudores.data.database.DeudaDataBase
 import com.example.gestor_deudores.ui.Registro.RegistroDeudorViewModel
 import com.example.gestor_deudores.ui.registroDeuda.RDeudaViewModel
-// Asegúrate de importar el HomeViewModel
 import com.example.gestor_deudores.ui.home.HomeViewModel
 import com.example.gestor_deudores.ui.cotizador.CotizadorViewModel
 import com.example.gestor_deudores.ui.pedidos.PedidoViewModel
+import com.example.gestor_deudores.ui.Resumen.ResumenViewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -50,24 +50,35 @@ class MainActivity : ComponentActivity() {
                     @Suppress("UNCHECKED_CAST")
                     return CotizadorViewModel(baseDeDatos.plantillaDao()) as T
                 }
+                if (modelClass.isAssignableFrom(ResumenViewModel::class.java)) {
+                    @Suppress("UNCHECKED_CAST")
+                    return ResumenViewModel(
+                        baseDeDatos.deudaDao(),
+                        baseDeDatos.deudorDao(),
+                        baseDeDatos.pedidoDao(),
+                        baseDeDatos.plantillaDao(),
+                        baseDeDatos.cuentaBancariaDao()
+                    ) as T
+                }
                 throw IllegalArgumentException("Clase ViewModel desconocida")
             }
         }
 
         val viewModelRegistro by viewModels<RegistroDeudorViewModel> { viewModelFactory }
         val viewModelDeuda by viewModels<RDeudaViewModel> { viewModelFactory }
-        // --- NUEVO: Instanciamos el HomeViewModel ---
         val viewModelHome by viewModels<HomeViewModel> { viewModelFactory }
         val viewModelPedido by viewModels<PedidoViewModel> { viewModelFactory }
         val viewModelCotizador by viewModels<CotizadorViewModel> { viewModelFactory }
+        val viewModelResumen by viewModels<ResumenViewModel> { viewModelFactory }
 
         setContent {
             NavegacionPrincipal(
                 viewModelRegistro = viewModelRegistro,
                 viewModelDeuda = viewModelDeuda,
-                viewModelHome = viewModelHome, // Lo enviamos a la navegación
+                viewModelHome = viewModelHome,
                 viewModelPedido = viewModelPedido,
-                viewModelCotizador = viewModelCotizador
+                viewModelCotizador = viewModelCotizador,
+                viewModelResumen = viewModelResumen
             )
         }
     }

@@ -22,6 +22,7 @@ import com.example.gestor_deudores.ui.cotizador.CotizadorPrincipal
 import com.example.gestor_deudores.ui.home.homePrincipal
 import com.example.gestor_deudores.ui.pedidos.PedidoViewModel
 import com.example.gestor_deudores.ui.pedidos.PedidosPrincipal
+import com.example.gestor_deudores.ui.Resumen.ResumenViewModel
 import com.example.gestor_deudores.ui.registroDeuda.Principal as PantallaRegistroDeuda
 import com.example.gestor_deudores.ui.registroDeuda.RDeudaViewModel
 import com.example.gestor_deudores.ui.rutas
@@ -32,7 +33,8 @@ fun NavegacionPrincipal(
     viewModelDeuda: RDeudaViewModel,
     viewModelHome: HomeViewModel,
     viewModelPedido: PedidoViewModel,
-    viewModelCotizador: CotizadorViewModel
+    viewModelCotizador: CotizadorViewModel,
+    viewModelResumen: ResumenViewModel
 ) {
     val navController = rememberNavController()
 
