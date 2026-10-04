@@ -142,10 +142,9 @@ fun CotizadorPrincipal(
                     
                     TarjetaPlantillaExpandible(
                         plantilla = plantilla,
-                        tasaBcvGlobal = tasaBcvGlobal,
+                        viewModel = viewModel,
                         expandida = estaExpandida,
                         onClickTarjeta = {
-                            // Si tocas la que ya está abierta, se cierra. Si tocas otra, se abre esa.
                             idTarjetaExpandida = if (estaExpandida) null else plantilla.id
                         },
                         onEditarClick = {
@@ -165,28 +164,15 @@ fun CotizadorPrincipal(
 @Composable
 fun TarjetaPlantillaExpandible(
     plantilla: PlantillaCotizacion,
-    tasaBcvGlobal: Double,
+    viewModel: CotizadorViewModel,
     expandida: Boolean,
     onClickTarjeta: () -> Unit,
     onEditarClick: () -> Unit
 ) {
     val formatoUSD = NumberFormat.getCurrencyInstance(Locale("en", "US"))
     
-    // Matemática rápida para mostrar en la tarjeta sin tener que cargarla al ViewModel
-    fun aUsd(valor: Double, moneda: String): Double = if (moneda == "VES") valor / tasaBcvGlobal else valor
-    
-    val costoPZ = aUsd(plantilla.precioPaquetePieza, plantilla.monedaPaquetePieza) / plantilla.cantidadPaquetePieza
-    val costoEmp = aUsd(plantilla.precioPaqueteEmpaque, plantilla.monedaPaqueteEmpaque) / plantilla.cantidadPaqueteEmpaque
-    val costoPapel = aUsd(plantilla.precioPaquetePapel, plantilla.monedaPaquetePapel) / plantilla.cantidadPaquetePapel
-    val costoDtf = aUsd(plantilla.precioTotalDtf, plantilla.monedaDtf) / plantilla.rendimientoDtf
-    val costoTrans = aUsd(plantilla.costoTransporte, plantilla.monedaTransporte) / plantilla.rendimientoTransporte
-    val costoDiseno = aUsd(plantilla.costoDiseno, plantilla.monedaDiseno) / plantilla.rendimientoDiseno
-    
-    val subtotal = costoPZ + costoEmp + costoPapel + costoDtf + costoTrans + costoDiseno
-    val costoTotal = subtotal + (subtotal * (plantilla.porcentajeOperativo / 100.0))
-    
-    val precioDetal = if(plantilla.porcentajeGananciaDetal < 100) costoTotal / (1.0 - (plantilla.porcentajeGananciaDetal / 100.0)) else 0.0
-    val precioMayor = if(plantilla.porcentajeGananciaMayor < 100) costoTotal / (1.0 - (plantilla.porcentajeGananciaMayor / 100.0)) else 0.0
+    // Obtenemos los resultados calculados directamente desde el ViewModel (Cero fórmulas en la Vista)
+    val res = viewModel.calcularResultadosPlantilla(plantilla)
 
     Card(
         modifier = Modifier
@@ -202,7 +188,7 @@ fun TarjetaPlantillaExpandible(
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(plantilla.nombrePlantilla, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 18.sp)
-                    Text("Detal: ${formatoUSD.format(precioDetal)} | Mayor: ${formatoUSD.format(precioMayor)}", color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
+                    Text("Detal: ${formatoUSD.format(res.precioDetalUsd)} | Mayor: ${formatoUSD.format(res.precioMayorUsd)}", color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
                 }
                 Icon(
                     imageVector = if (expandida) Icons.Default.Close else Icons.Default.Add, // Solo un icono indicativo
@@ -221,7 +207,7 @@ fun TarjetaPlantillaExpandible(
                     
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text("Costo de Producción Unitario:", color = Color.White, fontSize = 14.sp)
-                        Text(formatoUSD.format(costoTotal), color = Color.White, fontWeight = FontWeight.Bold)
+                        Text(formatoUSD.format(res.costoTotalProduccionUsd), color = Color.White, fontWeight = FontWeight.Bold)
                     }
                     
                     Spacer(modifier = Modifier.height(12.dp))
@@ -229,11 +215,11 @@ fun TarjetaPlantillaExpandible(
                     // VENTA AL DETAL
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text("VENTA AL DETAL (${plantilla.porcentajeGananciaDetal.toInt()}%):", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        Text(formatoUSD.format(precioDetal), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text(formatoUSD.format(res.precioDetalUsd), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     }
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text("Ganancia libre por pieza:", color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp)
-                        Text("+ " + formatoUSD.format(precioDetal - costoTotal), color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("+ " + formatoUSD.format(res.gananciaDetalUsd), color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -243,11 +229,11 @@ fun TarjetaPlantillaExpandible(
                         Column {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                 Text("VENTA AL MAYOR (${plantilla.porcentajeGananciaMayor.toInt()}%):", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                Text(formatoUSD.format(precioMayor), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                Text(formatoUSD.format(res.precioMayorUsd), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                             }
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                 Text("Ganancia libre por pieza:", color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp)
-                                Text("+ " + formatoUSD.format(precioMayor - costoTotal), color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("+ " + formatoUSD.format(res.gananciaMayorUsd), color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }

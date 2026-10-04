@@ -14,6 +14,15 @@ import kotlinx.coroutines.launch
 import java.math.BigDecimal
 import java.math.RoundingMode
 
+// Estado de Resultados calculados para una plantilla del catálogo
+data class ResultadoPlantilla(
+    val costoTotalProduccionUsd: Double,
+    val precioDetalUsd: Double,
+    val gananciaDetalUsd: Double,
+    val precioMayorUsd: Double,
+    val gananciaMayorUsd: Double
+)
+
 // Estado completo del Formulario de Edición/Creación de Plantilla
 data class CotizadorUiState(
     val idActual: Int = 0,
@@ -327,7 +336,57 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
     }
 
     // ==========================================
-    // EL CEREBRO MATEMÁTICO EN VIVO
+    // CÁLCULO DE RESULTADOS PARA UNA PLANTILLA GUARDADA
+    // (Utilizado por la tarjeta del catálogo para garantizar que la matemática sea 100% idéntica)
+    // ==========================================
+    fun calcularResultadosPlantilla(plantilla: PlantillaCotizacion): ResultadoPlantilla {
+        val tasaActiva = if (tasaBcvActual > 0.0) tasaBcvActual else 1.0
+
+        fun parseCant(cant: Int): Double = if (cant > 0) cant.toDouble() else 1.0
+        fun aUsd(valor: Double, moneda: String): Double = if (moneda == "VES") valor / tasaActiva else valor
+
+        val costoUnitarioPieza = aUsd(plantilla.precioPaquetePieza / parseCant(plantilla.cantidadPaquetePieza), plantilla.monedaPaquetePieza)
+        val costoUnitarioEmpaque = aUsd(plantilla.precioPaqueteEmpaque / parseCant(plantilla.cantidadPaqueteEmpaque), plantilla.monedaPaqueteEmpaque)
+        val costoUnitarioPapel = aUsd(plantilla.precioPaquetePapel / parseCant(plantilla.cantidadPaquetePapel), plantilla.monedaPaquetePapel)
+        
+        val dtfPorPieza = aUsd(plantilla.precioTotalDtf / parseCant(plantilla.rendimientoDtf), plantilla.monedaDtf)
+        val transportePorPieza = aUsd(plantilla.costoTransporte / parseCant(plantilla.rendimientoTransporte), plantilla.monedaTransporte)
+        val disenoPorPieza = aUsd(plantilla.costoDiseno / parseCant(plantilla.rendimientoDiseno), plantilla.monedaDiseno)
+        val extraPorPieza = aUsd(plantilla.costoExtra / parseCant(plantilla.rendimientoExtra), plantilla.monedaExtra)
+
+        val subtotalMateriales = costoUnitarioPieza + costoUnitarioEmpaque + costoUnitarioPapel + dtfPorPieza + transportePorPieza + disenoPorPieza + extraPorPieza
+        val costoOperativo = subtotalMateriales * (plantilla.porcentajeOperativo / 100.0)
+        val costoTotalProduccion = subtotalMateriales + costoOperativo
+
+        var precioVentaSug = 0.0
+        var ganancia = 0.0
+        var precioVentaMayorSug = 0.0
+        var gananciaMayor = 0.0
+
+        if (costoTotalProduccion > 0.0) {
+            val margenDecimal = plantilla.porcentajeGananciaDetal / 100.0
+            precioVentaSug = if (margenDecimal < 1.0) costoTotalProduccion / (1.0 - margenDecimal) else 0.0
+            ganancia = precioVentaSug - costoTotalProduccion
+
+            val margenMayorDecimal = plantilla.porcentajeGananciaMayor / 100.0
+            precioVentaMayorSug = if (margenMayorDecimal < 1.0) costoTotalProduccion / (1.0 - margenMayorDecimal) else 0.0
+            gananciaMayor = precioVentaMayorSug - costoTotalProduccion
+        }
+
+        fun redondear2(valor: Double): Double = 
+            BigDecimal.valueOf(valor).setScale(2, RoundingMode.HALF_UP).toDouble()
+
+        return ResultadoPlantilla(
+            costoTotalProduccionUsd = redondear2(costoTotalProduccion),
+            precioDetalUsd = redondear2(precioVentaSug),
+            gananciaDetalUsd = redondear2(ganancia),
+            precioMayorUsd = redondear2(precioVentaMayorSug),
+            gananciaMayorUsd = redondear2(gananciaMayor)
+        )
+    }
+
+    // ==========================================
+    // EL CEREBRO MATEMÁTICO EN VIVO (Formulario)
     // ==========================================
     private fun calcularResultados() {
         val estado = _uiState.value

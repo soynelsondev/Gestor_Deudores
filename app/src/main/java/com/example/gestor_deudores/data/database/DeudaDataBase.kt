@@ -23,13 +23,32 @@ abstract class DeudaDataBase : RoomDatabase() {
         @Volatile
         private var INSTANCE: DeudaDataBase? = null
 
+        private fun addColumnIfNotExists(db: SupportSQLiteDatabase, tableName: String, columnName: String, columnSql: String) {
+            val cursor = db.query("PRAGMA table_info(`$tableName`)")
+            var exists = false
+            try {
+                val nameIndex = cursor.getColumnIndex("name")
+                while (cursor.moveToNext()) {
+                    if (nameIndex != -1 && cursor.getString(nameIndex) == columnName) {
+                        exists = true
+                        break
+                    }
+                }
+            } finally {
+                cursor.close()
+            }
+            if (!exists) {
+                db.execSQL("ALTER TABLE `$tableName` ADD COLUMN $columnSql")
+            }
+        }
+
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE deudores ADD COLUMN archivado INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE Tabla_Deuda ADD COLUMN tipo TEXT NOT NULL DEFAULT 'CARGO'")
-                db.execSQL("ALTER TABLE Tabla_Deuda ADD COLUMN numCuotas INTEGER NOT NULL DEFAULT 1")
-                db.execSQL("ALTER TABLE Tabla_Deuda ADD COLUMN frecuencia TEXT NOT NULL DEFAULT 'MENSUAL'")
-                db.execSQL("ALTER TABLE Tabla_Deuda ADD COLUMN fechaMillis INTEGER NOT NULL DEFAULT 0")
+                addColumnIfNotExists(db, "deudores", "archivado", "`archivado` INTEGER NOT NULL DEFAULT 0")
+                addColumnIfNotExists(db, "Tabla_Deuda", "tipo", "`tipo` TEXT NOT NULL DEFAULT 'CARGO'")
+                addColumnIfNotExists(db, "Tabla_Deuda", "numCuotas", "`numCuotas` INTEGER NOT NULL DEFAULT 1")
+                addColumnIfNotExists(db, "Tabla_Deuda", "frecuencia", "`frecuencia` TEXT NOT NULL DEFAULT 'MENSUAL'")
+                addColumnIfNotExists(db, "Tabla_Deuda", "fechaMillis", "`fechaMillis` INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("UPDATE Tabla_Deuda SET tipo = 'ABONO' WHERE rol = 'PAGO' OR montoRestante < 0")
             }
         }
@@ -67,18 +86,13 @@ abstract class DeudaDataBase : RoomDatabase() {
                         `precioPaqueteEmpaque` REAL NOT NULL,
                         `monedaPaqueteEmpaque` TEXT NOT NULL,
                         `cantidadPaqueteEmpaque` INTEGER NOT NULL,
-                        `precioPaquetePapel` REAL NOT NULL,
-                        `monedaPaquetePapel` TEXT NOT NULL,
-                        `cantidadPaquetePapel` INTEGER NOT NULL,
                         `precioTotalDtf` REAL NOT NULL,
                         `monedaDtf` TEXT NOT NULL,
                         `rendimientoDtf` INTEGER NOT NULL,
                         `costoTransporte` REAL NOT NULL,
                         `monedaTransporte` TEXT NOT NULL,
-                        `rendimientoTransporte` INTEGER NOT NULL,
                         `costoDiseno` REAL NOT NULL,
                         `monedaDiseno` TEXT NOT NULL,
-                        `rendimientoDiseno` INTEGER NOT NULL,
                         `porcentajeOperativo` REAL NOT NULL,
                         `porcentajeGananciaDetal` REAL NOT NULL,
                         `porcentajeGananciaMayor` REAL NOT NULL
@@ -89,25 +103,24 @@ abstract class DeudaDataBase : RoomDatabase() {
 
         val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                // Agregar las columnas que faltaban a la tabla plantillas_cotizacion
-                db.execSQL("ALTER TABLE plantillas_cotizacion ADD COLUMN rendimientoTransporte INTEGER NOT NULL DEFAULT 1")
-                db.execSQL("ALTER TABLE plantillas_cotizacion ADD COLUMN rendimientoDiseno INTEGER NOT NULL DEFAULT 1")
+                addColumnIfNotExists(db, "plantillas_cotizacion", "rendimientoTransporte", "`rendimientoTransporte` INTEGER NOT NULL DEFAULT 1")
+                addColumnIfNotExists(db, "plantillas_cotizacion", "rendimientoDiseno", "`rendimientoDiseno` INTEGER NOT NULL DEFAULT 1")
             }
         }
 
         val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE plantillas_cotizacion ADD COLUMN precioPaquetePapel REAL NOT NULL DEFAULT 0.0")
-                db.execSQL("ALTER TABLE plantillas_cotizacion ADD COLUMN monedaPaquetePapel TEXT NOT NULL DEFAULT 'USD'")
-                db.execSQL("ALTER TABLE plantillas_cotizacion ADD COLUMN cantidadPaquetePapel INTEGER NOT NULL DEFAULT 100")
+                addColumnIfNotExists(db, "plantillas_cotizacion", "precioPaquetePapel", "`precioPaquetePapel` REAL NOT NULL DEFAULT 0.0")
+                addColumnIfNotExists(db, "plantillas_cotizacion", "monedaPaquetePapel", "`monedaPaquetePapel` TEXT NOT NULL DEFAULT 'USD'")
+                addColumnIfNotExists(db, "plantillas_cotizacion", "cantidadPaquetePapel", "`cantidadPaquetePapel` INTEGER NOT NULL DEFAULT 100")
             }
         }
 
         val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE plantillas_cotizacion ADD COLUMN costoExtra REAL NOT NULL DEFAULT 0.0")
-                db.execSQL("ALTER TABLE plantillas_cotizacion ADD COLUMN monedaExtra TEXT NOT NULL DEFAULT 'USD'")
-                db.execSQL("ALTER TABLE plantillas_cotizacion ADD COLUMN rendimientoExtra INTEGER NOT NULL DEFAULT 1")
+                addColumnIfNotExists(db, "plantillas_cotizacion", "costoExtra", "`costoExtra` REAL NOT NULL DEFAULT 0.0")
+                addColumnIfNotExists(db, "plantillas_cotizacion", "monedaExtra", "`monedaExtra` TEXT NOT NULL DEFAULT 'USD'")
+                addColumnIfNotExists(db, "plantillas_cotizacion", "rendimientoExtra", "`rendimientoExtra` INTEGER NOT NULL DEFAULT 1")
             }
         }
 
