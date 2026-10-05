@@ -96,7 +96,10 @@ data class ResumenUiState(
     val costoPasajesUsd: Double = 0.0,
     val costoInsumosUsd: Double = 0.0,
     val costoPasajesMesAnterior: Double = 0.0,
-    val costoInsumosMesAnterior: Double = 0.0
+    val costoInsumosMesAnterior: Double = 0.0,
+    
+    // Perfil del Negocio (para el Encabezado Personalizado del PDF)
+    val perfilNegocio: com.example.gestor_deudores.data.database.PerfilNegocio = com.example.gestor_deudores.data.database.PerfilNegocio()
 ) {
     val abonoSeleccionado: DesglosePagoIndividual?
         get() = if (listaAbonosDesglose.isNotEmpty() && abonoSeleccionadoIndex in listaAbonosDesglose.indices) {
@@ -109,7 +112,8 @@ private data class DatosDbCombinados(
     val deudores: List<Deudor>,
     val pedidos: List<PedidoConCliente>,
     val plantillas: List<PlantillaCotizacion>,
-    val cuentas: List<CuentaBancaria>
+    val cuentas: List<CuentaBancaria>,
+    val perfil: com.example.gestor_deudores.data.database.PerfilNegocio?
 )
 
 private data class FiltrosUiCombinados(
@@ -125,7 +129,8 @@ class ResumenViewModel(
     private val deudorDao: DeudorDao,
     private val pedidoDao: PedidoDao,
     private val plantillaDao: PlantillaDao,
-    private val cuentaBancariaDao: CuentaBancariaDao
+    private val cuentaBancariaDao: CuentaBancariaDao,
+    private val perfilDao: com.example.gestor_deudores.data.database.PerfilNegocioDao
 ) : ViewModel() {
 
     private val _periodoSeleccionado = MutableStateFlow(PeriodoFiltro.ESTE_MES)
@@ -203,7 +208,7 @@ class ResumenViewModel(
         plantillaDao.obtenerTodasLasPlantillas(),
         cuentaBancariaDao.obtenerTodasLasCuentas()
     ) { deudas, deudores, pedidos, plantillas, cuentas ->
-        DatosDbCombinados(deudas, deudores, pedidos, plantillas, cuentas)
+        DatosDbCombinados(deudas, deudores, pedidos, plantillas, cuentas, null)
     }
 
     // Combined Flow 2: Filtros de UI
@@ -220,8 +225,9 @@ class ResumenViewModel(
     // Combined Flow Final: Cerebro de cálculo completo
     val uiState: StateFlow<ResumenUiState> = combine(
         datosDbFlow,
-        filtrosUiFlow
-    ) { dbData, filtros ->
+        filtrosUiFlow,
+        perfilDao.obtenerPerfil()
+    ) { dbData, filtros, perfil ->
         val deudas = dbData.deudas
         val deudores = dbData.deudores
         val pedidos = dbData.pedidos
@@ -521,7 +527,8 @@ class ResumenViewModel(
             costoPasajesUsd = fondoPasajes,
             costoInsumosUsd = fondoTintasPapel,
             costoPasajesMesAnterior = pasajesMesAntUsd,
-            costoInsumosMesAnterior = insumosMesAntUsd
+            costoInsumosMesAnterior = insumosMesAntUsd,
+            perfilNegocio = perfil ?: com.example.gestor_deudores.data.database.PerfilNegocio()
         )
     }.stateIn(
         scope = viewModelScope,

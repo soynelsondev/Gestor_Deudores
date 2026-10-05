@@ -41,28 +41,45 @@ fun generarYCompartirPdf(context: Context, uiState: ResumenUiState) {
     }
 
     // =====================================
-    // ENCABEZADO EJECUTIVO
+    // ENCABEZADO EJECUTIVO (PERSONALIZADO CON PERFIL DE NEGOCIO)
     // =====================================
+    val perfil = uiState.perfilNegocio
+    val nombreEmpresa = if (perfil.nombreNegocio.isNotBlank()) perfil.nombreNegocio.uppercase() else "ZUBLI"
+
     paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-    paint.textSize = 22f
+    paint.textSize = 20f
     paint.color = Color.rgb(0, 109, 119) // Color "estados"
-    canvas.drawText("ZUBLI - REPORTE FINANCIERO Y AUDITORÍA", margin, yPos, paint)
-    yPos += 30f
+    canvas.drawText("$nombreEmpresa - REPORTE FINANCIERO", margin, yPos, paint)
+    yPos += 22f
+
+    val datosEmpresa = listOfNotNull(
+        if (perfil.rifCedula.isNotBlank()) "RIF: ${perfil.rifCedula}" else null,
+        if (perfil.telefonoContacto.isNotBlank()) "Tel: ${perfil.telefonoContacto}" else null,
+        if (perfil.eslogan.isNotBlank()) perfil.eslogan else null
+    ).joinToString(" | ")
+
+    if (datosEmpresa.isNotBlank()) {
+        paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+        paint.textSize = 10f
+        paint.color = Color.GRAY
+        canvas.drawText(datosEmpresa, margin, yPos, paint)
+        yPos += 20f
+    } else {
+        yPos += 10f
+    }
 
     paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
-    paint.textSize = 12f
+    paint.textSize = 11f
     paint.color = Color.DKGRAY
     
     val sdf = SimpleDateFormat("dd/MM/yyyy hh:mm a", Locale.getDefault())
     val fechaImpresion = sdf.format(Date())
     val periodoText = uiState.periodoSeleccionado.name.replace("_", " ")
     
-    canvas.drawText("Período Evaluado: $periodoText", margin, yPos, paint)
-    yPos += lineSpacing
-    canvas.drawText("Fecha de Generación: $fechaImpresion", margin, yPos, paint)
+    canvas.drawText("Período Evaluado: $periodoText | Fecha: $fechaImpresion", margin, yPos, paint)
     yPos += lineSpacing
     canvas.drawText("Tasa de Cambio Base (BCV): Bs ${String.format(Locale.US, "%.2f", uiState.tasaBcv)}", margin, yPos, paint)
-    yPos += 40f
+    yPos += 30f
 
     // =====================================
     // SECCIÓN 1: MÉTRICAS GLOBALES

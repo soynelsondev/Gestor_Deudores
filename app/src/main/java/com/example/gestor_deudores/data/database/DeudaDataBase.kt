@@ -8,8 +8,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [Deudor::class, Deuda::class, Pedido::class, PlantillaCotizacion::class, CuentaBancaria::class],
-    version = 15,
+    entities = [Deudor::class, Deuda::class, Pedido::class, PlantillaCotizacion::class, CuentaBancaria::class, PerfilNegocio::class],
+    version = 16,
     exportSchema = true
 )
 abstract class DeudaDataBase : RoomDatabase() {
@@ -19,6 +19,7 @@ abstract class DeudaDataBase : RoomDatabase() {
     abstract fun pedidoDao(): PedidoDao
     abstract fun plantillaDao(): PlantillaDao
     abstract fun cuentaBancariaDao(): CuentaBancariaDao
+    abstract fun perfilNegocioDao(): PerfilNegocioDao
 
     companion object {
         @Volatile
@@ -260,6 +261,26 @@ abstract class DeudaDataBase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `perfil_negocio` (
+                        `id` INTEGER PRIMARY KEY NOT NULL,
+                        `nombreNegocio` TEXT NOT NULL DEFAULT 'Mi Taller de Personalización',
+                        `rifCedula` TEXT NOT NULL DEFAULT '',
+                        `telefonoContacto` TEXT NOT NULL DEFAULT '',
+                        `eslogan` TEXT NOT NULL DEFAULT '',
+                        `plantillaMensajeCobro` TEXT NOT NULL DEFAULT 'Hola {cliente}, te recordamos tu saldo pendiente de ${'$'}monto en tu pedido {producto}. Saludos de {negocio}.',
+                        `plantillaMensajeListo` TEXT NOT NULL DEFAULT 'Hola {cliente}, ¡tu pedido de {producto} ya está listo! Saldo pendiente: ${'$'}monto. Saludos de {negocio}.'
+                    )
+                """)
+                db.execSQL("""
+                    INSERT OR IGNORE INTO `perfil_negocio` (`id`, `nombreNegocio`, `rifCedula`, `telefonoContacto`, `eslogan`, `plantillaMensajeCobro`, `plantillaMensajeListo`)
+                    VALUES (1, 'Mi Taller de Personalización', '', '', '', 'Hola {cliente}, te recordamos tu saldo pendiente de ${'$'}monto en tu pedido {producto}. Saludos de {negocio}.', 'Hola {cliente}, ¡tu pedido de {producto} ya está listo! Saldo pendiente: ${'$'}monto. Saludos de {negocio}.')
+                """)
+            }
+        }
+
         fun getDatabase(context: Context): DeudaDataBase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -271,7 +292,7 @@ abstract class DeudaDataBase : RoomDatabase() {
                         MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, 
                         MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, 
                         MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
-                        MIGRATION_13_14, MIGRATION_14_15
+                        MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16
                     )
                     .build()
 

@@ -45,8 +45,11 @@ class MainActivity : ComponentActivity() {
                 // --- NUEVO: Le enseñamos a crear el HomeViewModel ---
                 if (modelClass.isAssignableFrom(HomeViewModel::class.java)) {
                     @Suppress("UNCHECKED_CAST")
-                    // Ojo: el HomeViewModel necesita ambos DAOs
-                    return HomeViewModel(baseDeDatos.deudorDao(), baseDeDatos.deudaDao()) as T
+                    return HomeViewModel(
+                        baseDeDatos.deudorDao(),
+                        baseDeDatos.deudaDao(),
+                        baseDeDatos.perfilNegocioDao()
+                    ) as T
                 }
                 if (modelClass.isAssignableFrom(PedidoViewModel::class.java)) {
                     @Suppress("UNCHECKED_CAST")
@@ -68,7 +71,8 @@ class MainActivity : ComponentActivity() {
                         baseDeDatos.deudorDao(),
                         baseDeDatos.pedidoDao(),
                         baseDeDatos.plantillaDao(),
-                        baseDeDatos.cuentaBancariaDao()
+                        baseDeDatos.cuentaBancariaDao(),
+                        baseDeDatos.perfilNegocioDao()
                     ) as T
                 }
                 throw IllegalArgumentException("Clase ViewModel desconocida")

@@ -17,6 +17,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.window.Dialog
+import com.example.gestor_deudores.data.database.PerfilNegocio
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -127,6 +132,8 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
         viewModel.iniciarTasaBCV(context)
     }
 
+    val perfilNegocio by viewModel.perfilNegocio.collectAsState()
+    var mostrarDialogoPerfil by remember { mutableStateOf(false) }
     var deudaMaximaPermitida by remember { mutableStateOf(0.0) }
     
     // --- ESTADOS Y LAUNCHERS PARA RESPALDOS ---
@@ -258,7 +265,15 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
                             )
                         }
                         Spacer(modifier = Modifier.height(10.dp))
-                        Text("Zubli", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                        val nombreNegocioTxt = perfilNegocio?.nombreNegocio?.takeIf { it.isNotBlank() } ?: "Mi Taller"
+                        Text(
+                            text = "Zubli - $nombreNegocioTxt",
+                            color = Color.White,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
                         Text("Gestión de Negocio", color = fondo_claro, fontSize = 13.sp)
                     }
                 }
@@ -302,6 +317,31 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
                     ),
                     modifier = Modifier.padding(horizontal = 12.dp)
                 )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = "CONFIGURACIÓN DE MARCA",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Gray,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                )
+
+                // Opción 3: Configurar Mi Negocio y WhatsApp
+                NavigationDrawerItem(
+                    label = { Text("Configurar Mi Negocio y WhatsApp", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = estados) },
+                    selected = false,
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        mostrarDialogoPerfil = true
+                    },
+                    icon = { Text("⚙️", fontSize = 18.sp) },
+                    colors = NavigationDrawerItemDefaults.colors(
+                        unselectedContainerColor = Color.Transparent
+                    ),
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
             }
         }
     ) {
@@ -340,6 +380,16 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
                 )
             }
             ){ innerPadding ->
+
+        if (mostrarDialogoPerfil) {
+            DialogoConfigurarPerfilNegocio(
+                perfilActual = perfilNegocio ?: PerfilNegocio(),
+                onDismiss = { mostrarDialogoPerfil = false },
+                onGuardar = { nuevoPerfil ->
+                    viewModel.guardarPerfilNegocio(nuevoPerfil)
+                }
+            )
+        }
 
         Column (modifier = Modifier.fillMaxSize().padding(innerPadding) .background(fondo))
         {
@@ -1093,6 +1143,150 @@ fun DialogoAbono(
                         colors = ButtonDefaults.buttonColors(containerColor = fondo2)
                     ) {
                         Text("Guardar Abono", color = Color.White)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DialogoConfigurarPerfilNegocio(
+    perfilActual: com.example.gestor_deudores.data.database.PerfilNegocio,
+    onDismiss: () -> Unit,
+    onGuardar: (com.example.gestor_deudores.data.database.PerfilNegocio) -> Unit
+) {
+    var nombreNegocio by remember { mutableStateOf(perfilActual.nombreNegocio) }
+    var rifCedula by remember { mutableStateOf(perfilActual.rifCedula) }
+    var telefonoContacto by remember { mutableStateOf(perfilActual.telefonoContacto) }
+    var eslogan by remember { mutableStateOf(perfilActual.eslogan) }
+    var plantillaCobro by remember { mutableStateOf(perfilActual.plantillaMensajeCobro) }
+    var plantillaListo by remember { mutableStateOf(perfilActual.plantillaMensajeListo) }
+
+    Dialog(onDismissRequest = { onDismiss() }) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Text(
+                    text = "⚙️ Personalizar Taller & WhatsApp",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = estados
+                )
+                Text(
+                    text = "Los datos de tu negocio aparecerán en tus reportes PDF y mensajes de WhatsApp.",
+                    fontSize = 12.sp,
+                    color = Color.Gray,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+
+                OutlinedTextField(
+                    value = nombreNegocio,
+                    onValueChange = { nombreNegocio = it },
+                    label = { Text("Nombre Comercial del Negocio") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = rifCedula,
+                        onValueChange = { rifCedula = it },
+                        label = { Text("RIF / Cedula") },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    OutlinedTextField(
+                        value = telefonoContacto,
+                        onValueChange = { telefonoContacto = it },
+                        label = { Text("Teléfono WhatsApp") },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = eslogan,
+                    onValueChange = { eslogan = it },
+                    label = { Text("Eslogan o Ciudad (Opcional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+                androidx.compose.material3.HorizontalDivider()
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "💬 Plantillas de Mensajes WhatsApp",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = estados
+                )
+                Text(
+                    text = "Variables disponibles: {cliente}, {monto}, {producto}, {negocio}",
+                    fontSize = 11.sp,
+                    color = Color.Gray,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                OutlinedTextField(
+                    value = plantillaCobro,
+                    onValueChange = { plantillaCobro = it },
+                    label = { Text("Mensaje Recordatorio de Deuda") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 3,
+                    shape = RoundedCornerShape(12.dp)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = plantillaListo,
+                    onValueChange = { plantillaListo = it },
+                    label = { Text("Mensaje de Pedido Listo") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 3,
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    TextButton(onClick = { onDismiss() }) {
+                        Text("Cancelar", color = Color.Gray)
+                    }
+
+                    Button(
+                        onClick = {
+                            onGuardar(
+                                perfilActual.copy(
+                                    nombreNegocio = nombreNegocio.ifBlank { "Mi Taller" },
+                                    rifCedula = rifCedula,
+                                    telefonoContacto = telefonoContacto,
+                                    eslogan = eslogan,
+                                    plantillaMensajeCobro = plantillaCobro,
+                                    plantillaMensajeListo = plantillaListo
+                                )
+                            )
+                            onDismiss()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = estados)
+                    ) {
+                        Text("Guardar Cambios", color = Color.White)
                     }
                 }
             }

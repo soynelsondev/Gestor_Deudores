@@ -20,6 +20,8 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.example.gestor_deudores.data.database.PerfilNegocio
+import com.example.gestor_deudores.data.database.PerfilNegocioDao
 
 enum class Pestaña{
     PENDIENTES,
@@ -27,17 +29,29 @@ enum class Pestaña{
     ARCHIVADOS
 }
 
-
-
-class HomeViewModel(private val dao: DeudorDao,private val dao2: DeudaDao) : ViewModel() {
-
-
+class HomeViewModel(
+    private val dao: DeudorDao,
+    private val dao2: DeudaDao,
+    private val perfilDao: PerfilNegocioDao
+) : ViewModel() {
 
     val listaDeudores = dao.obtenerDeudores().stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue= emptyList()
+        initialValue = emptyList()
     )
+
+    val perfilNegocio = perfilDao.obtenerPerfil().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = PerfilNegocio()
+    )
+
+    fun guardarPerfilNegocio(nuevoPerfil: PerfilNegocio) {
+        viewModelScope.launch {
+            perfilDao.guardarPerfil(nuevoPerfil)
+        }
+    }
 
     private val _textoBusqueda = MutableStateFlow("")
     val textoBusqueda = _textoBusqueda.asStateFlow()
