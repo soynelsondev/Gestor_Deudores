@@ -7,10 +7,8 @@ data class DesgloseCostosPlantilla(
     val costoPasajeUsd: Double,
     val costoInsumosUsd: Double,
     val costoTotalProduccionUsd: Double,
-    val precioSugeridoDetalUsd: Double,
-    val gananciaDetalUsd: Double,
-    val precioSugeridoMayorUsd: Double,
-    val gananciaMayorUsd: Double
+    val precioSugeridoUsd: Double,
+    val gananciaUsd: Double
 )
 
 /**
@@ -49,17 +47,11 @@ fun calcularCostosPlantilla(plantilla: PlantillaCotizacion, tasaBcv: Double = 1.
     // 5. Cálculos de Venta y Ganancia
     var precioVentaSug = 0.0
     var ganancia = 0.0
-    var precioVentaMayorSug = 0.0
-    var gananciaMayor = 0.0
 
     if (costoTotalProduccion > 0.0) {
-        val margenDecimal = plantilla.porcentajeGananciaDetal / 100.0
+        val margenDecimal = plantilla.porcentajeGanancia / 100.0
         precioVentaSug = if (margenDecimal < 1.0) costoTotalProduccion / (1.0 - margenDecimal) else 0.0
         ganancia = precioVentaSug - costoTotalProduccion
-
-        val margenMayorDecimal = plantilla.porcentajeGananciaMayor / 100.0
-        precioVentaMayorSug = if (margenMayorDecimal < 1.0) costoTotalProduccion / (1.0 - margenMayorDecimal) else 0.0
-        gananciaMayor = precioVentaMayorSug - costoTotalProduccion
     }
 
     return DesgloseCostosPlantilla(
@@ -67,9 +59,7 @@ fun calcularCostosPlantilla(plantilla: PlantillaCotizacion, tasaBcv: Double = 1.
         costoPasajeUsd = transportePorPieza.redondear2(),
         costoInsumosUsd = costoInsumosFinal.redondear2(),
         costoTotalProduccionUsd = costoTotalProduccion.redondear2(),
-        precioSugeridoDetalUsd = precioVentaSug.redondear2(),
-        gananciaDetalUsd = ganancia.redondear2(),
-        precioSugeridoMayorUsd = precioVentaMayorSug.redondear2(),
-        gananciaMayorUsd = gananciaMayor.redondear2()
+        precioSugeridoUsd = precioVentaSug.redondear2(),
+        gananciaUsd = ganancia.redondear2()
     )
 }

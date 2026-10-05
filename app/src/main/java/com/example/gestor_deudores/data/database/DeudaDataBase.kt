@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [Deudor::class, Deuda::class, Pedido::class, PlantillaCotizacion::class, CuentaBancaria::class],
-    version = 9,
+    version = 15,
     exportSchema = true
 )
 abstract class DeudaDataBase : RoomDatabase() {
@@ -144,12 +144,119 @@ abstract class DeudaDataBase : RoomDatabase() {
 
         val MIGRATION_8_9 = object : Migration(8, 9) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                // Room espera la creación limpia de la columna nombrePiezaBase en un orden o string específico, 
-                // pero si la DB ya estaba instalada, usaremos ADD COLUMN simple con literales simples
-                db.execSQL("ALTER TABLE pedidos ADD COLUMN costoPiezaBaseUsd REAL NOT NULL DEFAULT 0.0")
-                db.execSQL("ALTER TABLE pedidos ADD COLUMN costoPasajeUsd REAL NOT NULL DEFAULT 0.0")
-                db.execSQL("ALTER TABLE pedidos ADD COLUMN costoInsumosUsd REAL NOT NULL DEFAULT 0.0")
-                db.execSQL("ALTER TABLE pedidos ADD COLUMN nombrePiezaBase TEXT NOT NULL DEFAULT 'Insumo Base'")
+                addColumnIfNotExists(db, "pedidos", "costoPiezaBaseUsd", "`costoPiezaBaseUsd` REAL NOT NULL DEFAULT 0.0")
+                addColumnIfNotExists(db, "pedidos", "costoPasajeUsd", "`costoPasajeUsd` REAL NOT NULL DEFAULT 0.0")
+                addColumnIfNotExists(db, "pedidos", "costoInsumosUsd", "`costoInsumosUsd` REAL NOT NULL DEFAULT 0.0")
+                addColumnIfNotExists(db, "pedidos", "nombrePiezaBase", "`nombrePiezaBase` TEXT NOT NULL DEFAULT 'Insumo Base'")
+            }
+        }
+
+        private fun recrearTablaPlantillasSegura(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS `plantillas_cotizacion_new` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `nombrePlantilla` TEXT NOT NULL,
+                    `precioPaquetePieza` REAL NOT NULL DEFAULT 0.0,
+                    `monedaPaquetePieza` TEXT NOT NULL DEFAULT 'USD',
+                    `cantidadPaquetePieza` INTEGER NOT NULL DEFAULT 1,
+                    `precioPaqueteEmpaque` REAL NOT NULL DEFAULT 0.0,
+                    `monedaPaqueteEmpaque` TEXT NOT NULL DEFAULT 'USD',
+                    `cantidadPaqueteEmpaque` INTEGER NOT NULL DEFAULT 1,
+                    `precioPaquetePapel` REAL NOT NULL DEFAULT 0.0,
+                    `monedaPaquetePapel` TEXT NOT NULL DEFAULT 'USD',
+                    `cantidadPaquetePapel` INTEGER NOT NULL DEFAULT 100,
+                    `precioTotalDtf` REAL NOT NULL DEFAULT 0.0,
+                    `monedaDtf` TEXT NOT NULL DEFAULT 'USD',
+                    `rendimientoDtf` INTEGER NOT NULL DEFAULT 1,
+                    `costoTransporte` REAL NOT NULL DEFAULT 0.0,
+                    `monedaTransporte` TEXT NOT NULL DEFAULT 'USD',
+                    `rendimientoTransporte` INTEGER NOT NULL DEFAULT 1,
+                    `costoDiseno` REAL NOT NULL DEFAULT 0.0,
+                    `monedaDiseno` TEXT NOT NULL DEFAULT 'USD',
+                    `rendimientoDiseno` INTEGER NOT NULL DEFAULT 1,
+                    `costoExtra` REAL NOT NULL DEFAULT 0.0,
+                    `monedaExtra` TEXT NOT NULL DEFAULT 'USD',
+                    `rendimientoExtra` INTEGER NOT NULL DEFAULT 1,
+                    `porcentajeOperativo` REAL NOT NULL DEFAULT 10.0,
+                    `porcentajeGanancia` REAL NOT NULL DEFAULT 40.0,
+                    `esPlantillaMayor` INTEGER NOT NULL DEFAULT 0,
+                    `minimoUnidadesMayor` INTEGER NOT NULL DEFAULT 6
+                )
+            """)
+
+            try {
+                val cursor = db.query("PRAGMA table_info(`plantillas_cotizacion`)")
+                val columnasExistentes = mutableSetOf<String>()
+                val nameIdx = cursor.getColumnIndex("name")
+                while (cursor.moveToNext()) {
+                    if (nameIdx != -1) {
+                        columnasExistentes.add(cursor.getString(nameIdx))
+                    }
+                }
+                cursor.close()
+
+                if (columnasExistentes.isNotEmpty()) {
+                    val colGanancia = if (columnasExistentes.contains("porcentajeGanancia")) "porcentajeGanancia" 
+                                     else if (columnasExistentes.contains("porcentajeGananciaDetal")) "porcentajeGananciaDetal" 
+                                     else "40.0"
+
+                    val colsToCopy = listOf(
+                        "id", "nombrePlantilla", "precioPaquetePieza", "monedaPaquetePieza", "cantidadPaquetePieza",
+                        "precioPaqueteEmpaque", "monedaPaqueteEmpaque", "cantidadPaqueteEmpaque",
+                        "precioPaquetePapel", "monedaPaquetePapel", "cantidadPaquetePapel",
+                        "precioTotalDtf", "monedaDtf", "rendimientoDtf",
+                        "costoTransporte", "monedaTransporte", "rendimientoTransporte",
+                        "costoDiseno", "monedaDiseno", "rendimientoDiseno",
+                        "costoExtra", "monedaExtra", "rendimientoExtra", "porcentajeOperativo",
+                        "esPlantillaMayor", "minimoUnidadesMayor"
+                    ).filter { columnasExistentes.contains(it) }
+
+                    val selectColsSql = (colsToCopy + "$colGanancia AS porcentajeGanancia").joinToString(", ")
+                    val insertColsSql = (colsToCopy + "porcentajeGanancia").joinToString(", ")
+
+                    db.execSQL("INSERT INTO `plantillas_cotizacion_new` ($insertColsSql) SELECT $selectColsSql FROM `plantillas_cotizacion`")
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            db.execSQL("DROP TABLE IF EXISTS `plantillas_cotizacion`")
+            db.execSQL("ALTER TABLE `plantillas_cotizacion_new` RENAME TO `plantillas_cotizacion`")
+        }
+
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                addColumnIfNotExists(db, "pedidos", "costosAdicionalesJson", "`costosAdicionalesJson` TEXT NOT NULL DEFAULT '[]'")
+            }
+        }
+
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                recrearTablaPlantillasSegura(db)
+            }
+        }
+
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                addColumnIfNotExists(db, "pedidos", "costosAdicionalesJson", "`costosAdicionalesJson` TEXT NOT NULL DEFAULT '[]'")
+            }
+        }
+
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                recrearTablaPlantillasSegura(db)
+            }
+        }
+
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                recrearTablaPlantillasSegura(db)
+            }
+        }
+
+        val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                recrearTablaPlantillasSegura(db)
             }
         }
 
@@ -160,7 +267,12 @@ abstract class DeudaDataBase : RoomDatabase() {
                     DeudaDataBase::class.java,
                     "control_deudas_db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+                    .addMigrations(
+                        MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, 
+                        MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, 
+                        MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
+                        MIGRATION_13_14, MIGRATION_14_15
+                    )
                     .build()
 
                 INSTANCE = instance

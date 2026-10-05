@@ -190,10 +190,16 @@ fun TarjetaPlantillaExpandible(
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(plantilla.nombrePlantilla, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 18.sp)
-                    Text("Detal: ${formatoUSD.format(res.precioDetalUsd)} | Mayor: ${formatoUSD.format(res.precioMayorUsd)}", color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Precio: ${formatoUSD.format(res.precioUsd)}", color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
+                        if (plantilla.esPlantillaMayor) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("🏷️ MAYOR (≥${plantilla.minimoUnidadesMayor} pcs)", color = Color(0xFFFFD54F), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
                 Icon(
-                    imageVector = if (expandida) Icons.Default.Close else Icons.Default.Add, // Solo un icono indicativo
+                    imageVector = if (expandida) Icons.Default.Close else Icons.Default.Add,
                     contentDescription = null,
                     tint = Color.White
                 )
@@ -214,30 +220,14 @@ fun TarjetaPlantillaExpandible(
                     
                     Spacer(modifier = Modifier.height(12.dp))
                     
-                    // VENTA AL DETAL
+                    // PRECIO DE VENTA Y GANANCIA
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("VENTA AL DETAL (${plantilla.porcentajeGananciaDetal.toInt()}%):", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        Text(formatoUSD.format(res.precioDetalUsd), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text("PRECIO DE VENTA (${plantilla.porcentajeGanancia.toInt()}%):", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Text(formatoUSD.format(res.precioUsd), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     }
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text("Ganancia libre por pieza:", color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp)
-                        Text("+ " + formatoUSD.format(res.gananciaDetalUsd), color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // VENTA AL MAYOR
-                    Box(modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(Color.Black.copy(alpha = 0.1f)).padding(8.dp)) {
-                        Column {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("VENTA AL MAYOR (${plantilla.porcentajeGananciaMayor.toInt()}%):", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                Text(formatoUSD.format(res.precioMayorUsd), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                            }
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Ganancia libre por pieza:", color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp)
-                                Text("+ " + formatoUSD.format(res.gananciaMayorUsd), color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
+                        Text("+ " + formatoUSD.format(res.gananciaUsd), color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -451,19 +441,39 @@ fun FormularioCotizacion(
                         onValorChange = { viewModel.onPorcentajeOperativoChange(it) }
                     )
                     SliderPorcentaje(
-                        titulo = "Margen Ganancia (DETAL):",
+                        titulo = "Margen de Ganancia Libre:",
                         valor = uiState.porcentajeGanancia,
                         rango = 0f..99f,
                         colorActivo = estados,
                         onValorChange = { viewModel.onPorcentajeGananciaChange(it) }
                     )
-                    SliderPorcentaje(
-                        titulo = "Margen Ganancia (MAYOR):",
-                        valor = uiState.porcentajeGananciaMayor,
-                        rango = 0f..99f,
-                        colorActivo = componentes,
-                        onValorChange = { viewModel.onPorcentajeGananciaMayorChange(it) }
-                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = uiState.esPlantillaMayor,
+                            onCheckedChange = { viewModel.onEsPlantillaMayorChange(it) }
+                        )
+                        Text(
+                            text = "🏷️ Es Tarifa de Venta al Mayor",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                    }
+
+                    if (uiState.esPlantillaMayor) {
+                        OutlinedTextField(
+                            value = uiState.minimoUnidadesMayor,
+                            onValueChange = { viewModel.onMinimoUnidadesMayorChange(it) },
+                            label = { Text("Aplica a partir de cuántas piezas:") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                        )
+                    }
                 }
             }
 
@@ -550,7 +560,7 @@ fun TarjetaPlantillaGuardada(plantilla: PlantillaCotizacion, seleccionada: Boole
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Margen: %.0f%%".format(plantilla.porcentajeGananciaDetal),
+                text = "Margen: %.0f%%".format(plantilla.porcentajeGanancia),
                 color = Color.White.copy(alpha = 0.8f),
                 fontSize = 11.sp
             )
@@ -689,32 +699,15 @@ fun TarjetaResultadosFinancieros(uiState: CotizadorUiState) {
             }
             HorizontalDivider(color = Color.White.copy(alpha = 0.3f), modifier = Modifier.padding(vertical = 8.dp))
 
-            // VENTA AL DETAL
-            Text("VENTA AL DETAL (Margen: ${uiState.porcentajeGanancia.toInt()}%)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            // PRECIO DE VENTA
+            Text("PRECIO DE VENTA (Margen: ${uiState.porcentajeGanancia.toInt()}%)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Precio Sugerido:", color = Color.White, fontSize = 16.sp)
-                Text(formatoUSD.format(uiState.precioSugeridoUsd), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text(formatoUSD.format(uiState.precioSugeridoUsd), color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
             }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Tu ganancia libre:", color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
-                Text("+ " + formatoUSD.format(uiState.gananciaNetaUsd), color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // VENTA AL MAYOR
-            Box(modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(Color.Black.copy(alpha = 0.1f)).padding(8.dp)) {
-                Column {
-                    Text("VENTA AL MAYOR (Margen: ${uiState.porcentajeGananciaMayor.toInt()}%)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Precio Sugerido:", color = Color.White, fontSize = 14.sp)
-                        Text(formatoUSD.format(uiState.precioSugeridoMayorUsd), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    }
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Tu ganancia libre:", color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp)
-                        Text("+ " + formatoUSD.format(uiState.gananciaNetaMayorUsd), color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
+                Text("Tu ganancia libre por pieza:", color = Color.White.copy(alpha = 0.9f), fontSize = 14.sp)
+                Text("+ " + formatoUSD.format(uiState.gananciaNetaUsd), color = Color.White.copy(alpha = 0.9f), fontSize = 14.sp, fontWeight = FontWeight.Bold)
             }
         }
     }

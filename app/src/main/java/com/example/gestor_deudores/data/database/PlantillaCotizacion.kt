@@ -38,7 +38,8 @@ data class PlantillaCotizacion(
     val rendimientoExtra: Int,
 
     val porcentajeOperativo: Float,
-    val porcentajeGananciaDetal: Float,
-    val porcentajeGananciaMayor: Float
+    val porcentajeGanancia: Float,
+    val esPlantillaMayor: Boolean = false,
+    val minimoUnidadesMayor: Int = 6
 )
 

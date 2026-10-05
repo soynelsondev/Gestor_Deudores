@@ -615,7 +615,7 @@ fun DialogoCrearPedido(
                                                 text = { 
                                                     Column {
                                                         Text(plantilla.nombrePlantilla, fontWeight = FontWeight.Bold)
-                                                        Text("Venta Sugerida: $${String.format(java.util.Locale.US, "%.2f", com.example.gestor_deudores.data.utils.calcularCostosPlantilla(plantilla).precioSugeridoDetalUsd)}", fontSize = 10.sp, color = Color.Gray)
+                                                        Text("Venta Sugerida: $${String.format(java.util.Locale.US, "%.2f", com.example.gestor_deudores.data.utils.calcularCostosPlantilla(plantilla).precioSugeridoUsd)}", fontSize = 10.sp, color = Color.Gray)
                                                     }
                                                 },
                                                 onClick = {
@@ -625,7 +625,7 @@ fun DialogoCrearPedido(
                                                     // 2. Autocompletamos y pegamos los costos
                                                     listaArticulos[index] = articulo.copy(
                                                         producto = plantilla.nombrePlantilla,
-                                                        precioUnitarioTexto = String.format(java.util.Locale.US, "%.2f", costosDesglosados.precioSugeridoDetalUsd),
+                                                        precioUnitarioTexto = String.format(java.util.Locale.US, "%.2f", costosDesglosados.precioSugeridoUsd),
                                                         costoPiezaBaseUnitario = costosDesglosados.costoPiezaBaseUsd,
                                                         nombrePiezaBase = plantilla.nombrePlantilla,
                                                         costoPasajeUnitario = costosDesglosados.costoPasajeUsd,
@@ -648,9 +648,37 @@ fun DialogoCrearPedido(
                             ) {
                                 OutlinedTextField(
                                     value = articulo.cantidadTexto,
-                                    onValueChange = { 
-                                        if (it.all { c -> c.isDigit() }) {
-                                            listaArticulos[index] = articulo.copy(cantidadTexto = it)
+                                    onValueChange = { inputCant ->
+                                        if (inputCant.all { c -> c.isDigit() }) {
+                                            val cantInt = inputCant.toIntOrNull() ?: 1
+                                            val prodNombre = articulo.producto.trim()
+
+                                            // Evaluamos si hay una tarifa al mayor
+                                            val plantillaMayor = plantillasCotizador.find { p -> 
+                                                p.esPlantillaMayor && cantInt >= p.minimoUnidadesMayor && 
+                                                (p.nombrePlantilla.contains(prodNombre, ignoreCase = true) || prodNombre.contains(p.nombrePlantilla, ignoreCase = true)) 
+                                            }
+
+                                            val plantillaDetal = plantillasCotizador.find { p -> 
+                                                !p.esPlantillaMayor && 
+                                                (p.nombrePlantilla.contains(prodNombre, ignoreCase = true) || prodNombre.contains(p.nombrePlantilla, ignoreCase = true)) 
+                                            }
+
+                                            val plantillaAplica = if (cantInt >= (plantillaMayor?.minimoUnidadesMayor ?: 999999)) plantillaMayor else plantillaDetal
+
+                                            if (plantillaAplica != null && prodNombre.isNotBlank()) {
+                                                val costos = com.example.gestor_deudores.data.utils.calcularCostosPlantilla(plantillaAplica)
+                                                listaArticulos[index] = articulo.copy(
+                                                    cantidadTexto = inputCant,
+                                                    precioUnitarioTexto = String.format(java.util.Locale.US, "%.2f", costos.precioSugeridoUsd),
+                                                    costoPiezaBaseUnitario = costos.costoPiezaBaseUsd,
+                                                    nombrePiezaBase = plantillaAplica.nombrePlantilla,
+                                                    costoPasajeUnitario = costos.costoPasajeUsd,
+                                                    costoInsumosUnitario = costos.costoInsumosUsd
+                                                )
+                                            } else {
+                                                listaArticulos[index] = articulo.copy(cantidadTexto = inputCant)
+                                            }
                                         }
                                     },
                                     label = { Text("Cant.") },
@@ -667,6 +695,25 @@ fun DialogoCrearPedido(
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                     modifier = Modifier.weight(1f),
                                     shape = RoundedCornerShape(12.dp)
+                                )
+                            }
+
+                            // Badge de Tarifa al Mayor Aplicada
+                            val cantIntActual = articulo.cantidadTexto.toIntOrNull() ?: 1
+                            val prodNombreActual = articulo.producto.trim()
+                            val plantillaAplicadaActual = plantillasCotizador.find { p -> 
+                                p.esPlantillaMayor && cantIntActual >= p.minimoUnidadesMayor && 
+                                prodNombreActual.isNotBlank() &&
+                                (p.nombrePlantilla.contains(prodNombreActual, ignoreCase = true) || prodNombreActual.contains(p.nombrePlantilla, ignoreCase = true)) 
+                            }
+
+                            if (plantillaAplicadaActual != null) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "🏷️ ¡Tarifa al Mayor Aplicada! (≥${plantillaAplicadaActual.minimoUnidadesMayor} pcs)",
+                                    color = Color(0xFF2E7D32),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
                                 )
                             }
                         }

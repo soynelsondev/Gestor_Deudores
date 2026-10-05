@@ -17,10 +17,8 @@ import java.math.RoundingMode
 // Estado de Resultados calculados para una plantilla del catálogo
 data class ResultadoPlantilla(
     val costoTotalProduccionUsd: Double,
-    val precioDetalUsd: Double,
-    val gananciaDetalUsd: Double,
-    val precioMayorUsd: Double,
-    val gananciaMayorUsd: Double
+    val precioUsd: Double,
+    val gananciaUsd: Double
 )
 
 // Estado completo del Formulario de Edición/Creación de Plantilla
@@ -64,21 +62,20 @@ data class CotizadorUiState(
 
     // 5. Operatividad y Ganancia (Barras deslizables)
     val porcentajeOperativo: Float = 10f, // 10% por defecto para luz/desgaste
-    val porcentajeGanancia: Float = 40f,  // 40% por defecto de margen DETAL
-    val porcentajeGananciaMayor: Float = 25f, // 25% por defecto de margen al MAYOR
+    val porcentajeGanancia: Float = 40f,  // 40% por defecto de margen libre
+    
+    // 6. Configuración Venta al Mayor
+    val esPlantillaMayor: Boolean = false,
+    val minimoUnidadesMayor: String = "6",
 
     // ==========================================
     // RESULTADOS MATEMÁTICOS (Calculados en vivo)
     // ==========================================
     val costoTotalProduccionUsd: Double = 0.0,
     
-    // Resultados al Detal
+    // Resultados
     val precioSugeridoUsd: Double = 0.0,
-    val gananciaNetaUsd: Double = 0.0,
-    
-    // Resultados al Mayor
-    val precioSugeridoMayorUsd: Double = 0.0,
-    val gananciaNetaMayorUsd: Double = 0.0
+    val gananciaNetaUsd: Double = 0.0
 )
 
 class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
@@ -226,10 +223,14 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
         calcularResultados()
     }
 
-    fun onPorcentajeGananciaMayorChange(valor: Float) {
-        val margenSeguro = if (valor >= 100f) 99.9f else valor
-        _uiState.update { it.copy(porcentajeGananciaMayor = margenSeguro) }
-        calcularResultados()
+    fun onEsPlantillaMayorChange(valor: Boolean) {
+        _uiState.update { it.copy(esPlantillaMayor = valor) }
+    }
+
+    fun onMinimoUnidadesMayorChange(valor: String) {
+        if (valor.all { it.isDigit() }) {
+            _uiState.update { it.copy(minimoUnidadesMayor = valor) }
+        }
     }
 
     // ==========================================
@@ -267,8 +268,9 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
                 monedaExtra = plantilla.monedaExtra,
                 rendimientoExtra = plantilla.rendimientoExtra.toString(),
                 porcentajeOperativo = plantilla.porcentajeOperativo,
-                porcentajeGanancia = plantilla.porcentajeGananciaDetal,
-                porcentajeGananciaMayor = plantilla.porcentajeGananciaMayor
+                porcentajeGanancia = plantilla.porcentajeGanancia,
+                esPlantillaMayor = plantilla.esPlantillaMayor,
+                minimoUnidadesMayor = plantilla.minimoUnidadesMayor.toString()
             )
         }
         calcularResultados() // Para que refresque los USD en vivo con la tasa actual
@@ -315,8 +317,9 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
             monedaExtra = estado.monedaExtra,
             rendimientoExtra = parseCant(estado.rendimientoExtra),
             porcentajeOperativo = estado.porcentajeOperativo,
-            porcentajeGananciaDetal = estado.porcentajeGanancia,
-            porcentajeGananciaMayor = estado.porcentajeGananciaMayor
+            porcentajeGanancia = estado.porcentajeGanancia,
+            esPlantillaMayor = estado.esPlantillaMayor,
+            minimoUnidadesMayor = parseCant(estado.minimoUnidadesMayor)
         )
 
         viewModelScope.launch {
@@ -343,10 +346,8 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
 
         return ResultadoPlantilla(
             costoTotalProduccionUsd = costos.costoTotalProduccionUsd,
-            precioDetalUsd = costos.precioSugeridoDetalUsd,
-            gananciaDetalUsd = costos.gananciaDetalUsd,
-            precioMayorUsd = costos.precioSugeridoMayorUsd,
-            gananciaMayorUsd = costos.gananciaMayorUsd
+            precioUsd = costos.precioSugeridoUsd,
+            gananciaUsd = costos.gananciaUsd
         )
     }
 
@@ -395,17 +396,10 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
 
         var precioVentaSug = 0.0
         var ganancia = 0.0
-        var precioVentaMayorSug = 0.0
-        var gananciaMayor = 0.0
-
         if (costoTotalProduccion > 0.0) {
             val margenDecimal = estado.porcentajeGanancia / 100.0
             precioVentaSug = costoTotalProduccion / (1.0 - margenDecimal)
             ganancia = precioVentaSug - costoTotalProduccion
-            
-            val margenMayorDecimal = estado.porcentajeGananciaMayor / 100.0
-            precioVentaMayorSug = costoTotalProduccion / (1.0 - margenMayorDecimal)
-            gananciaMayor = precioVentaMayorSug - costoTotalProduccion
         }
 
         fun redondear2(valor: Double): Double = 
@@ -415,9 +409,7 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
             it.copy(
                 costoTotalProduccionUsd = redondear2(costoTotalProduccion),
                 precioSugeridoUsd = redondear2(precioVentaSug),
-                gananciaNetaUsd = redondear2(ganancia),
-                precioSugeridoMayorUsd = redondear2(precioVentaMayorSug),
-                gananciaNetaMayorUsd = redondear2(gananciaMayor)
+                gananciaNetaUsd = redondear2(ganancia)
             )
         }
     }
