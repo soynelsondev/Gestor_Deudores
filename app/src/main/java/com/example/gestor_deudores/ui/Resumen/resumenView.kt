@@ -28,6 +28,8 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -752,16 +754,74 @@ fun TarjetaRadiografiaPagoItem(
 
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 desglose.desgloseItems.forEach { item ->
-                    val itemMonto = if (monedaVista == "VES" && tasaBcv > 0) item.montoUsd * tasaBcv else item.montoUsd
+                    ItemDesgloseAcordeon(item = item, monedaVista = monedaVista, tasaBcv = tasaBcv, simbolo = simbolo)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ItemDesgloseAcordeon(
+    item: DesglosePagoItem,
+    monedaVista: String,
+    tasaBcv: Double,
+    simbolo: String
+) {
+    var expandido by remember { mutableStateOf(false) }
+    val tieneSubitems = item.subItems.isNotEmpty()
+    val itemMonto = if (monedaVista == "VES" && tasaBcv > 0) item.montoUsd * tasaBcv else item.montoUsd
+
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(enabled = tieneSubitems) { expandido = !expandido }
+                .padding(vertical = 2.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "• ${item.concepto}", 
+                    fontSize = 12.sp, 
+                    fontWeight = if(tieneSubitems) FontWeight.Bold else FontWeight.Normal
+                )
+                if (tieneSubitems) {
+                    Icon(
+                        imageVector = if (expandido) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = "Expandir",
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+            Text(
+                text = "$simbolo ${String.format(Locale.getDefault(), "%.2f", itemMonto)} (${String.format(Locale.getDefault(), "%.1f", item.porcentaje)}%)",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = if(tieneSubitems) MaterialTheme.colorScheme.primary else Color.Unspecified
+            )
+        }
+
+        androidx.compose.animation.AnimatedVisibility(visible = expandido && tieneSubitems) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, top = 4.dp, bottom = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                item.subItems.forEach { subItem ->
+                    val subMonto = if (monedaVista == "VES" && tasaBcv > 0) subItem.montoUsd * tasaBcv else subItem.montoUsd
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text(text = "• ${item.concepto}", fontSize = 12.sp)
+                        Text(text = "└ ${subItem.concepto}", fontSize = 11.sp, color = Color.DarkGray)
                         Text(
-                            text = "$simbolo ${String.format(Locale.getDefault(), "%.2f", itemMonto)} (${String.format(Locale.getDefault(), "%.1f", item.porcentaje)}%)",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
+                            text = "$simbolo ${String.format(Locale.getDefault(), "%.2f", subMonto)} (${String.format(Locale.getDefault(), "%.1f", subItem.porcentaje)}%)",
+                            fontSize = 11.sp,
+                            color = Color.DarkGray
                         )
                     }
                 }

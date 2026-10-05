@@ -43,7 +43,8 @@ data class FondoInsumoItem(
 data class DesglosePagoItem(
     val concepto: String,
     val montoUsd: Double,
-    val porcentaje: Float
+    val porcentaje: Float,
+    val subItems: List<DesglosePagoItem> = emptyList() // NUEVO: Para el menú desplegable (Acordeón)
 )
 
 data class DesglosePagoIndividual(
@@ -330,6 +331,16 @@ class ResumenViewModel(
 
         // Opción 0: Consolidado de todos los abonos del período
         if (ingresosCobradosUsd > 0) {
+            
+            // Creamos los sub-ítems para el consolidado estimando sobre el total de insumos
+            val subItemsConsolidado = mutableListOf<DesglosePagoItem>()
+            if (fondoTintasPapel > 0) {
+                subItemsConsolidado.add(DesglosePagoItem("Papel, Tintas y Empaque", (fondoTintasPapel * 0.40).redondear2(), 40f))
+                subItemsConsolidado.add(DesglosePagoItem("Impresión (DTF)", (fondoTintasPapel * 0.30).redondear2(), 30f))
+                subItemsConsolidado.add(DesglosePagoItem("Diseño & Extras", (fondoTintasPapel * 0.15).redondear2(), 15f))
+                subItemsConsolidado.add(DesglosePagoItem("Operatividad (Luz)", (fondoTintasPapel * 0.15).redondear2(), 15f))
+            }
+
             listaAbonosDesglose.add(
                 DesglosePagoIndividual(
                     idDeuda = -1,
@@ -339,7 +350,7 @@ class ResumenViewModel(
                     desgloseItems = listOf(
                         DesglosePagoItem("Material Base (Sublimación/Rígidos)", fondoTextil, (fondoTextil / totalFondos * 100).toFloat()),
                         DesglosePagoItem("Pasajes & Transporte", fondoPasajes, (fondoPasajes / totalFondos * 100).toFloat()),
-                        DesglosePagoItem("Tintas, Papel & Insumos", fondoTintasPapel, (fondoTintasPapel / totalFondos * 100).toFloat()),
+                        DesglosePagoItem("Costos Adicionales de Producción", fondoTintasPapel, (fondoTintasPapel / totalFondos * 100).toFloat(), subItemsConsolidado),
                         DesglosePagoItem("Ganancia Neta Libre", fondoGanancia, (fondoGanancia / totalFondos * 100).toFloat())
                     )
                 )
@@ -361,12 +372,37 @@ class ResumenViewModel(
             val pInsumo: Double
             val pGanancia: Double
             var nombreInsumoReal = "Insumo Base / Textil"
+            val subItemsExtras = mutableListOf<DesglosePagoItem>()
 
             if (pedidoFotografia != null && (pedidoFotografia.costoPiezaBaseUsd > 0 || pedidoFotografia.costoInsumosUsd > 0)) {
                 val proporcion = if (pedidoFotografia.totalUsd > 0) montoAbono / pedidoFotografia.totalUsd else 1.0
+                
+                // Si la plantilla base existe hoy, desglosamos visualmente
+                val plantillaOrigen = plantillas.find { it.nombrePlantilla == pedidoFotografia.nombrePiezaBase }
+                
+                if (plantillaOrigen != null) {
+                    val mCosto = com.example.gestor_deudores.data.utils.calcularCostosPlantilla(plantillaOrigen)
+                    val escala = (if(pedidoFotografia.cantidad>0) pedidoFotografia.cantidad else 1) * proporcion
+                    
+                    val pasajeV = (mCosto.costoPasajeUsd * escala).redondear2()
+                    val insumoV = (mCosto.costoInsumosUsd * escala).redondear2()
+                    
+                    pPasaje = pasajeV
+                    pInsumo = insumoV
+                    
+                    // Llenamos los subItems con una estimación lógica de la plantilla actual
+                    if (insumoV > 0) {
+                        subItemsExtras.add(DesglosePagoItem("Papel, Tintas y Empaque", (insumoV * 0.40).redondear2(), 40f))
+                        subItemsExtras.add(DesglosePagoItem("Impresión (DTF)", (insumoV * 0.30).redondear2(), 30f))
+                        subItemsExtras.add(DesglosePagoItem("Diseño & Extras", (insumoV * 0.15).redondear2(), 15f))
+                        subItemsExtras.add(DesglosePagoItem("Operatividad (Luz)", (insumoV * 0.15).redondear2(), 15f))
+                    }
+                } else {
+                    pPasaje = 0.0
+                    pInsumo = 0.0
+                }
+
                 pTextil = (pedidoFotografia.costoPiezaBaseUsd * proporcion).redondear2()
-                pPasaje = (pedidoFotografia.costoPasajeUsd * proporcion).redondear2()
-                pInsumo = (pedidoFotografia.costoInsumosUsd * proporcion).redondear2()
                 pGanancia = (montoAbono - (pTextil + pPasaje + pInsumo)).coerceAtLeast(0.0).redondear2()
                 nombreInsumoReal = "Pieza Base: ${pedidoFotografia.nombrePiezaBase}"
             } else {
@@ -385,7 +421,7 @@ class ResumenViewModel(
                     desgloseItems = listOf(
                         DesglosePagoItem(nombreInsumoReal, pTextil, (pTextil / montoAbono * 100).toFloat()),
                         DesglosePagoItem("Pasajes & Transporte", pPasaje, (pPasaje / montoAbono * 100).toFloat()),
-                        DesglosePagoItem("Tintas & Papel", pInsumo, (pInsumo / montoAbono * 100).toFloat()),
+                        DesglosePagoItem("Costos Adicionales de Producción", pInsumo, (pInsumo / montoAbono * 100).toFloat(), subItemsExtras),
                         DesglosePagoItem("Ganancia Neta Libre", pGanancia, (pGanancia / montoAbono * 100).toFloat())
                     )
                 )
