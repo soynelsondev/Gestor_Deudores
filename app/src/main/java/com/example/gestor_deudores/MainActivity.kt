@@ -20,6 +20,16 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        // Solicitar permisos de notificación para Android 13+ (API 33+)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101)
+            }
+        }
+
+        // Programar notificación periódica de cierre de mes
+        com.example.gestor_deudores.data.utils.NotificacionUtils.programarNotificacionMensual(applicationContext)
+
         val baseDeDatos = DeudaDataBase.getDatabase(applicationContext)
 
         val viewModelFactory = object : ViewModelProvider.Factory {

@@ -85,7 +85,66 @@ fun generarYCompartirPdf(context: Context, uiState: ResumenUiState) {
     yPos += lineSpacing
     val rentabilidad = if (uiState.ingresosCobradosUsd > 0) (uiState.gananciaNetaUsd / uiState.ingresosCobradosUsd) * 100 else 0.0
     canvas.drawText("• Margen de Rentabilidad Neta: ${String.format(Locale.US, "%.1f", rentabilidad)}%", margin, yPos, paint)
-    yPos += 40f
+    yPos += 30f
+
+    // =====================================
+    // SECCIÓN 1B: CUADRO COMPARATIVO INTERMENSUAL
+    // =====================================
+    if (uiState.ingresosCobradosMesAnterior > 0.0) {
+        checkY(160f)
+        paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        paint.textSize = 14f
+        paint.color = Color.BLACK
+        canvas.drawText("1B. AUDITORÍA COMPARATIVA CON EL MES ANTERIOR", margin, yPos, paint)
+        yPos += 5f
+        paint.strokeWidth = 1f
+        canvas.drawLine(margin, yPos, 555f, yPos, paint)
+        yPos += 20f
+
+        val c1 = margin
+        val c2 = 200f
+        val c3 = 300f
+        val c4 = 410f
+
+        // Cabecera Tabla Comparativa
+        paint.color = Color.rgb(220, 220, 220)
+        canvas.drawRect(c1, yPos - 12f, 555f, yPos + 6f, paint)
+        paint.color = Color.BLACK
+        paint.textSize = 10f
+        canvas.drawText("Concepto Financiero", c1 + 5f, yPos, paint)
+        canvas.drawText("Mes Anterior", c2, yPos, paint)
+        canvas.drawText("Mes Actual", c3, yPos, paint)
+        canvas.drawText("Diferencia / Var.", c4, yPos, paint)
+        yPos += lineSpacing + 4f
+
+        paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+
+        fun dibFilaComp(concepto: String, vAnt: Double, vAct: Double, isEven: Boolean) {
+            if (isEven) {
+                paint.color = Color.rgb(248, 248, 248)
+                canvas.drawRect(c1, yPos - 12f, 555f, yPos + 6f, paint)
+            }
+            val diff = vAct - vAnt
+            val pctVar = if (vAnt > 0) (diff / vAnt) * 100 else 0.0
+            
+            paint.color = Color.BLACK
+            canvas.drawText(concepto, c1 + 5f, yPos, paint)
+            canvas.drawText("$${String.format(Locale.US, "%.2f", vAnt)}", c2, yPos, paint)
+            canvas.drawText("$${String.format(Locale.US, "%.2f", vAct)}", c3, yPos, paint)
+            
+            val signStr = if (diff >= 0) "+" else ""
+            paint.color = if (diff > 0) Color.rgb(46, 125, 50) else if (diff < 0) Color.rgb(211, 47, 47) else Color.DKGRAY
+            canvas.drawText("$signStr$${String.format(Locale.US, "%.2f", diff)} (${String.format(Locale.US, "%.1f", pctVar)}%)", c4, yPos, paint)
+            yPos += lineSpacing
+        }
+
+        dibFilaComp("Ingresos Cobrados", uiState.ingresosCobradosMesAnterior, uiState.ingresosCobradosUsd, false)
+        dibFilaComp("Ganancia Neta Libre", uiState.gananciaNetaMesAnterior, uiState.gananciaNetaUsd, true)
+        dibFilaComp("Fondo Logística / Envíos", uiState.costoPasajesMesAnterior, uiState.costoPasajesUsd, false)
+        dibFilaComp("Fondo Insumos / Materiales", uiState.costoInsumosMesAnterior, uiState.costoInsumosUsd, true)
+        
+        yPos += 20f
+    }
 
     // =====================================
     // SECCIÓN 2: DISTRIBUCIÓN DE FONDOS

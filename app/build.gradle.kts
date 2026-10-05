@@ -79,4 +79,7 @@ dependencies {
     // Retrofit y Convertidor Gson para consultar la API de Tasas (Dólar BCV)
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+
+    // WorkManager para notificaciones automáticas de cierre de mes
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
 }

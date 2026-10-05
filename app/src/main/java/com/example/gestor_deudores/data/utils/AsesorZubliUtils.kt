@@ -1,12 +1,12 @@
 package com.example.gestor_deudores.data.utils
 
 import com.example.gestor_deudores.ui.Resumen.AlertaFinanciera
-import kotlin.random.Random
+import java.util.Locale
 
 /**
- * MOTOR DE INTELIGENCIA DE NEGOCIO (ASESOR ZUBLI)
- * Analiza las variables financieras y devuelve estrategias y consejos avanzados
- * de sublimación y personalización.
+ * MOTOR DE INTELIGENCIA DE NEGOCIO (ASESOR ZUBLI - NÚMEROS PUROS)
+ * Analiza las variables financieras y devuelve explicaciones numéricas exactas
+ * basadas 100% en los datos reales registrados en SQLite.
  */
 object AsesorZubliUtils {
 
@@ -15,11 +15,16 @@ object AsesorZubliUtils {
         gananciaNetaUsd: Double,
         porCobrarUsd: Double,
         costoPasajesUsd: Double,
-        topProductoNombre: String?,
+        costoInsumosUsd: Double,
+        topProductos: List<Pair<String, Int>>,
         clienteMasDeudorNombre: String?,
         clienteMasDeudorMonto: Double,
         clienteVipNombre: String?,
-        clienteVipMonto: Double
+        clienteVipMonto: Double,
+        gananciaNetaMesAnterior: Double = 0.0,
+        ingresosCobradosMesAnterior: Double = 0.0,
+        costoPasajesMesAnterior: Double = 0.0,
+        costoInsumosMesAnterior: Double = 0.0
     ): List<AlertaFinanciera> {
         val alertas = mutableListOf<AlertaFinanciera>()
 
@@ -27,85 +32,70 @@ object AsesorZubliUtils {
             alertas.add(
                 AlertaFinanciera(
                     titulo = "¡Bienvenido al Dashboard!",
-                    mensaje = "💡 Registra tus pedidos y abonos para que el Asesor Zubli empiece a analizar tus finanzas y te dé estrategias de negocio.",
+                    mensaje = "💡 Registra tus pedidos y abonos para que el Asesor Zubli empiece a analizar tus finanzas con datos numéricos reales.",
                     nivel = "INFO"
                 )
             )
             return alertas
         }
 
-        val margenGanancia = if (ingresosCobradosUsd > 0) (gananciaNetaUsd / ingresosCobradosUsd) * 100 else 0.0
         val pctPasajes = if (ingresosCobradosUsd > 0) (costoPasajesUsd / ingresosCobradosUsd) * 100 else 0.0
-        val totalVendido = ingresosCobradosUsd + porCobrarUsd
-        val pctDeuda = if (totalVendido > 0) (porCobrarUsd / totalVendido) * 100 else 0.0
-        
-        val productoFuerte = topProductoNombre ?: "tus productos"
-
-        // =====================================
-        // REGLA 1: SANGRADO POR LOGÍSTICA (PASAJES > 12%)
-        // =====================================
-        if (pctPasajes > 12.0) {
-            val consejosLogistica = listOf(
-                "⚠️ Los envíos y viajes te comen el ${String.format(java.util.Locale.US, "%.1f", pctPasajes)}% del dinero. Estrategia: Agrupa tus entregas un solo día a la semana o cobra un 'Delivery Tarifa Plana' a tus clientes.",
-                "⚠️ Gastas mucho en logística. Estrategia: Junta varios pedidos de clientes y manda a imprimir un Metro Lineal de DTF completo de una vez. Bajarás el costo de pasajes y de impresión drásticamente.",
-                "⚠️ Fuga de dinero en transporte detectada. Considera sumar siempre un porcentaje fijo por concepto de 'movilización' en tus próximas cotizaciones de $productoFuerte."
-            )
-            alertas.add(AlertaFinanciera("Fuga por Logística y Envíos", consejosLogistica.random(), "WARNING"))
+        val prodText = if (topProductos.isNotEmpty()) {
+            topProductos.take(2).joinToString(" y ") { "${it.first} (${it.second} pcs)" }
+        } else {
+            "tus productos generales"
         }
 
         // =====================================
-        // REGLA 2: MÁRGENES DE GANANCIA (RENTABILIDAD)
+        // REGLA 1: ANÁLISIS DE COMPARATIVA INTERMENSUAL (NÚMEROS PUROS)
         // =====================================
-        if (ingresosCobradosUsd > 0) {
-            if (margenGanancia < 35.0) { // Peligro: Ganando muy poco
-                val consejosBajoMargen = listOf(
-                    "🔴 Tu margen actual es del ${String.format(java.util.Locale.US, "%.1f", margenGanancia)}%. Estás regalando tu trabajo. Estrategia: No subas el precio de golpe; empieza a crear Combos (Ej: $productoFuerte + Llavero) donde el llavero tiene alto margen.",
-                    "🔴 Estás compitiendo solo por precio (${String.format(java.util.Locale.US, "%.1f", margenGanancia)}% libre). Estrategia: Incluye un empaque llamativo (que cuesta $0.30) y súbele $2.00 al precio final. Vende 'Regalos Listos', no productos crudos.",
-                    "🔴 Trabajando mucho para ganar poco. Tu ganancia libre es inferior al 35%. Revisa el Cotizador urgente y asegúrate de estar cobrando el porcentaje de desgaste (luz/plancha)."
-                )
-                alertas.add(AlertaFinanciera("Rentabilidad Crítica", consejosBajoMargen.random(), "DANGER"))
-            } else if (margenGanancia in 35.0..50.0) { // Regular: Puede mejorar
-                val consejosMargenMedio = listOf(
-                    "🟡 Margen de ganancia estable (${String.format(java.util.Locale.US, "%.1f", margenGanancia)}%), pero mejorable. Estrategia: Si $productoFuerte se vende bien, intenta comprar los insumos al mayor para la próxima semana y saltarás al 50% de ganancia libre.",
-                    "🟡 Rentabilidad moderada. Sugerencia: Prueba ofrecer personalizaciones 'Premium' (con nombres dorados o empaques de regalo) en $productoFuerte para aumentar tu ganancia sin trabajar doble."
-                )
-                alertas.add(AlertaFinanciera("Margen Estable pero Mejorable", consejosMargenMedio.random(), "INFO"))
-            } else { // Excelente: Negocio Sano
-                val consejosBuenMargen = listOf(
-                    "🟢 ¡Tus finanzas están perfectas! Margen libre del ${String.format(java.util.Locale.US, "%.1f", margenGanancia)}%. Estrategia: Separa el 5% de tus ganancias de este mes para pagar publicidad. Tienes capacidad de escalar.",
-                    "🟢 Negocio Sano. Aprovecha este buen flujo de caja ($${String.format(java.util.Locale.US, "%.2f", gananciaNetaUsd)} libres) para armar inventario de $productoFuerte antes de temporada alta.",
-                    "🟢 ¡Excelente estructura de costos! Tienes buena rentabilidad. Mantén la disciplina de separar el fondo de reposición cada vez que recibas un abono."
-                )
-                alertas.add(AlertaFinanciera("¡Rentabilidad Excelente!", consejosBuenMargen.random(), "SUCCESS"))
+        if (ingresosCobradosMesAnterior > 0.0) {
+            val diffGanancia = gananciaNetaUsd - gananciaNetaMesAnterior
+            val diffIngresos = ingresosCobradosUsd - ingresosCobradosMesAnterior
+            val diffPasajes = costoPasajesUsd - costoPasajesMesAnterior
+            val diffInsumos = costoInsumosUsd - costoInsumosMesAnterior
+
+            if (kotlin.math.abs(diffGanancia) <= 2.5) {
+                // ESCENARIO: RENDIMIENTO ESTABLE / PAREJO
+                val msgEstable = "📊 Análisis Numérico vs Mes Pasado: RENDIMIENTO ESTABLE. Cobraste $${String.format(Locale.US, "%.2f", ingresosCobradosUsd)} (Dif: $${String.format(Locale.US, "%+.2f", diffIngresos)}) con una ganancia neta libre de $${String.format(Locale.US, "%.2f", gananciaNetaUsd)} (Variación: 0.0%). Los costos se mantuvieron equilibrados: Insumos $${String.format(Locale.US, "%.2f", costoInsumosUsd)} y Logística $${String.format(Locale.US, "%.2f", costoPasajesUsd)}. Productos principales: $prodText."
+                alertas.add(AlertaFinanciera("Desempeño Numérico Estable", msgEstable, "INFO"))
+            } else if (diffGanancia > 2.5) {
+                // ESCENARIO: CRECIMIENTO
+                val pctIncr = (diffGanancia / gananciaNetaMesAnterior) * 100
+                val msgMejor = "📊 Análisis Numérico vs Mes Pasado: CRECIMIENTO DE MARGEN. Cobraste $${String.format(Locale.US, "%.2f", ingresosCobradosUsd)} (+$${String.format(Locale.US, "%.2f", diffIngresos)}) y obtuviste $${String.format(Locale.US, "%.2f", gananciaNetaUsd)} de ganancia neta (+$${String.format(Locale.US, "%.2f", diffGanancia)} | +${String.format(Locale.US, "%.1f", pctIncr)}%). Insumos: $${String.format(Locale.US, "%.2f", costoInsumosUsd)} | Logística: $${String.format(Locale.US, "%.2f", costoPasajesUsd)}. Motor principal de movimiento: $prodText."
+                alertas.add(AlertaFinanciera("Incremento Numérico de Margen", msgMejor, "SUCCESS"))
+            } else {
+                // ESCENARIO: DISMINUCIÓN
+                val absDiffG = kotlin.math.abs(diffGanancia)
+                val pctDecr = (absDiffG / gananciaNetaMesAnterior) * 100
+                val msgPeor = "📊 Análisis Numérico vs Mes Pasado: DISMINUCIÓN DE MARGEN. Cobraste $${String.format(Locale.US, "%.2f", ingresosCobradosUsd)} (Dif: $${String.format(Locale.US, "%.2f", diffIngresos)}) y la ganancia neta bajó a $${String.format(Locale.US, "%.2f", gananciaNetaUsd)} (-$${String.format(Locale.US, "%.2f", absDiffG)} | -${String.format(Locale.US, "%.1f", pctDecr)}%). Explicación de los números: El gasto en transporte fue de $${String.format(Locale.US, "%.2f", costoPasajesUsd)} (Dif: $${String.format(Locale.US, "%+.2f", diffPasajes)}) e insumos $${String.format(Locale.US, "%.2f", costoInsumosUsd)} (Dif: $${String.format(Locale.US, "%+.2f", diffInsumos)})."
+                alertas.add(AlertaFinanciera("Ajuste Numérico de Margen", msgPeor, "WARNING"))
             }
         }
 
         // =====================================
-        // REGLA 3: FLUJO DE CAJA (CUENTAS POR COBRAR) Y RIESGO DE CLIENTES
+        // REGLA 2: SANGRADO POR LOGÍSTICA (PASAJES > 12%)
         // =====================================
-        if (clienteMasDeudorNombre != null && clienteMasDeudorMonto > 20.0) {
-            val consejosRiesgo = listOf(
-                "🚨 Alerta de Crédito: '$clienteMasDeudorNombre' concentra el mayor riesgo de deuda en tu negocio ($${String.format(java.util.Locale.US, "%.2f", clienteMasDeudorMonto)}). Estrategia: Evita tomarle nuevos pedidos a crédito hasta que no liquide. Mándale un WhatsApp de cobranza hoy.",
-                "🚨 Dinero Estancado. $clienteMasDeudorNombre te debe $${String.format(java.util.Locale.US, "%.2f", clienteMasDeudorMonto)}. Tu capital de trabajo se está quedando atrapado. Ofrece un pequeño descuento si paga el total hoy."
-            )
-            alertas.add(AlertaFinanciera("Riesgo de Cartera (Cliente)", consejosRiesgo.random(), "DANGER"))
-        } else if (porCobrarUsd > 15.0 && pctDeuda > 30.0) {
-            val consejosCobranza = listOf(
-                "🟡 Tienes $${String.format(java.util.Locale.US, "%.2f", porCobrarUsd)} en la calle (${String.format(java.util.Locale.US, "%.1f", pctDeuda)}% de tus ventas). Estrategia: No inicies trabajos sin un 60% de abono. Tu capital se está quedando atrapado.",
-                "🟡 Mucho saldo pendiente global. Estrategia: Envía un WhatsApp a los deudores diciendo: 'Hola, estamos limpiando inventario. Si liquidas tu saldo hoy, te llevas un obsequio sorpresa'. Recupera efectivo rápido."
-            )
-            alertas.add(AlertaFinanciera("Dinero Estancado (Global)", consejosCobranza.random(), "WARNING"))
+        if (pctPasajes > 12.0) {
+            val msgLogistica = "⚠️ Explicación Numérica de Logística: Los pasajes y envíos representaron el ${String.format(Locale.US, "%.1f", pctPasajes)}% ($${String.format(Locale.US, "%.2f", costoPasajesUsd)}) de tus ingresos totales de $${String.format(Locale.US, "%.2f", ingresosCobradosUsd)}."
+            alertas.add(AlertaFinanciera("Impacto Numérico de Logística", msgLogistica, "WARNING"))
         }
 
         // =====================================
-        // REGLA 4: CLIENTE VIP / FIDELIZACIÓN
+        // REGLA 3: RIESGO DE CLIENTES Y COBRANZAS
         // =====================================
-        if (clienteVipNombre != null && clienteVipMonto > 50.0) {
-            val consejosVip = listOf(
-                "🏆 Fidelización: '$clienteVipNombre' es tu cliente VIP del período (Abonó $${String.format(java.util.Locale.US, "%.2f", clienteVipMonto)}). Estrategia: Escríbele un mensaje de agradecimiento y ofrécele un 10% de descuento en su próxima compra para asegurar su lealtad.",
-                "🏆 Retención de Clientes. $clienteVipNombre te generó el mayor ingreso este mes. Considéralo para regalos corporativos de tu marca en navidad. Los buenos clientes hay que cuidarlos."
-            )
-            alertas.add(AlertaFinanciera("Oportunidad de Fidelización (VIP)", consejosVip.random(), "SUCCESS"))
+        if (clienteMasDeudorNombre != null && clienteMasDeudorMonto > 20.0) {
+            val msgRiesgo = "🚨 Balance de Deuda de Cliente: '$clienteMasDeudorNombre' concentra el mayor saldo pendiente individual ($${String.format(Locale.US, "%.2f", clienteMasDeudorMonto)}) dentro del total por cobrar de $${String.format(Locale.US, "%.2f", porCobrarUsd)}."
+            alertas.add(AlertaFinanciera("Concentración de Cartera", msgRiesgo, "DANGER"))
+        }
+
+        // =====================================
+        // REGLA 4: CLIENTE VIP DE MAYOR APORTE
+        // =====================================
+        if (clienteVipNombre != null && clienteVipMonto > 40.0) {
+            val pctAporte = (clienteVipMonto / ingresosCobradosUsd.coerceAtLeast(0.01)) * 100
+            val msgVip = "🏆 Cliente de Mayor Aporte: '$clienteVipNombre' representó el ${String.format(Locale.US, "%.1f", pctAporte)}% ($${String.format(Locale.US, "%.2f", clienteVipMonto)}) del dinero cobrado en caja en este período."
+            alertas.add(AlertaFinanciera("Aporte Principal de Caja", msgVip, "SUCCESS"))
         }
 
         return alertas

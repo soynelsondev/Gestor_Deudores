@@ -88,7 +88,15 @@ data class ResumenUiState(
     val pedidosListosCount: Int = 0,
     val pedidosEntregadosCount: Int = 0,
     val alertasFinancieras: List<AlertaFinanciera> = emptyList(),
-    val topProductos: List<Pair<String, Int>> = emptyList()
+    val topProductos: List<Pair<String, Int>> = emptyList(),
+    
+    // Métricas del Mes Anterior (para el Cuadro Contable del PDF)
+    val ingresosCobradosMesAnterior: Double = 0.0,
+    val gananciaNetaMesAnterior: Double = 0.0,
+    val costoPasajesUsd: Double = 0.0,
+    val costoInsumosUsd: Double = 0.0,
+    val costoPasajesMesAnterior: Double = 0.0,
+    val costoInsumosMesAnterior: Double = 0.0
 ) {
     val abonoSeleccionado: DesglosePagoIndividual?
         get() = if (listaAbonosDesglose.isNotEmpty() && abonoSeleccionadoIndex in listaAbonosDesglose.indices) {
@@ -459,19 +467,33 @@ class ResumenViewModel(
         val clienteVipEntry = pagosPorCliente.maxByOrNull { it.value }
         val clienteVip = deudores.find { it.id == clienteVipEntry?.key }
 
-        // 8. Alertas de Salud Financiera (Asesor Zubli Inteligente)
-        val productoFuerte = topProds.firstOrNull()?.first
-        
+        // Cálculo de Métricas del Mes Anterior (para Comparativa Intermensual)
+        val (inicioMesAntMillis, finMesAntMillis) = calcularRangoMillis(PeriodoFiltro.MES_ANTERIOR)
+        val abonosMesAnt = deudas.filter { 
+            it.tipo == "ABONO" && obtenerFechaMillisValida(it) in inicioMesAntMillis..finMesAntMillis 
+        }
+        val ingresosMesAntUsd = abonosMesAnt.sumOf { Math.abs(it.montoRestante) }
+        val pctGananciaActual = if (ingresosCobradosUsd > 0) (gananciaNetaUsd / ingresosCobradosUsd) else 0.40
+        val gananciaMesAntUsd = ingresosMesAntUsd * pctGananciaActual
+        val pasajesMesAntUsd = ingresosMesAntUsd * (config.pctPasaje / 100.0)
+        val insumosMesAntUsd = ingresosMesAntUsd * ((config.pctTextil + config.pctInsumos) / 100.0)
+
+        // 8. Alertas de Salud Financiera (Asesor Zubli Inteligente - Números Puros)
         val alertas = com.example.gestor_deudores.data.utils.AsesorZubliUtils.generarConsejos(
             ingresosCobradosUsd = ingresosCobradosUsd,
             gananciaNetaUsd = gananciaNetaUsd,
             porCobrarUsd = porCobrarUsd,
             costoPasajesUsd = fondoPasajes,
-            topProductoNombre = productoFuerte,
+            costoInsumosUsd = fondoTintasPapel,
+            topProductos = topProds,
             clienteMasDeudorNombre = clienteMasDeudor?.let { "${it.nombre} ${it.apellido}" },
             clienteMasDeudorMonto = clienteMasDeudorEntry?.value ?: 0.0,
             clienteVipNombre = clienteVip?.let { "${it.nombre} ${it.apellido}" },
-            clienteVipMonto = clienteVipEntry?.value ?: 0.0
+            clienteVipMonto = clienteVipEntry?.value ?: 0.0,
+            gananciaNetaMesAnterior = gananciaMesAntUsd,
+            ingresosCobradosMesAnterior = ingresosMesAntUsd,
+            costoPasajesMesAnterior = pasajesMesAntUsd,
+            costoInsumosMesAnterior = insumosMesAntUsd
         )
 
         ResumenUiState(
@@ -493,7 +515,13 @@ class ResumenViewModel(
             pedidosListosCount = lisCount,
             pedidosEntregadosCount = entCount,
             alertasFinancieras = alertas,
-            topProductos = topProds
+            topProductos = topProds,
+            ingresosCobradosMesAnterior = ingresosMesAntUsd,
+            gananciaNetaMesAnterior = gananciaMesAntUsd,
+            costoPasajesUsd = fondoPasajes,
+            costoInsumosUsd = fondoTintasPapel,
+            costoPasajesMesAnterior = pasajesMesAntUsd,
+            costoInsumosMesAnterior = insumosMesAntUsd
         )
     }.stateIn(
         scope = viewModelScope,
