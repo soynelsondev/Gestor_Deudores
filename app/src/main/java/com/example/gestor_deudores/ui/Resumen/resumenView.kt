@@ -296,6 +296,13 @@ fun SeccionFiltrosYEncabezado(
         ) {
             item {
                 FilterChip(
+                    selected = periodoSeleccionado == PeriodoFiltro.ESTA_SEMANA,
+                    onClick = { onPeriodoCambiado(PeriodoFiltro.ESTA_SEMANA) },
+                    label = { Text("Esta Semana") }
+                )
+            }
+            item {
+                FilterChip(
                     selected = periodoSeleccionado == PeriodoFiltro.ESTE_MES,
                     onClick = { onPeriodoCambiado(PeriodoFiltro.ESTE_MES) },
                     label = { Text("Este Mes") }
@@ -327,16 +334,44 @@ fun SeccionFiltrosYEncabezado(
 }
 
 // ==========================================
-// COMPONENTE 3: GRÁFICA DE EVALUACIÓN
+// COMPONENTE 3: GRÁFICA DE EVALUACIÓN (TORTA / DONUT)
 // ==========================================
 @Composable
 fun GraficaPerdidasGanancias(uiState: ResumenUiState) {
-    val totalFacturado = uiState.ingresosCobradosUsd.coerceAtLeast(0.01)
-    val pctCostos = ((uiState.fondoReposicionUsd / totalFacturado) * 100).coerceIn(0.0, 100.0)
-    val pctGanancia = ((uiState.gananciaNetaUsd / totalFacturado) * 100).coerceIn(0.0, 100.0)
+    val totalFacturado = uiState.ingresosCobradosUsd.coerceAtLeast(0.01).toFloat()
+    
+    // Si no hay ingresos, no dibujamos la torta o la pintamos gris
+    if (totalFacturado <= 0.01f) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            Box(modifier = Modifier.padding(24.dp).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Text("No hay abonos en este período para graficar.", color = Color.Gray, fontSize = 13.sp)
+            }
+        }
+        return
+    }
+
+    // Buscamos los fondos específicos que calcula el ViewModel
+    val fondoGanancia = uiState.fondosInsumos.find { it.id == "ganancia" }?.montoUsd?.toFloat() ?: 0f
+    val fondoTextil = uiState.fondosInsumos.find { it.id == "textil" }?.montoUsd?.toFloat() ?: 0f
+    val fondoTintas = uiState.fondosInsumos.find { it.id == "tintas" }?.montoUsd?.toFloat() ?: 0f
+    val fondoPasaje = uiState.fondosInsumos.find { it.id == "pasaje" }?.montoUsd?.toFloat() ?: 0f
+
+    val pctGanancia = (fondoGanancia / totalFacturado) * 360f
+    val pctTextil = (fondoTextil / totalFacturado) * 360f
+    val pctTintas = (fondoTintas / totalFacturado) * 360f
+    val pctPasaje = (fondoPasaje / totalFacturado) * 360f
 
     val colorGanancia = Color(0xFF2E7D32)
-    val colorCostos = Color(0xFF1565C0)
+    val colorTextil = Color(0xFF1565C0)
+    val colorTintas = Color(0xFF8E24AA)
+    val colorPasaje = Color(0xFFF57C00)
+
+    val monedaSimbolo = if (uiState.monedaVista == "VES") "Bs" else "$"
+    val montoCentroMostrado = if (uiState.monedaVista == "VES" && uiState.tasaBcv > 0) fondoGanancia * uiState.tasaBcv else fondoGanancia.toDouble()
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -344,77 +379,110 @@ fun GraficaPerdidasGanancias(uiState: ResumenUiState) {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            modifier = Modifier.padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Evaluación de Rentabilidad",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
-                )
-                Text(
-                    text = "Margen: ${String.format(Locale.getDefault(), "%.1f", pctGanancia)}%",
-                    fontWeight = FontWeight.Bold,
-                    color = colorGanancia,
-                    fontSize = 13.sp
-                )
-            }
+            Text(
+                text = "Flujo de Dinero y Rentabilidad",
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp,
+                modifier = Modifier.align(Alignment.Start)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Barra gráfica doble
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(14.dp)
-                    .clip(RoundedCornerShape(7.dp))
-                    .background(Color.LightGray)
+            // GRÁFICO DE DONA (CANVAS)
+            Box(
+                modifier = Modifier.size(160.dp),
+                contentAlignment = Alignment.Center
             ) {
-                if (pctCostos > 0) {
-                    Box(
-                        modifier = Modifier
-                            .weight(pctCostos.toFloat())
-                            .fillMaxSize()
-                            .background(colorCostos)
+                androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                    val strokeWidth = 35f
+                    var startAngle = -90f
+
+                    // Dibuja Ganancia
+                    drawArc(
+                        color = colorGanancia,
+                        startAngle = startAngle,
+                        sweepAngle = pctGanancia,
+                        useCenter = false,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(strokeWidth)
+                    )
+                    startAngle += pctGanancia
+
+                    // Dibuja Textil
+                    drawArc(
+                        color = colorTextil,
+                        startAngle = startAngle,
+                        sweepAngle = pctTextil,
+                        useCenter = false,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(strokeWidth)
+                    )
+                    startAngle += pctTextil
+
+                    // Dibuja Tintas
+                    drawArc(
+                        color = colorTintas,
+                        startAngle = startAngle,
+                        sweepAngle = pctTintas,
+                        useCenter = false,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(strokeWidth)
+                    )
+                    startAngle += pctTintas
+
+                    // Dibuja Pasaje
+                    drawArc(
+                        color = colorPasaje,
+                        startAngle = startAngle,
+                        sweepAngle = pctPasaje,
+                        useCenter = false,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(strokeWidth)
                     )
                 }
-                if (pctGanancia > 0) {
-                    Box(
-                        modifier = Modifier
-                            .weight(pctGanancia.toFloat())
-                            .fillMaxSize()
-                            .background(colorGanancia)
+
+                // Textos en el centro del Donut
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = "Libre", fontSize = 10.sp, color = Color.Gray, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        text = "$monedaSimbolo ${String.format(Locale.getDefault(), "%.2f", montoCentroMostrado)}",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        color = colorGanancia
                     )
+                    Text(text = "${String.format(Locale.getDefault(), "%.1f", (fondoGanancia / totalFacturado) * 100)}%", fontSize = 11.sp, color = colorGanancia, fontWeight = FontWeight.Bold)
                 }
             }
 
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // LEYENDAS INFERIORES
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(colorCostos))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Costos / Reposición (${String.format(Locale.getDefault(), "%.0f", pctCostos)}%)",
-                        fontSize = 11.sp
-                    )
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    ItemLeyendaTorta(colorGanancia, "Ganancia Neta", (fondoGanancia / totalFacturado) * 100)
+                    ItemLeyendaTorta(colorTextil, "Mat. Base", (fondoTextil / totalFacturado) * 100)
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(colorGanancia))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Ganancia Neta (${String.format(Locale.getDefault(), "%.0f", pctGanancia)}%)",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = colorGanancia
-                    )
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    ItemLeyendaTorta(colorTintas, "Tintas & Extras", (fondoTintas / totalFacturado) * 100)
+                    ItemLeyendaTorta(colorPasaje, "Transporte", (fondoPasaje / totalFacturado) * 100)
                 }
             }
         }
+    }
+}
+
+@Composable
+fun ItemLeyendaTorta(color: Color, texto: String, porcentaje: Float) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(color))
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = "$texto (${String.format(Locale.getDefault(), "%.1f", porcentaje)}%)",
+            fontSize = 11.sp,
+            color = if (texto.contains("Ganancia")) color else Color.DarkGray,
+            fontWeight = if (texto.contains("Ganancia")) FontWeight.Bold else FontWeight.Normal
+        )
     }
 }
 

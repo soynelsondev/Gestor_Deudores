@@ -25,6 +25,7 @@ import java.util.Calendar
 import java.util.TimeZone
 
 enum class PeriodoFiltro {
+    ESTA_SEMANA,
     ESTE_MES,
     MES_ANTERIOR,
     ULTIMOS_3_MESES,
@@ -442,36 +443,17 @@ class ResumenViewModel(
             .sortedByDescending { it.second }
             .take(5)
 
-        // 8. Alertas de Salud Financiera
-        val alertas = mutableListOf<AlertaFinanciera>()
-
-        if (porCobrarUsd > (ingresosCobradosUsd * 0.5) && porCobrarUsd > 20.0) {
-            alertas.add(
-                AlertaFinanciera(
-                    titulo = "Alto saldo en la calle",
-                    mensaje = "Tienes $$porCobrarUsd USD por cobrar. Usa el recordatorio de WhatsApp para agilizar los pagos.",
-                    nivel = "WARNING"
-                )
-            )
-        }
-
-        if (ingresosCobradosUsd > 0.0 && gananciaNetaUsd / ingresosCobradosUsd < 0.25) {
-            alertas.add(
-                AlertaFinanciera(
-                    titulo = "Margen de ganancia bajo",
-                    mensaje = "Tu ganancia neta estimada es inferior al 25%. Revisa los costos de pasaje e insumos en el Cotizador.",
-                    nivel = "DANGER"
-                )
-            )
-        } else if (ingresosCobradosUsd > 0.0) {
-            alertas.add(
-                AlertaFinanciera(
-                    titulo = "Salud Financiera Estable",
-                    mensaje = "Tu margen de ganancia está saludable. Mantén la separación de fondos al recibir cada abono.",
-                    nivel = "INFO"
-                )
-            )
-        }
+        // 8. Alertas de Salud Financiera (Asesor Zubli Inteligente)
+        val productoFuerte = topProds.firstOrNull()?.first
+        
+        val alertas = com.example.gestor_deudores.data.utils.AsesorZubliUtils.generarConsejos(
+            ingresosCobradosUsd = ingresosCobradosUsd,
+            fondoReposicionUsd = fondoReposicionTotalUsd,
+            gananciaNetaUsd = gananciaNetaUsd,
+            porCobrarUsd = porCobrarUsd,
+            costoPasajesUsd = fondoPasajes,
+            topProductoNombre = productoFuerte
+        )
 
         ResumenUiState(
             cargando = false,
@@ -505,6 +487,15 @@ class ResumenViewModel(
         val finMillis = System.currentTimeMillis()
 
         return when (periodo) {
+            PeriodoFiltro.ESTA_SEMANA -> {
+                // Ir al lunes de esta semana
+                cal.set(Calendar.DAY_OF_WEEK, cal.firstDayOfWeek)
+                cal.set(Calendar.HOUR_OF_DAY, 0)
+                cal.set(Calendar.MINUTE, 0)
+                cal.set(Calendar.SECOND, 0)
+                cal.set(Calendar.MILLISECOND, 0)
+                Pair(cal.timeInMillis, finMillis)
+            }
             PeriodoFiltro.ESTE_MES -> {
                 cal.set(Calendar.DAY_OF_MONTH, 1)
                 cal.set(Calendar.HOUR_OF_DAY, 0)
