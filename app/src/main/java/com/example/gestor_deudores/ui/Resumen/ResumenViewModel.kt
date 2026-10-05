@@ -443,16 +443,35 @@ class ResumenViewModel(
             .sortedByDescending { it.second }
             .take(5)
 
+        // Análisis de Clientes (Auditoría para el Asesor y el PDF)
+        // Agrupamos la deuda actual de cada cliente en la calle
+        val deudaPorCliente = cargosActivos.groupBy { it.idDeudor }
+            .mapValues { entry -> entry.value.sumOf { it.montoInicial } - deudas.filter { it.idDeudor == entry.key && it.tipo == "ABONO" }.sumOf { Math.abs(it.montoRestante) } }
+            .filterValues { it > 0.0 }
+            
+        val clienteMasDeudorEntry = deudaPorCliente.maxByOrNull { it.value }
+        val clienteMasDeudor = deudores.find { it.id == clienteMasDeudorEntry?.key }
+        
+        // Agrupamos el pago (abonos) recibido por cliente en este período
+        val pagosPorCliente = abonosEnPeriodo.groupBy { it.idDeudor }
+            .mapValues { entry -> entry.value.sumOf { Math.abs(it.montoRestante) } }
+            
+        val clienteVipEntry = pagosPorCliente.maxByOrNull { it.value }
+        val clienteVip = deudores.find { it.id == clienteVipEntry?.key }
+
         // 8. Alertas de Salud Financiera (Asesor Zubli Inteligente)
         val productoFuerte = topProds.firstOrNull()?.first
         
         val alertas = com.example.gestor_deudores.data.utils.AsesorZubliUtils.generarConsejos(
             ingresosCobradosUsd = ingresosCobradosUsd,
-            fondoReposicionUsd = fondoReposicionTotalUsd,
             gananciaNetaUsd = gananciaNetaUsd,
             porCobrarUsd = porCobrarUsd,
             costoPasajesUsd = fondoPasajes,
-            topProductoNombre = productoFuerte
+            topProductoNombre = productoFuerte,
+            clienteMasDeudorNombre = clienteMasDeudor?.let { "${it.nombre} ${it.apellido}" },
+            clienteMasDeudorMonto = clienteMasDeudorEntry?.value ?: 0.0,
+            clienteVipNombre = clienteVip?.let { "${it.nombre} ${it.apellido}" },
+            clienteVipMonto = clienteVipEntry?.value ?: 0.0
         )
 
         ResumenUiState(

@@ -12,11 +12,14 @@ object AsesorZubliUtils {
 
     fun generarConsejos(
         ingresosCobradosUsd: Double,
-        fondoReposicionUsd: Double,
         gananciaNetaUsd: Double,
         porCobrarUsd: Double,
         costoPasajesUsd: Double,
-        topProductoNombre: String?
+        topProductoNombre: String?,
+        clienteMasDeudorNombre: String?,
+        clienteMasDeudorMonto: Double,
+        clienteVipNombre: String?,
+        clienteVipMonto: Double
     ): List<AlertaFinanciera> {
         val alertas = mutableListOf<AlertaFinanciera>()
 
@@ -78,15 +81,31 @@ object AsesorZubliUtils {
         }
 
         // =====================================
-        // REGLA 3: FLUJO DE CAJA (CUENTAS POR COBRAR)
+        // REGLA 3: FLUJO DE CAJA (CUENTAS POR COBRAR) Y RIESGO DE CLIENTES
         // =====================================
-        if (porCobrarUsd > 15.0 && pctDeuda > 30.0) {
+        if (clienteMasDeudorNombre != null && clienteMasDeudorMonto > 20.0) {
+            val consejosRiesgo = listOf(
+                "🚨 Alerta de Crédito: '$clienteMasDeudorNombre' concentra el mayor riesgo de deuda en tu negocio ($${String.format(java.util.Locale.US, "%.2f", clienteMasDeudorMonto)}). Estrategia: Evita tomarle nuevos pedidos a crédito hasta que no liquide. Mándale un WhatsApp de cobranza hoy.",
+                "🚨 Dinero Estancado. $clienteMasDeudorNombre te debe $${String.format(java.util.Locale.US, "%.2f", clienteMasDeudorMonto)}. Tu capital de trabajo se está quedando atrapado. Ofrece un pequeño descuento si paga el total hoy."
+            )
+            alertas.add(AlertaFinanciera("Riesgo de Cartera (Cliente)", consejosRiesgo.random(), "DANGER"))
+        } else if (porCobrarUsd > 15.0 && pctDeuda > 30.0) {
             val consejosCobranza = listOf(
                 "🟡 Tienes $${String.format(java.util.Locale.US, "%.2f", porCobrarUsd)} en la calle (${String.format(java.util.Locale.US, "%.1f", pctDeuda)}% de tus ventas). Estrategia: No inicies trabajos sin un 60% de abono. Tu capital se está quedando atrapado.",
-                "🟡 Mucho saldo pendiente. Estrategia: Envía un WhatsApp a los deudores diciendo: 'Hola, estamos limpiando inventario. Si liquidas tu saldo hoy, te llevas un obsequio sorpresa'. Recupera efectivo rápido.",
-                "🟡 Alto riesgo de liquidez. Usa el botón de WhatsApp en la pestaña 'Mis Cobros' para enviar recordatorios amigables de pago hoy mismo."
+                "🟡 Mucho saldo pendiente global. Estrategia: Envía un WhatsApp a los deudores diciendo: 'Hola, estamos limpiando inventario. Si liquidas tu saldo hoy, te llevas un obsequio sorpresa'. Recupera efectivo rápido."
             )
-            alertas.add(AlertaFinanciera("Dinero Estancado (Cuentas por Cobrar)", consejosCobranza.random(), "WARNING"))
+            alertas.add(AlertaFinanciera("Dinero Estancado (Global)", consejosCobranza.random(), "WARNING"))
+        }
+
+        // =====================================
+        // REGLA 4: CLIENTE VIP / FIDELIZACIÓN
+        // =====================================
+        if (clienteVipNombre != null && clienteVipMonto > 50.0) {
+            val consejosVip = listOf(
+                "🏆 Fidelización: '$clienteVipNombre' es tu cliente VIP del período (Abonó $${String.format(java.util.Locale.US, "%.2f", clienteVipMonto)}). Estrategia: Escríbele un mensaje de agradecimiento y ofrécele un 10% de descuento en su próxima compra para asegurar su lealtad.",
+                "🏆 Retención de Clientes. $clienteVipNombre te generó el mayor ingreso este mes. Considéralo para regalos corporativos de tu marca en navidad. Los buenos clientes hay que cuidarlos."
+            )
+            alertas.add(AlertaFinanciera("Oportunidad de Fidelización (VIP)", consejosVip.random(), "SUCCESS"))
         }
 
         return alertas

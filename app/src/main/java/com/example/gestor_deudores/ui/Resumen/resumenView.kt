@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -94,10 +95,23 @@ fun ResumenPrincipal(
                             fontSize = 18.sp,
                             color = Color.White
                         )
-                        BotonConmutadorMoneda(
-                            monedaActual = uiState.monedaVista,
-                            onCambiarMoneda = { viewModel.cambiarMonedaVista(it) }
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(
+                                onClick = {
+                                    com.example.gestor_deudores.data.utils.generarYCompartirPdf(navController.context, uiState)
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Share,
+                                    contentDescription = "Compartir Reporte PDF",
+                                    tint = Color.White
+                                )
+                            }
+                            BotonConmutadorMoneda(
+                                monedaActual = uiState.monedaVista,
+                                onCambiarMoneda = { viewModel.cambiarMonedaVista(it) }
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
