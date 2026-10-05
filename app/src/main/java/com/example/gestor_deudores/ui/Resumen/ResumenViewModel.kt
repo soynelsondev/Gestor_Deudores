@@ -293,7 +293,7 @@ class ResumenViewModel(
         val fondosInsumos = listOf(
             FondoInsumoItem(
                 id = "textil",
-                nombre = "Material Base (Textiles, Rígidos)",
+                nombre = "Material Base (Sublimación, Rígidos, etc.)",
                 montoUsd = fondoTextil,
                 porcentajeDelTotal = (fondoTextil / totalFondos * 100).toFloat(),
                 icono = "📦",
@@ -337,7 +337,7 @@ class ResumenViewModel(
                     montoTotalAbonoUsd = ingresosCobradosUsd,
                     fechaStr = "Consolidado Período",
                     desgloseItems = listOf(
-                        DesglosePagoItem("Material Base (Textil/Rígido)", fondoTextil, (fondoTextil / totalFondos * 100).toFloat()),
+                        DesglosePagoItem("Material Base (Sublimación/Rígidos)", fondoTextil, (fondoTextil / totalFondos * 100).toFloat()),
                         DesglosePagoItem("Pasajes & Transporte", fondoPasajes, (fondoPasajes / totalFondos * 100).toFloat()),
                         DesglosePagoItem("Tintas, Papel & Insumos", fondoTintasPapel, (fondoTintasPapel / totalFondos * 100).toFloat()),
                         DesglosePagoItem("Ganancia Neta Libre", fondoGanancia, (fondoGanancia / totalFondos * 100).toFloat())
