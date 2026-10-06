@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [Deudor::class, Deuda::class, Pedido::class, PlantillaCotizacion::class, CuentaBancaria::class, PerfilNegocio::class],
-    version = 16,
+    version = 18,
     exportSchema = true
 )
 abstract class DeudaDataBase : RoomDatabase() {
@@ -261,23 +261,71 @@ abstract class DeudaDataBase : RoomDatabase() {
             }
         }
 
+        private fun recrearTablaPerfilSegura(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS `perfil_negocio_new` (
+                    `id` INTEGER PRIMARY KEY NOT NULL,
+                    `nombreNegocio` TEXT NOT NULL DEFAULT 'Mi Taller de Personalización',
+                    `rifCedula` TEXT NOT NULL DEFAULT '',
+                    `telefonoContacto` TEXT NOT NULL DEFAULT '',
+                    `eslogan` TEXT NOT NULL DEFAULT '',
+                    `saludoCobro` TEXT NOT NULL DEFAULT '¡Hola! Te escribimos con mucho gusto de parte de nuestro taller.',
+                    `cierreCobro` TEXT NOT NULL DEFAULT 'Por favor indícanos cuándo podrías realizar el pago. ¡Muchas gracias!',
+                    `saludoListo` TEXT NOT NULL DEFAULT '¡Hola! Te tenemos excelentes noticias de parte de nuestro taller.',
+                    `cierreListo` TEXT NOT NULL DEFAULT 'Puedes pasar retirando tu pedido en nuestro horario habitual. ¡Te esperamos!'
+                )
+            """)
+
+            try {
+                val cursor = db.query("PRAGMA table_info(`perfil_negocio`)")
+                val columnas = mutableSetOf<String>()
+                val nameIdx = cursor.getColumnIndex("name")
+                while (cursor.moveToNext()) {
+                    if (nameIdx != -1) {
+                        columnas.add(cursor.getString(nameIdx))
+                    }
+                }
+                cursor.close()
+
+                if (columnas.isNotEmpty()) {
+                    val colsToCopy = listOf(
+                        "id", "nombreNegocio", "rifCedula", "telefonoContacto", "eslogan",
+                        "saludoCobro", "cierreCobro", "saludoListo", "cierreListo"
+                    ).filter { columnas.contains(it) }
+
+                    if (colsToCopy.isNotEmpty()) {
+                        val colsSql = colsToCopy.joinToString(", ")
+                        db.execSQL("INSERT INTO `perfil_negocio_new` ($colsSql) SELECT $colsSql FROM `perfil_negocio`")
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            db.execSQL("""
+                INSERT OR IGNORE INTO `perfil_negocio_new` (`id`, `nombreNegocio`, `rifCedula`, `telefonoContacto`, `eslogan`, `saludoCobro`, `cierreCobro`, `saludoListo`, `cierreListo`)
+                VALUES (1, 'Mi Taller de Personalización', '', '', '', '¡Hola! Te escribimos con mucho gusto de parte de nuestro taller.', 'Por favor indícanos cuándo podrías realizar el pago. ¡Muchas gracias!', '¡Hola! Te tenemos excelentes noticias de parte de nuestro taller.', 'Puedes pasar retirando tu pedido en nuestro horario habitual. ¡Te esperamos!')
+            """)
+
+            db.execSQL("DROP TABLE IF EXISTS `perfil_negocio`")
+            db.execSQL("ALTER TABLE `perfil_negocio_new` RENAME TO `perfil_negocio`")
+        }
+
         val MIGRATION_15_16 = object : Migration(15, 16) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("""
-                    CREATE TABLE IF NOT EXISTS `perfil_negocio` (
-                        `id` INTEGER PRIMARY KEY NOT NULL,
-                        `nombreNegocio` TEXT NOT NULL DEFAULT 'Mi Taller de Personalización',
-                        `rifCedula` TEXT NOT NULL DEFAULT '',
-                        `telefonoContacto` TEXT NOT NULL DEFAULT '',
-                        `eslogan` TEXT NOT NULL DEFAULT '',
-                        `plantillaMensajeCobro` TEXT NOT NULL DEFAULT 'Hola {cliente}, te recordamos tu saldo pendiente de ${'$'}monto en tu pedido {producto}. Saludos de {negocio}.',
-                        `plantillaMensajeListo` TEXT NOT NULL DEFAULT 'Hola {cliente}, ¡tu pedido de {producto} ya está listo! Saldo pendiente: ${'$'}monto. Saludos de {negocio}.'
-                    )
-                """)
-                db.execSQL("""
-                    INSERT OR IGNORE INTO `perfil_negocio` (`id`, `nombreNegocio`, `rifCedula`, `telefonoContacto`, `eslogan`, `plantillaMensajeCobro`, `plantillaMensajeListo`)
-                    VALUES (1, 'Mi Taller de Personalización', '', '', '', 'Hola {cliente}, te recordamos tu saldo pendiente de ${'$'}monto en tu pedido {producto}. Saludos de {negocio}.', 'Hola {cliente}, ¡tu pedido de {producto} ya está listo! Saldo pendiente: ${'$'}monto. Saludos de {negocio}.')
-                """)
+                recrearTablaPerfilSegura(db)
+            }
+        }
+
+        val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                recrearTablaPerfilSegura(db)
+            }
+        }
+
+        val MIGRATION_17_18 = object : Migration(17, 18) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                recrearTablaPerfilSegura(db)
             }
         }
 
@@ -292,7 +340,7 @@ abstract class DeudaDataBase : RoomDatabase() {
                         MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, 
                         MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, 
                         MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
-                        MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16
+                        MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18
                     )
                     .build()
 

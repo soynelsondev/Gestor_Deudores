@@ -35,3 +35,54 @@ fun abrirWhatsApp(context: Context, telefonoRaw: String, mensaje: String) {
         Toast.makeText(context, "WhatsApp no está instalado en este dispositivo", Toast.LENGTH_LONG).show()
     }
 }
+
+fun armarMensajeCobro(
+    perfil: com.example.gestor_deudores.data.database.PerfilNegocio,
+    clienteNombre: String,
+    montoUsd: Double,
+    montoBsText: String,
+    cuotaUsd: Double,
+    cuotaBsText: String,
+    fechaVencimiento: String
+): String {
+    val saludo = perfil.saludoCobro.ifBlank { "¡Hola! Te escribimos con mucho gusto de parte de nuestro taller." }
+    val cierre = perfil.cierreCobro.ifBlank { "Por favor indícanos cuándo podrías realizar el pago. ¡Muchas gracias!" }
+
+    val strMontoUsd = String.format(java.util.Locale.US, "%.2f", montoUsd)
+    val strCuotaUsd = String.format(java.util.Locale.US, "%.2f", cuotaUsd)
+
+    return """
+    |$saludo
+    |
+    |📋 *RESUMEN DE CUENTA*
+    |👤 *Cliente:* $clienteNombre
+    |💰 *Saldo Pendiente:* $$strMontoUsd USD$montoBsText
+    |📅 *Próxima Cuota:* $$strCuotaUsd USD$cuotaBsText (Vence: $fechaVencimiento)
+    |
+    |$cierre
+    """.trimMargin()
+}
+
+fun armarMensajePedidoListo(
+    perfil: com.example.gestor_deudores.data.database.PerfilNegocio,
+    clienteNombre: String,
+    productoNombre: String,
+    montoUsd: Double,
+    montoBsText: String
+): String {
+    val saludo = perfil.saludoListo.ifBlank { "¡Hola! Te tenemos excelentes noticias de parte de nuestro taller." }
+    val cierre = perfil.cierreListo.ifBlank { "Puedes pasar retirando tu pedido en nuestro horario habitual. ¡Te esperamos!" }
+
+    val strMontoUsd = String.format(java.util.Locale.US, "%.2f", montoUsd)
+    val textoSaldo = if (montoUsd > 0) "\n💰 *Saldo a Cancelar:* $$strMontoUsd USD$montoBsText" else "\n✅ *Estado:* Cancelado en su totalidad"
+
+    return """
+    |$saludo
+    |
+    |🎉 *¡TU PEDIDO ESTÁ LISTO!*
+    |👤 *Cliente:* $clienteNombre
+    |📦 *Producto:* $productoNombre$textoSaldo
+    |
+    |$cierre
+    """.trimMargin()
+}

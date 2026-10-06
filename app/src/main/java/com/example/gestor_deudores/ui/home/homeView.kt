@@ -432,6 +432,7 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
                         pestañaActual = pestañaActual,
                         monedaVista = monedaVista,
                         tasaBCV = precioDolarBCV,
+                        perfilNegocio = perfilNegocio ?: com.example.gestor_deudores.data.database.PerfilNegocio(),
                         onEditarClick = {
                             // Para editar, viajamos a la ruta de registro PERO enviándole el ID
                             // (Tendremos que ajustar rutas.kt para que acepte este ID)
@@ -696,6 +697,7 @@ fun carDeudores(
     pestañaActual: Pestaña,
     monedaVista: String = "USD",
     tasaBCV: Double = 0.0,
+    perfilNegocio: com.example.gestor_deudores.data.database.PerfilNegocio = com.example.gestor_deudores.data.database.PerfilNegocio(),
     onEditarClick: () -> Unit,
     onAbonarClick: () -> Unit,
     onEliminarClick: () -> Unit,
@@ -894,12 +896,15 @@ fun carDeudores(
                                 val montoBsText = if (tasaBCV > 0) " (equivale a Bs. ${"%.2f".format(montoRestante * tasaBCV)})" else ""
                                 val cuotaBsText = if (tasaBCV > 0 && estadoCobro?.proximaCuotaMonto != null) " (Bs. ${"%.2f".format(estadoCobro.proximaCuotaMonto * tasaBCV)})" else ""
 
-                                val mensaje = if (estadoCobro != null && estadoCobro.vencida) {
-                                    val textoAtraso = if (estadoCobro.diasAtraso == 1L) "hace 1 día" else "hace ${estadoCobro.diasAtraso} días"
-                                    "Hola ${deudor.nombre}, te escribimos para recordarte que tu cuota de $cuotaFormateada USD$cuotaBsText venció $textoAtraso. Tu saldo total pendiente es de $saldoFormateado USD$montoBsText. Por favor indícanos cuándo podrías realizar el pago. ¡Muchas gracias!"
-                                } else {
-                                    "Hola ${deudor.nombre}, te escribimos para recordarte que tu saldo pendiente es de $saldoFormateado USD$montoBsText. Tu próxima cuota de $cuotaFormateada USD$cuotaBsText vence el $fechaFormateada. ¡Muchas gracias!"
-                                }
+                                val mensaje = com.example.gestor_deudores.data.utils.armarMensajeCobro(
+                                    perfil = perfilNegocio ?: com.example.gestor_deudores.data.database.PerfilNegocio(),
+                                    clienteNombre = "${deudor.nombre} ${deudor.apellido}".trim(),
+                                    montoUsd = montoRestante,
+                                    montoBsText = montoBsText,
+                                    cuotaUsd = estadoCobro?.proximaCuotaMonto ?: 0.0,
+                                    cuotaBsText = cuotaBsText,
+                                    fechaVencimiento = fechaFormateada
+                                )
 
                                 abrirWhatsApp(contexto, deudor.telf, mensaje)
                             }
@@ -1160,8 +1165,12 @@ fun DialogoConfigurarPerfilNegocio(
     var rifCedula by remember { mutableStateOf(perfilActual.rifCedula) }
     var telefonoContacto by remember { mutableStateOf(perfilActual.telefonoContacto) }
     var eslogan by remember { mutableStateOf(perfilActual.eslogan) }
-    var plantillaCobro by remember { mutableStateOf(perfilActual.plantillaMensajeCobro) }
-    var plantillaListo by remember { mutableStateOf(perfilActual.plantillaMensajeListo) }
+    
+    var saludoCobro by remember { mutableStateOf(perfilActual.saludoCobro) }
+    var cierreCobro by remember { mutableStateOf(perfilActual.cierreCobro) }
+    
+    var saludoListo by remember { mutableStateOf(perfilActual.saludoListo) }
+    var cierreListo by remember { mutableStateOf(perfilActual.cierreListo) }
 
     Dialog(onDismissRequest = { onDismiss() }) {
         Card(
@@ -1183,7 +1192,7 @@ fun DialogoConfigurarPerfilNegocio(
                     color = estados
                 )
                 Text(
-                    text = "Los datos de tu negocio aparecerán en tus reportes PDF y mensajes de WhatsApp.",
+                    text = "Los datos de tu negocio se usarán en los reportes PDF y mensajes de WhatsApp.",
                     fontSize = 12.sp,
                     color = Color.Gray,
                     modifier = Modifier.padding(bottom = 12.dp)
@@ -1229,34 +1238,88 @@ fun DialogoConfigurarPerfilNegocio(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = "💬 Plantillas de Mensajes WhatsApp",
+                    text = "💬 Mensajes de WhatsApp (A Prueba de Error)",
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
                     color = estados
                 )
                 Text(
-                    text = "Variables disponibles: {cliente}, {monto}, {producto}, {negocio}",
+                    text = "Escribe tu saludo y tu mensaje de pago. Los saldos y nombres se insertan automáticamente sin llaves ni códigos.",
                     fontSize = 11.sp,
                     color = Color.Gray,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
 
+                // --- MENSAJE 1: RECORDATORIO DE DEUDA ---
+                Text("1. Recordatorio de Deuda", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Spacer(modifier = Modifier.height(4.dp))
                 OutlinedTextField(
-                    value = plantillaCobro,
-                    onValueChange = { plantillaCobro = it },
-                    label = { Text("Mensaje Recordatorio de Deuda") },
+                    value = saludoCobro,
+                    onValueChange = { saludoCobro = it },
+                    label = { Text("Saludo de Inicio") },
                     modifier = Modifier.fillMaxWidth(),
-                    minLines = 3,
                     shape = RoundedCornerShape(12.dp)
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                
+                // Vista previa bloqueada de la ficha
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color.LightGray.copy(alpha = 0.3f))
+                        .padding(8.dp)
+                ) {
+                    Text(
+                        text = "📋 FICHA AUTOMÁTICA DE DEUDA\n👤 Cliente: Nombre del Deudor\n💰 Saldo: $45.00 USD (Bs. 2.250,00)\n📅 Próxima Cuota: $15.00 USD",
+                        fontSize = 11.sp,
+                        color = Color.DarkGray
+                    )
+                }
 
                 OutlinedTextField(
-                    value = plantillaListo,
-                    onValueChange = { plantillaListo = it },
-                    label = { Text("Mensaje de Pedido Listo") },
+                    value = cierreCobro,
+                    onValueChange = { cierreCobro = it },
+                    label = { Text("Mensaje de Cierre / Datos de Pago") },
                     modifier = Modifier.fillMaxWidth(),
-                    minLines = 3,
+                    minLines = 2,
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // --- MENSAJE 2: PEDIDO LISTO ---
+                Text("2. Notificación de Pedido Listo", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Spacer(modifier = Modifier.height(4.dp))
+                OutlinedTextField(
+                    value = saludoListo,
+                    onValueChange = { saludoListo = it },
+                    label = { Text("Saludo de Inicio") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color.LightGray.copy(alpha = 0.3f))
+                        .padding(8.dp)
+                ) {
+                    Text(
+                        text = "🎉 FICHA AUTOMÁTICA DE PEDIDO\n👤 Cliente: Nombre del Cliente\n📦 Producto: 10x Franelas\n💰 Saldo a Cancelar: $20.00 USD",
+                        fontSize = 11.sp,
+                        color = Color.DarkGray
+                    )
+                }
+
+                OutlinedTextField(
+                    value = cierreListo,
+                    onValueChange = { cierreListo = it },
+                    label = { Text("Mensaje de Cierre / Retiro") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
                     shape = RoundedCornerShape(12.dp)
                 )
 
@@ -1278,8 +1341,10 @@ fun DialogoConfigurarPerfilNegocio(
                                     rifCedula = rifCedula,
                                     telefonoContacto = telefonoContacto,
                                     eslogan = eslogan,
-                                    plantillaMensajeCobro = plantillaCobro,
-                                    plantillaMensajeListo = plantillaListo
+                                    saludoCobro = saludoCobro,
+                                    cierreCobro = cierreCobro,
+                                    saludoListo = saludoListo,
+                                    cierreListo = cierreListo
                                 )
                             )
                             onDismiss()
