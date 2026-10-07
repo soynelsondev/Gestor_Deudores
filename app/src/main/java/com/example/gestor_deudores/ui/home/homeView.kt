@@ -134,6 +134,7 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
 
     val perfilNegocio by viewModel.perfilNegocio.collectAsState()
     var mostrarDialogoPerfil by remember { mutableStateOf(false) }
+    var mostrarBibliotecaInsumos by remember { mutableStateOf(false) }
     var deudaMaximaPermitida by remember { mutableStateOf(0.0) }
     
     // --- ESTADOS Y LAUNCHERS PARA RESPALDOS ---
@@ -388,6 +389,14 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
                 onGuardar = { nuevoPerfil ->
                     viewModel.guardarPerfilNegocio(nuevoPerfil)
                 }
+            )
+        }
+
+        if (mostrarBibliotecaInsumos) {
+            val cotizadorViewModel: com.example.gestor_deudores.ui.cotizador.CotizadorViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+            DialogoGestionBibliotecaInsumos(
+                cotizadorViewModel = cotizadorViewModel,
+                onDismiss = { mostrarBibliotecaInsumos = false }
             )
         }
 
@@ -1353,6 +1362,168 @@ fun DialogoConfigurarPerfilNegocio(
                     ) {
                         Text("Guardar Cambios", color = Color.White)
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DialogoGestionBibliotecaInsumos(
+    cotizadorViewModel: com.example.gestor_deudores.ui.cotizador.CotizadorViewModel,
+    onDismiss: () -> Unit
+) {
+    val listaInsumos by cotizadorViewModel.listaInsumosBiblioteca.collectAsState()
+    
+    var nombre by remember { mutableStateOf("") }
+    var categoria by remember { mutableStateOf("MATERIA_PRIMA") }
+    var precioLoteTexto by remember { mutableStateOf("") }
+    var moneda by remember { mutableStateOf("USD") }
+    var rendimientoTexto by remember { mutableStateOf("1") }
+    var unidadLote by remember { mutableStateOf("Piezas") }
+
+    Dialog(onDismissRequest = { onDismiss() }) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Text(
+                    text = "📦 Biblioteca de Insumos & Materiales",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = estados
+                )
+                Text(
+                    text = "Guarda aquí tus materiales. Si cambia el precio de un insumo, lo editas aquí y se actualizará en tus plantillas.",
+                    fontSize = 12.sp,
+                    color = Color.Gray,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+
+                // Formulario rápido para agregar nuevo material
+                Text(
+                    text = "➕ Agregar / Guardar Insumo",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = estados
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+
+                OutlinedTextField(
+                    value = nombre,
+                    onValueChange = { nombre = it },
+                    label = { Text("Nombre del Material") },
+                    placeholder = { Text("Ej. Taza Blanca 11oz, Metro DTF") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = precioLoteTexto,
+                        onValueChange = { precioLoteTexto = it },
+                        label = { Text("Precio Lote ($)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    OutlinedTextField(
+                        value = rendimientoTexto,
+                        onValueChange = { rendimientoTexto = it },
+                        label = { Text("Cant. Lote") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Button(
+                    onClick = {
+                        val pD = precioLoteTexto.replace(",", ".").toDoubleOrNull() ?: 0.0
+                        val rI = rendimientoTexto.toIntOrNull() ?: 1
+                        if (nombre.isNotBlank() && pD > 0) {
+                            cotizadorViewModel.guardarInsumoBiblioteca(
+                                com.example.gestor_deudores.data.database.InsumoBiblioteca(
+                                    nombre = nombre.trim(),
+                                    categoria = categoria,
+                                    precioLote = pD,
+                                    cantidadLote = if (rI > 0) rI else 1,
+                                    moneda = moneda,
+                                    unidadLote = unidadLote
+                                )
+                            )
+                            nombre = ""
+                            precioLoteTexto = ""
+                            rendimientoTexto = "1"
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = estados),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Guardar en la Biblioteca", color = Color.White)
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                androidx.compose.material3.HorizontalDivider()
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "📋 Mis Insumos Guardados (${listaInsumos.size})",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                if (listaInsumos.isEmpty()) {
+                    Text(
+                        text = "Aún no tienes insumos guardados en tu biblioteca.",
+                        fontSize = 12.sp,
+                        color = Color.Gray,
+                        modifier = Modifier.padding(vertical = 12.dp)
+                    )
+                } else {
+                    listaInsumos.forEach { item ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color.Black.copy(alpha = 0.04f))
+                                .padding(10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(item.nombre, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                val unitario = if (item.cantidadLote > 0) item.precioLote / item.cantidadLote else item.precioLote
+                                Text(
+                                    "Lote: $${item.precioLote} ${item.moneda} ÷ ${item.cantidadLote} = $${String.format(Locale.US, "%.2f", unitario)}/u",
+                                    fontSize = 11.sp,
+                                    color = Color.DarkGray
+                                )
+                            }
+                            IconButton(onClick = { cotizadorViewModel.eliminarInsumoBiblioteca(item) }) {
+                                Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = Color.Red, modifier = Modifier.size(20.dp))
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                TextButton(onClick = { onDismiss() }, modifier = Modifier.align(Alignment.End)) {
+                    Text("Cerrar", color = Color.Gray)
                 }
             }
         }

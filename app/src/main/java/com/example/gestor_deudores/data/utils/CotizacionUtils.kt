@@ -11,17 +11,29 @@ enum class TipoGanancia {
     GANANCIA_FIJA // Dólares Fijos por Pieza: Costo + $Fijo
 }
 
+data class ResultadoEscalaCantidad(
+    val nombreEscala: String,
+    val desdeCantidad: Int,
+    val costoUnitarioUsd: Double,
+    val precioUnitarioUsd: Double,
+    val gananciaUnitarioUsd: Double,
+    val precioTotalLoteUsd: Double
+)
+
 data class DesgloseCostosPlantilla(
     val costoPiezaBaseUsd: Double,
     val costoPasajeUsd: Double,
     val costoInsumosUsd: Double,
+    val costoManoObraUsd: Double = 0.0,
     val costoTotalProduccionUsd: Double,
     val precioSugeridoUsd: Double,
     val gananciaUsd: Double,
+    val comisionUsd: Double = 0.0,
     val precioDocenaUsd: Double = 0.0,
     val gananciaDocenaUsd: Double = 0.0,
     val margenSobreVentaPorcentaje: Float = 0f,
-    val esPerdida: Boolean = false
+    val esPerdida: Boolean = false,
+    val tablaEscalasResultado: List<ResultadoEscalaCantidad> = emptyList()
 )
 
 /**
@@ -33,7 +45,8 @@ fun calcularCostosPlantilla(
     plantilla: PlantillaCotizacion,
     tasaBcv: Double = 1.0,
     tipoGanancia: TipoGanancia = TipoGanancia.SOBRE_COSTO,
-    gananciaFijaUsd: Double = 0.0
+    gananciaFijaUsd: Double = 0.0,
+    cantidadPedido: Int = 1
 ): DesgloseCostosPlantilla {
     val tasaActiva = if (tasaBcv > 0.0) tasaBcv else 1.0
 
@@ -54,11 +67,11 @@ fun calcularCostosPlantilla(
     if (insumosDinamicos.isNotEmpty()) {
         // --- CÁLCULO VÍA INSUMOS DINÁMICOS ILIMITADOS ---
         costoUnitarioPieza = insumosDinamicos.filter { it.categoria == "MATERIA_PRIMA" }
-            .sumOf { it.calcularCostoUnitarioUsd(tasaActiva) }
+            .sumOf { it.calcularCostoUnitarioUsd(tasaActiva, cantidadPedido) }
         transportePorPieza = insumosDinamicos.filter { it.categoria == "SERVICIO" }
-            .sumOf { it.calcularCostoUnitarioUsd(tasaActiva) }
+            .sumOf { it.calcularCostoUnitarioUsd(tasaActiva, cantidadPedido) }
         costoInsumosBase = insumosDinamicos.filter { it.categoria == "INSUMO_EXTRA" }
-            .sumOf { it.calcularCostoUnitarioUsd(tasaActiva) }
+            .sumOf { it.calcularCostoUnitarioUsd(tasaActiva, cantidadPedido) }
     } else {
         // --- CÁLCULO TRADICIONAL (FALLBACK) ---
         fun parseCant(cant: Int): Double = if (cant > 0) cant.toDouble() else 1.0
@@ -80,50 +93,74 @@ fun calcularCostosPlantilla(
     // 2. Subtotal Materiales
     val subtotalMateriales = costoUnitarioPieza + transportePorPieza + costoInsumosBase
     
-    // 3. Costo Operativo
+    // 3. Costo Operativo y Mano de Obra
     val costoOperativo = subtotalMateriales * (plantilla.porcentajeOperativo / 100.0)
-    val costoTotalProduccion = subtotalMateriales + costoOperativo
+    val costoManoObra = (plantilla.minutosPorPieza / 60.0) * plantilla.tarifaPorHoraUsd
+    val costoTotalProduccion = subtotalMateriales + costoOperativo + costoManoObra
     
     // 4. Agrupamos el operativo dentro de "Insumos" para tener los 3 grandes bloques
     val costoInsumosFinal = costoInsumosBase + costoOperativo
 
     // 5. Cálculos de Venta y Ganancia (Soporta SOBRE_COSTO, SOBRE_VENTA y GANANCIA_FIJA)
-    var precioVentaSug = 0.0
+    var precioSinComision = 0.0
     var ganancia = 0.0
 
     if (costoTotalProduccion > 0.0) {
         val pctDecimal = (plantilla.porcentajeGanancia / 100.0).coerceAtLeast(0.0)
         when (tipoGanancia) {
             TipoGanancia.SOBRE_COSTO -> {
-                precioVentaSug = costoTotalProduccion * (1.0 + pctDecimal)
-                ganancia = precioVentaSug - costoTotalProduccion
+                precioSinComision = costoTotalProduccion * (1.0 + pctDecimal)
+                ganancia = precioSinComision - costoTotalProduccion
             }
             TipoGanancia.SOBRE_VENTA -> {
-                precioVentaSug = if (pctDecimal < 1.0) costoTotalProduccion / (1.0 - pctDecimal) else costoTotalProduccion * 2.0
-                ganancia = precioVentaSug - costoTotalProduccion
+                precioSinComision = if (pctDecimal < 1.0) costoTotalProduccion / (1.0 - pctDecimal) else costoTotalProduccion * 2.0
+                ganancia = precioSinComision - costoTotalProduccion
             }
             TipoGanancia.GANANCIA_FIJA -> {
                 ganancia = gananciaFijaUsd.coerceAtLeast(0.0)
-                precioVentaSug = costoTotalProduccion + ganancia
+                precioSinComision = costoTotalProduccion + ganancia
             }
         }
     }
+
+    // 6. Aplicación de Comisión de Cobro
+    val comisionPct = (plantilla.comisionPorcentaje / 100.0).coerceIn(0.0, 0.95)
+    val precioVentaSug = if (comisionPct > 0.0) precioSinComision / (1.0 - comisionPct) else precioSinComision
+    val comisionUsd = precioVentaSug - precioSinComision
 
     val precioDocena = precioVentaSug * 12.0
     val gananciaDocena = ganancia * 12.0
     val margenSobreVentaPct = if (precioVentaSug > 0.0) ((ganancia / precioVentaSug) * 100.0).toFloat() else 0f
     val esPerdida = costoTotalProduccion > 0.0 && precioVentaSug <= costoTotalProduccion
 
+    // 7. Generación de Tabla de Escalas por Cantidad (1, 6, 12, 24, 50 pcs) si no estamos en recursión
+    val tablaEscalas = if (cantidadPedido == 1) {
+        listOf(1, 6, 12, 24, 50).map { q ->
+            val cUnid = calcularCostosPlantilla(plantilla, tasaBcv, tipoGanancia, gananciaFijaUsd, cantidadPedido = q)
+            ResultadoEscalaCantidad(
+                nombreEscala = "Lote de $q pcs",
+                desdeCantidad = q,
+                costoUnitarioUsd = cUnid.costoTotalProduccionUsd,
+                precioUnitarioUsd = cUnid.precioSugeridoUsd,
+                gananciaUnitarioUsd = cUnid.gananciaUsd,
+                precioTotalLoteUsd = (cUnid.precioSugeridoUsd * q).redondear2()
+            )
+        }
+    } else emptyList()
+
     return DesgloseCostosPlantilla(
         costoPiezaBaseUsd = costoUnitarioPieza.redondear2(),
         costoPasajeUsd = transportePorPieza.redondear2(),
         costoInsumosUsd = costoInsumosFinal.redondear2(),
+        costoManoObraUsd = costoManoObra.redondear2(),
         costoTotalProduccionUsd = costoTotalProduccion.redondear2(),
         precioSugeridoUsd = precioVentaSug.redondear2(),
         gananciaUsd = ganancia.redondear2(),
+        comisionUsd = comisionUsd.redondear2(),
         precioDocenaUsd = precioDocena.redondear2(),
         gananciaDocenaUsd = gananciaDocena.redondear2(),
         margenSobreVentaPorcentaje = margenSobreVentaPct,
-        esPerdida = esPerdida
+        esPerdida = esPerdida,
+        tablaEscalasResultado = tablaEscalas
     )
 }

@@ -60,11 +60,14 @@ data class CotizadorUiState(
     val monedaExtra: String = "USD",
     val rendimientoExtra: String = "1",
 
-    // 5. Operatividad y Ganancia (Fase 1: Ganancia Flexible)
-    val porcentajeOperativo: Float = 10f, // 10% por defecto para luz/desgaste
-    val porcentajeGanancia: Float = 40f,  // 40% por defecto de margen
+    // 5. Operatividad y Ganancia (Fase 1 y 2: Mano de obra y comisión)
+    val porcentajeOperativo: Float = 10f,
+    val porcentajeGanancia: Float = 40f,
     val tipoGanancia: com.example.gestor_deudores.data.utils.TipoGanancia = com.example.gestor_deudores.data.utils.TipoGanancia.SOBRE_COSTO,
     val gananciaFijaUsd: String = "0.0",
+    val minutosPorPieza: String = "",
+    val tarifaPorHoraUsd: String = "",
+    val comisionPorcentaje: Float = 0f,
     
     // 6. Configuración Venta al Mayor
     val esPlantillaMayor: Boolean = false,
@@ -77,6 +80,8 @@ data class CotizadorUiState(
     // RESULTADOS MATEMÁTICOS (Calculados en vivo)
     // ==========================================
     val costoTotalProduccionUsd: Double = 0.0,
+    val costoManoObraUsd: Double = 0.0,
+    val comisionUsd: Double = 0.0,
     
     // Resultados
     val precioSugeridoUsd: Double = 0.0,
@@ -84,10 +89,14 @@ data class CotizadorUiState(
     val precioDocenaUsd: Double = 0.0,
     val gananciaDocenaUsd: Double = 0.0,
     val margenSobreVentaPct: Float = 0f,
-    val esPerdida: Boolean = false
+    val esPerdida: Boolean = false,
+    val tablaEscalasResultado: List<com.example.gestor_deudores.data.utils.ResultadoEscalaCantidad> = emptyList()
 )
 
-class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
+class CotizadorViewModel(
+    private val plantillaDao: PlantillaDao,
+    private val insumoBibliotecaDao: com.example.gestor_deudores.data.database.InsumoBibliotecaDao
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CotizadorUiState())
     val uiState: StateFlow<CotizadorUiState> = _uiState.asStateFlow()
@@ -99,6 +108,44 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
+
+    val listaInsumosBiblioteca = insumoBibliotecaDao.obtenerTodosLosInsumos().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    fun guardarInsumoBiblioteca(insumo: com.example.gestor_deudores.data.database.InsumoBiblioteca) {
+        viewModelScope.launch {
+            insumoBibliotecaDao.guardarInsumo(insumo)
+        }
+    }
+
+    fun eliminarInsumoBiblioteca(insumo: com.example.gestor_deudores.data.database.InsumoBiblioteca) {
+        viewModelScope.launch {
+            insumoBibliotecaDao.eliminarInsumo(insumo)
+        }
+    }
+
+    fun duplicarPlantilla(plantilla: PlantillaCotizacion) {
+        viewModelScope.launch {
+            val copia = plantilla.copy(
+                id = 0,
+                nombrePlantilla = "${plantilla.nombrePlantilla} (Copia)"
+            )
+            plantillaDao.agregarPlantilla(copia)
+        }
+    }
+
+    fun cargarPreset(preset: com.example.gestor_deudores.data.utils.CotizadorPresetsUtils.PresetProducto) {
+        _uiState.update { actual ->
+            actual.copy(
+                nombrePlantilla = preset.titulo,
+                listaInsumos = preset.insumosSugeridos
+            )
+        }
+        calcularResultados()
+    }
 
     // Variable reactiva para saber la tasa de cambio actual que haya introducido el usuario
     private var tasaBcvActual: Double = 1.0
@@ -211,6 +258,21 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
         calcularResultados()
     }
 
+    fun onMinutosPorPiezaChange(valor: String) {
+        _uiState.update { it.copy(minutosPorPieza = valor) }
+        calcularResultados()
+    }
+
+    fun onTarifaPorHoraChange(valor: String) {
+        _uiState.update { it.copy(tarifaPorHoraUsd = valor) }
+        calcularResultados()
+    }
+
+    fun onComisionPorcentajeChange(valor: Float) {
+        _uiState.update { it.copy(comisionPorcentaje = valor.coerceIn(0f, 50f)) }
+        calcularResultados()
+    }
+
     fun onMonedaExtraChange(moneda: String) {
         _uiState.update { it.copy(monedaExtra = moneda) }
         calcularResultados()
@@ -305,6 +367,9 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
                 rendimientoExtra = plantilla.rendimientoExtra.toString(),
                 porcentajeOperativo = plantilla.porcentajeOperativo,
                 porcentajeGanancia = plantilla.porcentajeGanancia,
+                minutosPorPieza = if (plantilla.minutosPorPieza > 0) plantilla.minutosPorPieza.toString() else "",
+                tarifaPorHoraUsd = if (plantilla.tarifaPorHoraUsd > 0) plantilla.tarifaPorHoraUsd.toString() else "",
+                comisionPorcentaje = plantilla.comisionPorcentaje,
                 esPlantillaMayor = plantilla.esPlantillaMayor,
                 minimoUnidadesMayor = plantilla.minimoUnidadesMayor.toString(),
                 listaInsumos = try {
@@ -364,7 +429,10 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
             porcentajeGanancia = estado.porcentajeGanancia,
             esPlantillaMayor = estado.esPlantillaMayor,
             minimoUnidadesMayor = parseCant(estado.minimoUnidadesMayor),
-            costosAdicionalesJson = com.google.gson.Gson().toJson(estado.listaInsumos)
+            costosAdicionalesJson = com.google.gson.Gson().toJson(estado.listaInsumos),
+            minutosPorPieza = parseD(estado.minutosPorPieza),
+            tarifaPorHoraUsd = parseD(estado.tarifaPorHoraUsd),
+            comisionPorcentaje = estado.comisionPorcentaje
         )
 
         viewModelScope.launch {
@@ -436,7 +504,10 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
             porcentajeGanancia = estado.porcentajeGanancia,
             esPlantillaMayor = estado.esPlantillaMayor,
             minimoUnidadesMayor = parseCantInt(estado.minimoUnidadesMayor),
-            costosAdicionalesJson = com.google.gson.Gson().toJson(estado.listaInsumos)
+            costosAdicionalesJson = com.google.gson.Gson().toJson(estado.listaInsumos),
+            minutosPorPieza = parseD(estado.minutosPorPieza),
+            tarifaPorHoraUsd = parseD(estado.tarifaPorHoraUsd),
+            comisionPorcentaje = estado.comisionPorcentaje
         )
 
         val costos = com.example.gestor_deudores.data.utils.calcularCostosPlantilla(
@@ -449,12 +520,15 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
         _uiState.update {
             it.copy(
                 costoTotalProduccionUsd = costos.costoTotalProduccionUsd,
+                costoManoObraUsd = costos.costoManoObraUsd,
+                comisionUsd = costos.comisionUsd,
                 precioSugeridoUsd = costos.precioSugeridoUsd,
                 gananciaNetaUsd = costos.gananciaUsd,
                 precioDocenaUsd = costos.precioDocenaUsd,
                 gananciaDocenaUsd = costos.gananciaDocenaUsd,
                 margenSobreVentaPct = costos.margenSobreVentaPorcentaje,
-                esPerdida = costos.esPerdida
+                esPerdida = costos.esPerdida,
+                tablaEscalasResultado = costos.tablaEscalasResultado
             )
         }
     }

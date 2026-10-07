@@ -1,0 +1,654 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 20,
+    "identityHash": "2a35eabc156af9015ae4e7b0b060ff72",
+    "entities": [
+      {
+        "tableName": "deudores",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `nombre` TEXT NOT NULL, `apellido` TEXT NOT NULL, `cedula` TEXT NOT NULL, `telf` TEXT NOT NULL, `archivado` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nombre",
+            "columnName": "nombre",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "apellido",
+            "columnName": "apellido",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cedula",
+            "columnName": "cedula",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "telf",
+            "columnName": "telf",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "archivado",
+            "columnName": "archivado",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "Tabla_Deuda",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `idDeudor` INTEGER NOT NULL, `montoInicial` REAL NOT NULL, `montoRestante` REAL NOT NULL, `tipoDeuda` TEXT NOT NULL, `fecha` TEXT NOT NULL, `rol` TEXT NOT NULL, `descripcion` TEXT NOT NULL, `estado` TEXT NOT NULL, `tipo` TEXT NOT NULL, `numCuotas` INTEGER NOT NULL, `frecuencia` TEXT NOT NULL, `fechaMillis` INTEGER NOT NULL, FOREIGN KEY(`idDeudor`) REFERENCES `deudores`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "idDeudor",
+            "columnName": "idDeudor",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "montoInicial",
+            "columnName": "montoInicial",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "montoRestante",
+            "columnName": "montoRestante",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tipoDeuda",
+            "columnName": "tipoDeuda",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fecha",
+            "columnName": "fecha",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rol",
+            "columnName": "rol",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "descripcion",
+            "columnName": "descripcion",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "estado",
+            "columnName": "estado",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tipo",
+            "columnName": "tipo",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "numCuotas",
+            "columnName": "numCuotas",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "frecuencia",
+            "columnName": "frecuencia",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fechaMillis",
+            "columnName": "fechaMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_Tabla_Deuda_idDeudor",
+            "unique": false,
+            "columnNames": [
+              "idDeudor"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_Tabla_Deuda_idDeudor` ON `${TABLE_NAME}` (`idDeudor`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "deudores",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "idDeudor"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "pedidos",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `deudorId` INTEGER NOT NULL, `producto` TEXT NOT NULL, `cantidad` INTEGER NOT NULL, `precioUnitarioUsd` REAL NOT NULL, `totalUsd` REAL NOT NULL, `fechaCreacionMillis` INTEGER NOT NULL, `fechaEntregaMillis` INTEGER NOT NULL, `estado` TEXT NOT NULL, `notas` TEXT NOT NULL, `costoPiezaBaseUsd` REAL NOT NULL, `costoPasajeUsd` REAL NOT NULL, `costoInsumosUsd` REAL NOT NULL, `nombrePiezaBase` TEXT NOT NULL, FOREIGN KEY(`deudorId`) REFERENCES `deudores`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deudorId",
+            "columnName": "deudorId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "producto",
+            "columnName": "producto",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cantidad",
+            "columnName": "cantidad",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "precioUnitarioUsd",
+            "columnName": "precioUnitarioUsd",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "totalUsd",
+            "columnName": "totalUsd",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fechaCreacionMillis",
+            "columnName": "fechaCreacionMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fechaEntregaMillis",
+            "columnName": "fechaEntregaMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "estado",
+            "columnName": "estado",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notas",
+            "columnName": "notas",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "costoPiezaBaseUsd",
+            "columnName": "costoPiezaBaseUsd",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "costoPasajeUsd",
+            "columnName": "costoPasajeUsd",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "costoInsumosUsd",
+            "columnName": "costoInsumosUsd",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nombrePiezaBase",
+            "columnName": "nombrePiezaBase",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_pedidos_deudorId",
+            "unique": false,
+            "columnNames": [
+              "deudorId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_pedidos_deudorId` ON `${TABLE_NAME}` (`deudorId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "deudores",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "deudorId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "plantillas_cotizacion",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `nombrePlantilla` TEXT NOT NULL, `precioPaquetePieza` REAL NOT NULL, `monedaPaquetePieza` TEXT NOT NULL, `cantidadPaquetePieza` INTEGER NOT NULL, `precioPaqueteEmpaque` REAL NOT NULL, `monedaPaqueteEmpaque` TEXT NOT NULL, `cantidadPaqueteEmpaque` INTEGER NOT NULL, `precioPaquetePapel` REAL NOT NULL, `monedaPaquetePapel` TEXT NOT NULL, `cantidadPaquetePapel` INTEGER NOT NULL, `precioTotalDtf` REAL NOT NULL, `monedaDtf` TEXT NOT NULL, `rendimientoDtf` INTEGER NOT NULL, `costoTransporte` REAL NOT NULL, `monedaTransporte` TEXT NOT NULL, `rendimientoTransporte` INTEGER NOT NULL, `costoDiseno` REAL NOT NULL, `monedaDiseno` TEXT NOT NULL, `rendimientoDiseno` INTEGER NOT NULL, `costoExtra` REAL NOT NULL, `monedaExtra` TEXT NOT NULL, `rendimientoExtra` INTEGER NOT NULL, `porcentajeOperativo` REAL NOT NULL, `porcentajeGanancia` REAL NOT NULL, `esPlantillaMayor` INTEGER NOT NULL, `minimoUnidadesMayor` INTEGER NOT NULL, `costosAdicionalesJson` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nombrePlantilla",
+            "columnName": "nombrePlantilla",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "precioPaquetePieza",
+            "columnName": "precioPaquetePieza",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "monedaPaquetePieza",
+            "columnName": "monedaPaquetePieza",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cantidadPaquetePieza",
+            "columnName": "cantidadPaquetePieza",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "precioPaqueteEmpaque",
+            "columnName": "precioPaqueteEmpaque",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "monedaPaqueteEmpaque",
+            "columnName": "monedaPaqueteEmpaque",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cantidadPaqueteEmpaque",
+            "columnName": "cantidadPaqueteEmpaque",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "precioPaquetePapel",
+            "columnName": "precioPaquetePapel",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "monedaPaquetePapel",
+            "columnName": "monedaPaquetePapel",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cantidadPaquetePapel",
+            "columnName": "cantidadPaquetePapel",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "precioTotalDtf",
+            "columnName": "precioTotalDtf",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "monedaDtf",
+            "columnName": "monedaDtf",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rendimientoDtf",
+            "columnName": "rendimientoDtf",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "costoTransporte",
+            "columnName": "costoTransporte",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "monedaTransporte",
+            "columnName": "monedaTransporte",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rendimientoTransporte",
+            "columnName": "rendimientoTransporte",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "costoDiseno",
+            "columnName": "costoDiseno",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "monedaDiseno",
+            "columnName": "monedaDiseno",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rendimientoDiseno",
+            "columnName": "rendimientoDiseno",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "costoExtra",
+            "columnName": "costoExtra",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "monedaExtra",
+            "columnName": "monedaExtra",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rendimientoExtra",
+            "columnName": "rendimientoExtra",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "porcentajeOperativo",
+            "columnName": "porcentajeOperativo",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "porcentajeGanancia",
+            "columnName": "porcentajeGanancia",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "esPlantillaMayor",
+            "columnName": "esPlantillaMayor",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "minimoUnidadesMayor",
+            "columnName": "minimoUnidadesMayor",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "costosAdicionalesJson",
+            "columnName": "costosAdicionalesJson",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "cuentas_bancarias",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `nombre` TEXT NOT NULL, `tipo` TEXT NOT NULL, `moneda` TEXT NOT NULL, `saldoActual` REAL NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nombre",
+            "columnName": "nombre",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tipo",
+            "columnName": "tipo",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "moneda",
+            "columnName": "moneda",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "saldoActual",
+            "columnName": "saldoActual",
+            "affinity": "REAL",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "perfil_negocio",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `nombreNegocio` TEXT NOT NULL, `rifCedula` TEXT NOT NULL, `telefonoContacto` TEXT NOT NULL, `eslogan` TEXT NOT NULL, `saludoCobro` TEXT NOT NULL, `cierreCobro` TEXT NOT NULL, `saludoListo` TEXT NOT NULL, `cierreListo` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nombreNegocio",
+            "columnName": "nombreNegocio",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rifCedula",
+            "columnName": "rifCedula",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "telefonoContacto",
+            "columnName": "telefonoContacto",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "eslogan",
+            "columnName": "eslogan",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "saludoCobro",
+            "columnName": "saludoCobro",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cierreCobro",
+            "columnName": "cierreCobro",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "saludoListo",
+            "columnName": "saludoListo",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cierreListo",
+            "columnName": "cierreListo",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "biblioteca_insumos",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `nombre` TEXT NOT NULL, `categoria` TEXT NOT NULL, `unidadLote` TEXT NOT NULL, `precioLote` REAL NOT NULL, `cantidadLote` INTEGER NOT NULL, `moneda` TEXT NOT NULL, `fechaActualizacion` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nombre",
+            "columnName": "nombre",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "categoria",
+            "columnName": "categoria",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "unidadLote",
+            "columnName": "unidadLote",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "precioLote",
+            "columnName": "precioLote",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cantidadLote",
+            "columnName": "cantidadLote",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "moneda",
+            "columnName": "moneda",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fechaActualizacion",
+            "columnName": "fechaActualizacion",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      }
+    ],
+    "views": [],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '2a35eabc156af9015ae4e7b0b060ff72')"
+    ]
+  }
+}

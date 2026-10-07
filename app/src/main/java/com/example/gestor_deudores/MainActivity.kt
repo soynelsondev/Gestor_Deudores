@@ -62,7 +62,10 @@ class MainActivity : ComponentActivity() {
                 }
                 if (modelClass.isAssignableFrom(CotizadorViewModel::class.java)) {
                     @Suppress("UNCHECKED_CAST")
-                    return CotizadorViewModel(baseDeDatos.plantillaDao()) as T
+                    return CotizadorViewModel(
+                        baseDeDatos.plantillaDao(),
+                        baseDeDatos.insumoBibliotecaDao()
+                    ) as T
                 }
                 if (modelClass.isAssignableFrom(ResumenViewModel::class.java)) {
                     @Suppress("UNCHECKED_CAST")

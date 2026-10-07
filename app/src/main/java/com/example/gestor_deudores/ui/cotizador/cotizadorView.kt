@@ -154,6 +154,9 @@ fun CotizadorPrincipal(
                         onEditarClick = {
                             viewModel.cargarPlantilla(plantilla)
                             mostrarFormulario = true
+                        },
+                        onDuplicarClick = {
+                            viewModel.duplicarPlantilla(plantilla)
                         }
                     )
                 }
@@ -171,7 +174,8 @@ fun TarjetaPlantillaExpandible(
     viewModel: CotizadorViewModel,
     expandida: Boolean,
     onClickTarjeta: () -> Unit,
-    onEditarClick: () -> Unit
+    onEditarClick: () -> Unit,
+    onDuplicarClick: () -> Unit
 ) {
     val formatoUSD = NumberFormat.getCurrencyInstance(Locale("en", "US"))
     
@@ -234,13 +238,25 @@ fun TarjetaPlantillaExpandible(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Botón Editar
-                    Button(
-                        onClick = onEditarClick,
-                        colors = ButtonDefaults.buttonColors(containerColor = fondo),
-                        modifier = Modifier.fillMaxWidth()
+                    // Botones Duplicar y Editar
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text("Editar Costos de la Plantilla", color = estados, fontWeight = FontWeight.Bold)
+                        OutlinedButton(
+                            onClick = onDuplicarClick,
+                            modifier = Modifier.weight(1f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.5f))
+                        ) {
+                            Text("📋 Copiar", color = Color.White, fontSize = 11.sp)
+                        }
+                        Button(
+                            onClick = onEditarClick,
+                            colors = ButtonDefaults.buttonColors(containerColor = fondo),
+                            modifier = Modifier.weight(1.5f)
+                        ) {
+                            Text("Editar Costos", color = estados, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        }
                     }
                 }
             }
@@ -274,17 +290,31 @@ fun FormularioCotizacion(
             }
         }
 
-        // --- SECCIÓN 1: NOMBRE DE PLANTILLA ---
+        // --- SECCIÓN 1: NOMBRE DE PLANTILLA Y PRESETS ---
         item {
-            OutlinedTextField(
-                value = uiState.nombrePlantilla,
-                onValueChange = { viewModel.onNombrePlantillaChange(it) },
-                label = { Text("Nombre de la Plantilla") },
-                placeholder = { Text("Ej. Taza Mágica, Franela DTF") },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                singleLine = true
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = uiState.nombrePlantilla,
+                    onValueChange = { viewModel.onNombrePlantillaChange(it) },
+                    label = { Text("Nombre de la Plantilla") },
+                    placeholder = { Text("Ej. Taza Mágica, Franela DTF") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true
+                )
+
+                Text("⚡ Cargar Receta Prearmada (1 Clic):", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.SemiBold)
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    items(com.example.gestor_deudores.data.utils.CotizadorPresetsUtils.obtenerPresets()) { preset ->
+                        AssistChip(
+                            onClick = { viewModel.cargarPreset(preset) },
+                            label = { Text("${preset.icono} ${preset.titulo}", fontSize = 11.sp) }
+                        )
+                    }
+                }
+            }
         }
 
         // --- SECCIÓN 1: MATERIA PRIMA (Pieza, Empaque y Extras) ---
@@ -349,17 +379,15 @@ fun FormularioCotizacion(
                 }
             }
 
-            // --- SECCIÓN 4: SERVICIOS DIRECTOS E INDIRECTOS ---
+            // --- SECCIÓN 2: SERVICIOS DIRECTOS (DTF, Pasajes, Diseño) ---
             item {
-                SeccionCard(titulo = "2. Servicios Externos y DTF") {
+                SeccionCard(titulo = "2. Servicios Directos (DTF, Pasajes, Diseño)") {
                     // DTF
                     Text("Costo de Impresión / DTF:", fontSize = 12.sp, color = Color.Gray)
                     CampoMonedaCantidad(
                         precio = uiState.precioTotalDtf,
                         moneda = uiState.monedaDtf,
-                        cantidad = uiState.rendimientoDtf, // Cantidad de piezas que salen
-                        labelPrecio = "Costo Total",
-                        labelCantidad = "Piezas",
+                        cantidad = uiState.rendimientoDtf,
                         onPrecioChange = { viewModel.onPrecioTotalDtfChange(it) },
                         onMonedaChange = { viewModel.onMonedaDtfChange(it) },
                         onCantidadChange = { viewModel.onRendimientoDtfChange(it) }
@@ -372,8 +400,6 @@ fun FormularioCotizacion(
                         precio = uiState.costoTransporte,
                         moneda = uiState.monedaTransporte,
                         cantidad = uiState.rendimientoTransporte,
-                        labelPrecio = "Costo Total",
-                        labelCantidad = "Piezas",
                         onPrecioChange = { viewModel.onCostoTransporteChange(it) },
                         onMonedaChange = { viewModel.onMonedaTransporteChange(it) },
                         onCantidadChange = { viewModel.onRendimientoTransporteChange(it) }
@@ -387,8 +413,6 @@ fun FormularioCotizacion(
                         precio = uiState.costoDiseno,
                         moneda = uiState.monedaDiseno,
                         cantidad = uiState.rendimientoDiseno,
-                        labelPrecio = "Costo Total",
-                        labelCantidad = "Piezas",
                         onPrecioChange = { viewModel.onCostoDisenoChange(it) },
                         onMonedaChange = { viewModel.onMonedaDisenoChange(it) },
                         onCantidadChange = { viewModel.onRendimientoDisenoChange(it) }
@@ -438,6 +462,7 @@ fun FormularioCotizacion(
 
                 if (mostrarDialogoInsumo) {
                     DialogoAgregarInsumo(
+                        viewModel = viewModel,
                         onDismiss = { mostrarDialogoInsumo = false },
                         onAgregar = { nuevoInsumo ->
                             viewModel.agregarInsumo(nuevoInsumo)
@@ -580,6 +605,61 @@ fun FormularioCotizacion(
                             modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
                         )
                     }
+
+                    // --- MANO DE OBRA Y COMISIÓN OPCIONAL ---
+                    var mostrarAvanzado by remember { mutableStateOf(uiState.minutosPorPieza.isNotEmpty() || uiState.comisionPorcentaje > 0) }
+
+                    if (mostrarAvanzado) {
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        Text("🛠️ Mano de Obra y Comisión de Cobro (Avanzado):", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.SemiBold)
+                        
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = uiState.minutosPorPieza,
+                                onValueChange = { viewModel.onMinutosPorPiezaChange(it) },
+                                label = { Text("Minutos / Pieza") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            OutlinedTextField(
+                                value = uiState.tarifaPorHoraUsd,
+                                onValueChange = { viewModel.onTarifaPorHoraChange(it) },
+                                label = { Text("Tarifa $/Hora") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                        }
+
+                        SliderPorcentaje(
+                            titulo = "Comisión de Cobro Punto/Tarjeta (%):",
+                            valor = uiState.comisionPorcentaje,
+                            rango = 0f..20f,
+                            colorActivo = Color.DarkGray,
+                            onValorChange = { viewModel.onComisionPorcentajeChange(it) }
+                        )
+
+                        TextButton(
+                            onClick = { 
+                                mostrarAvanzado = false
+                                viewModel.onMinutosPorPiezaChange("")
+                                viewModel.onTarifaPorHoraChange("")
+                                viewModel.onComisionPorcentajeChange(0f)
+                            },
+                            modifier = Modifier.align(Alignment.End)
+                        ) {
+                            Text("Ocultar avanzado", color = Color.Red, fontSize = 11.sp)
+                        }
+                    } else {
+                        TextButton(
+                            onClick = { mostrarAvanzado = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Text(" Agregar Mano de Obra o Comisión de Punto")
+                        }
+                    }
                 }
             }
 
@@ -680,49 +760,65 @@ fun CampoMonedaCantidad(
     precio: String,
     moneda: String,
     cantidad: String,
-    labelPrecio: String = "Precio Lote",
+    labelPrecio: String = "¿Cuánto pagaste?",
     labelCantidad: String = "Piezas",
     onPrecioChange: (String) -> Unit,
     onMonedaChange: (String) -> Unit,
     onCantidadChange: (String) -> Unit
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Campo de Precio
-        OutlinedTextField(
-            value = precio,
-            onValueChange = { if (it.all { c -> c.isDigit() || c == '.' || c == ',' }) onPrecioChange(it) },
-            label = { Text(labelPrecio) },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-            modifier = Modifier.weight(1.5f),
-            shape = RoundedCornerShape(12.dp),
-            singleLine = true
-        )
-
-        // Selector USD / VES
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(12.dp))
-                .background(fondo2)
-                .clickable { onMonedaChange(if (moneda == "USD") "VES" else "USD") }
-                .padding(horizontal = 12.dp, vertical = 16.dp)
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(if (moneda == "USD") "USD" else "Bs", color = Color.White, fontWeight = FontWeight.Bold)
+            // Campo de Precio
+            OutlinedTextField(
+                value = precio,
+                onValueChange = { if (it.all { c -> c.isDigit() || c == '.' || c == ',' }) onPrecioChange(it) },
+                label = { Text(labelPrecio, fontSize = 11.sp) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.weight(1.5f),
+                shape = RoundedCornerShape(12.dp),
+                singleLine = true
+            )
+
+            // Selector USD / VES
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(fondo2)
+                    .clickable { onMonedaChange(if (moneda == "USD") "VES" else "USD") }
+                    .padding(horizontal = 12.dp, vertical = 16.dp)
+            ) {
+                Text(if (moneda == "USD") "USD" else "Bs", color = Color.White, fontWeight = FontWeight.Bold)
+            }
+
+            // Campo de Cantidad
+            OutlinedTextField(
+                value = cantidad,
+                onValueChange = { if (it.all { c -> c.isDigit() }) onCantidadChange(it) },
+                label = { Text(labelCantidad, fontSize = 11.sp) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(12.dp),
+                singleLine = true
+            )
         }
 
-        // Campo de Cantidad
-        OutlinedTextField(
-            value = cantidad,
-            onValueChange = { if (it.all { c -> c.isDigit() }) onCantidadChange(it) },
-            label = { Text(labelCantidad) },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.weight(1f),
-            shape = RoundedCornerShape(12.dp),
-            singleLine = true
-        )
+        // Vista previa inmediata por línea (= $X.XX por pieza)
+        val pD = precio.replace(",", ".").toDoubleOrNull() ?: 0.0
+        val cI = cantidad.toIntOrNull() ?: 1
+        if (pD > 0.0) {
+            val unitario = pD / (if (cI > 0) cI else 1)
+            Text(
+                text = "= $${String.format(Locale.US, "%.2f", unitario)} por pieza",
+                color = Color(0xFF2E7D32),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(top = 2.dp, start = 4.dp)
+            )
+        }
     }
 }
 
@@ -860,6 +956,79 @@ fun TarjetaResultadosFinancieros(uiState: CotizadorUiState) {
                     Text("Ganancia libre por Docena:", color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp)
                     Text("+ " + formatoUSD.format(uiState.gananciaDocenaUsd), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
+
+                // Botón Tabla de Escalas por Cantidad
+                var mostrarTablaEscalas by remember { mutableStateOf(false) }
+
+                if (mostrarTablaEscalas) {
+                    DialogoTablaEscalas(
+                        tabla = uiState.tablaEscalasResultado,
+                        onDismiss = { mostrarTablaEscalas = false }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+                OutlinedButton(
+                    onClick = { mostrarTablaEscalas = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.5f))
+                ) {
+                    Text("📊 Ver Tabla de Precios por Cantidad (1, 6, 12, 24, 50 pcs)", fontSize = 11.sp, color = Color.White)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DialogoTablaEscalas(
+    tabla: List<com.example.gestor_deudores.data.utils.ResultadoEscalaCantidad>,
+    onDismiss: () -> Unit
+) {
+    val formatoUSD = NumberFormat.getCurrencyInstance(Locale("en", "US"))
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(8.dp),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp).verticalScroll(rememberScrollState())
+            ) {
+                Text("📊 Tabla de Precios por Cantidad", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = estados)
+                Text("Precios unitarios y totales según el volumen del pedido.", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 12.dp))
+
+                // Encabezados
+                Row(
+                    modifier = Modifier.fillMaxWidth().background(Color.LightGray.copy(alpha = 0.3f)).padding(8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Volumen", fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                    Text("Costo /u", fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                    Text("Precio /u", fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                    Text("Total Lote", fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                }
+
+                tabla.forEach { fila ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp, horizontal = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("${fila.desdeCantidad} pcs", fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                        Text(formatoUSD.format(fila.costoUnitarioUsd), fontSize = 11.sp, color = Color.DarkGray, modifier = Modifier.weight(1f))
+                        Text(formatoUSD.format(fila.precioUnitarioUsd), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = estados, modifier = Modifier.weight(1f))
+                        Text(formatoUSD.format(fila.precioTotalLoteUsd), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF2E7D32), modifier = Modifier.weight(1f))
+                    }
+                    HorizontalDivider()
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) {
+                    Text("Cerrar", color = Color.Gray)
+                }
             }
         }
     }
@@ -867,11 +1036,16 @@ fun TarjetaResultadosFinancieros(uiState: CotizadorUiState) {
 
 @Composable
 fun DialogoAgregarInsumo(
+    viewModel: CotizadorViewModel,
     onDismiss: () -> Unit,
     onAgregar: (com.example.gestor_deudores.data.database.InsumoCotizacion) -> Unit
 ) {
+    val biblioteca by viewModel.listaInsumosBiblioteca.collectAsState()
+    var expandidoBiblioteca by remember { mutableStateOf(false) }
+
     var nombre by remember { mutableStateOf("") }
     var categoria by remember { mutableStateOf("MATERIA_PRIMA") }
+    var tipoCosto by remember { mutableStateOf("POR_PIEZA") }
     var precioLoteTexto by remember { mutableStateOf("") }
     var moneda by remember { mutableStateOf("USD") }
     var rendimientoTexto by remember { mutableStateOf("1") }
@@ -887,6 +1061,37 @@ fun DialogoAgregarInsumo(
             ) {
                 Text("➕ Agregar Insumo o Servicio", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = estados)
                 Spacer(modifier = Modifier.height(12.dp))
+
+                if (biblioteca.isNotEmpty()) {
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(
+                            onClick = { expandidoBiblioteca = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("📚 Elegir de Mis Insumos Guardados", fontSize = 12.sp)
+                        }
+                        DropdownMenu(
+                            expanded = expandidoBiblioteca,
+                            onDismissRequest = { expandidoBiblioteca = false }
+                        ) {
+                            biblioteca.forEach { item ->
+                                DropdownMenuItem(
+                                    text = { Text("${item.nombre} ($${item.precioLote} ${item.moneda} / ${item.unidadLote})") },
+                                    onClick = {
+                                        nombre = item.nombre
+                                        categoria = item.categoria
+                                        precioLoteTexto = item.precioLote.toString()
+                                        moneda = item.moneda
+                                        rendimientoTexto = item.cantidadLote.toString()
+                                        expandidoBiblioteca = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
 
                 OutlinedTextField(
                     value = nombre,
@@ -918,6 +1123,21 @@ fun DialogoAgregarInsumo(
                     )
                 }
 
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Asignación del Costo:", fontSize = 12.sp, color = Color.Gray)
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    FilterChip(
+                        selected = tipoCosto == "POR_PIEZA",
+                        onClick = { tipoCosto = "POR_PIEZA" },
+                        label = { Text("🔘 Por Pieza", fontSize = 11.sp) }
+                    )
+                    FilterChip(
+                        selected = tipoCosto == "POR_PEDIDO",
+                        onClick = { tipoCosto = "POR_PEDIDO" },
+                        label = { Text("📦 Fijo por Pedido", fontSize = 11.sp) }
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(12.dp))
 
                 CampoMonedaCantidad(
@@ -946,7 +1166,8 @@ fun DialogoAgregarInsumo(
                                         categoria = categoria,
                                         precioLote = pD,
                                         moneda = moneda,
-                                        rendimientoCantidad = if (rI > 0) rI else 1
+                                        rendimientoCantidad = if (rI > 0) rI else 1,
+                                        tipoCosto = tipoCosto
                                     )
                                 )
                                 onDismiss()
