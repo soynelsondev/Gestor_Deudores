@@ -46,7 +46,8 @@ fun calcularCostosPlantilla(
     tasaBcv: Double = 1.0,
     tipoGanancia: TipoGanancia = TipoGanancia.SOBRE_COSTO,
     gananciaFijaUsd: Double = 0.0,
-    cantidadPedido: Int = 1
+    cantidadPedido: Int = 1,
+    calcularEscalas: Boolean = true
 ): DesgloseCostosPlantilla {
     val tasaActiva = if (tasaBcv > 0.0) tasaBcv else 1.0
 
@@ -134,9 +135,16 @@ fun calcularCostosPlantilla(
     val esPerdida = costoTotalProduccion > 0.0 && precioVentaSug <= costoTotalProduccion
 
     // 7. Generación de Tabla de Escalas por Cantidad (1, 6, 12, 24, 50 pcs) si no estamos en recursión
-    val tablaEscalas = if (cantidadPedido == 1) {
+    val tablaEscalas = if (calcularEscalas) {
         listOf(1, 6, 12, 24, 50).map { q ->
-            val cUnid = calcularCostosPlantilla(plantilla, tasaBcv, tipoGanancia, gananciaFijaUsd, cantidadPedido = q)
+            val cUnid = calcularCostosPlantilla(
+                plantilla = plantilla,
+                tasaBcv = tasaBcv,
+                tipoGanancia = tipoGanancia,
+                gananciaFijaUsd = gananciaFijaUsd,
+                cantidadPedido = q,
+                calcularEscalas = false
+            )
             ResultadoEscalaCantidad(
                 nombreEscala = "Lote de $q pcs",
                 desdeCantidad = q,
