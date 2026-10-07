@@ -499,9 +499,9 @@ fun FormularioCotizacion(
                 }
             }
 
-            // --- SECCIÓN 4: PORCENTAJES (SLIDERS) ---
+            // --- SECCIÓN 4: PORCENTAJES Y GANANCIA (Fase 1: Ganancia Flexible) ---
             item {
-                SeccionCard(titulo = "4. Operatividad y Ganancia (%)") {
+                SeccionCard(titulo = "4. Operatividad y Modo de Ganancia") {
                     SliderPorcentaje(
                         titulo = "Costos Operativos (Luz/Merma):",
                         valor = uiState.porcentajeOperativo,
@@ -509,13 +509,50 @@ fun FormularioCotizacion(
                         colorActivo = Color.Gray,
                         onValorChange = { viewModel.onPorcentajeOperativoChange(it) }
                     )
-                    SliderPorcentaje(
-                        titulo = "Margen de Ganancia Libre:",
-                        valor = uiState.porcentajeGanancia,
-                        rango = 0f..99f,
-                        colorActivo = estados,
-                        onValorChange = { viewModel.onPorcentajeGananciaChange(it) }
-                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Método de Ganancia:", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.SemiBold)
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        FilterChip(
+                            selected = uiState.tipoGanancia == com.example.gestor_deudores.data.utils.TipoGanancia.SOBRE_COSTO,
+                            onClick = { viewModel.onTipoGananciaChange(com.example.gestor_deudores.data.utils.TipoGanancia.SOBRE_COSTO) },
+                            label = { Text("% s/ Costo", fontSize = 11.sp) }
+                        )
+                        FilterChip(
+                            selected = uiState.tipoGanancia == com.example.gestor_deudores.data.utils.TipoGanancia.SOBRE_VENTA,
+                            onClick = { viewModel.onTipoGananciaChange(com.example.gestor_deudores.data.utils.TipoGanancia.SOBRE_VENTA) },
+                            label = { Text("% s/ Venta", fontSize = 11.sp) }
+                        )
+                        FilterChip(
+                            selected = uiState.tipoGanancia == com.example.gestor_deudores.data.utils.TipoGanancia.GANANCIA_FIJA,
+                            onClick = { viewModel.onTipoGananciaChange(com.example.gestor_deudores.data.utils.TipoGanancia.GANANCIA_FIJA) },
+                            label = { Text("$ Fija / pc", fontSize = 11.sp) }
+                        )
+                    }
+
+                    if (uiState.tipoGanancia == com.example.gestor_deudores.data.utils.TipoGanancia.GANANCIA_FIJA) {
+                        OutlinedTextField(
+                            value = uiState.gananciaFijaUsd,
+                            onValueChange = { viewModel.onGananciaFijaChange(it) },
+                            label = { Text("Ganancia Fija Deseada por Pieza ($)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    } else {
+                        SliderPorcentaje(
+                            titulo = if (uiState.tipoGanancia == com.example.gestor_deudores.data.utils.TipoGanancia.SOBRE_COSTO) 
+                                "Porcentaje sobre el Costo (%):" else "Margen sobre la Venta (%):",
+                            valor = uiState.porcentajeGanancia,
+                            rango = 0f..300f,
+                            colorActivo = estados,
+                            onValorChange = { viewModel.onPorcentajeGananciaChange(it) }
+                        )
+                    }
 
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
@@ -755,28 +792,74 @@ fun TarjetaResultadosFinancieros(uiState: CotizadorUiState) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = fondo2) // Un verde agua elegante
+        colors = CardDefaults.cardColors(containerColor = if (uiState.esPerdida) Color(0xFFC62828) else fondo2)
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
             Text("📊 RESUMEN DE COTIZACIÓN", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // Costo Real
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Costo Producción (Pieza + DTF + Luz):", color = Color.White, fontSize = 12.sp)
-                Text(formatoUSD.format(uiState.costoTotalProduccionUsd), color = Color.White, fontWeight = FontWeight.Bold)
-            }
-            HorizontalDivider(color = Color.White.copy(alpha = 0.3f), modifier = Modifier.padding(vertical = 8.dp))
+            if (uiState.costoTotalProduccionUsd == 0.0) {
+                Text(
+                    text = "💡 Completa la prenda o base para ver tu precio sugerido y ganancia.",
+                    fontSize = 13.sp,
+                    color = Color.White.copy(alpha = 0.9f)
+                )
+            } else {
+                if (uiState.esPerdida) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color.White)
+                            .padding(10.dp)
+                    ) {
+                        Text(
+                            text = "⚠️ ATENCIÓN: Con este precio pierdes dinero. El precio sugerido debe superar el costo de producción ($${uiState.costoTotalProduccionUsd}).",
+                            color = Color(0xFFC62828),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
 
-            // PRECIO DE VENTA
-            Text("PRECIO DE VENTA (Margen: ${uiState.porcentajeGanancia.toInt()}%)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Precio Sugerido:", color = Color.White, fontSize = 16.sp)
-                Text(formatoUSD.format(uiState.precioSugeridoUsd), color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-            }
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Tu ganancia libre por pieza:", color = Color.White.copy(alpha = 0.9f), fontSize = 14.sp)
-                Text("+ " + formatoUSD.format(uiState.gananciaNetaUsd), color = Color.White.copy(alpha = 0.9f), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                // Costo Real
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Costo Producción por Pieza:", color = Color.White, fontSize = 13.sp)
+                    Text(formatoUSD.format(uiState.costoTotalProduccionUsd), color = Color.White, fontWeight = FontWeight.Bold)
+                }
+                HorizontalDivider(color = Color.White.copy(alpha = 0.3f), modifier = Modifier.padding(vertical = 8.dp))
+
+                // PRECIO DE VENTA
+                val descGanancia = when (uiState.tipoGanancia) {
+                    com.example.gestor_deudores.data.utils.TipoGanancia.SOBRE_COSTO -> "${uiState.porcentajeGanancia.toInt()}% s/ Costo (${String.format(Locale.US, "%.1f", uiState.margenSobreVentaPct)}% s/ Venta)"
+                    com.example.gestor_deudores.data.utils.TipoGanancia.SOBRE_VENTA -> "${uiState.porcentajeGanancia.toInt()}% Margen s/ Venta"
+                    else -> "Ganancia Fija $${uiState.gananciaFijaUsd}/u"
+                }
+
+                Text("PRECIO DE VENTA ($descGanancia):", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Precio Sugerido Unitario:", color = Color.White, fontSize = 14.sp)
+                    Text(formatoUSD.format(uiState.precioSugeridoUsd), color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                }
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Tu ganancia libre por pieza:", color = Color.White.copy(alpha = 0.9f), fontSize = 13.sp)
+                    Text("+ " + formatoUSD.format(uiState.gananciaNetaUsd), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+
+                HorizontalDivider(color = Color.White.copy(alpha = 0.2f), modifier = Modifier.padding(vertical = 8.dp))
+
+                // DOCENA
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Precio por Docena (12 pcs):", color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp)
+                    Text(formatoUSD.format(uiState.precioDocenaUsd), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Ganancia libre por Docena:", color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp)
+                    Text("+ " + formatoUSD.format(uiState.gananciaDocenaUsd), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
             }
         }
     }

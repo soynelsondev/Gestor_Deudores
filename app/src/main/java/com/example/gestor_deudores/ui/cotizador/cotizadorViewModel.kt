@@ -60,9 +60,11 @@ data class CotizadorUiState(
     val monedaExtra: String = "USD",
     val rendimientoExtra: String = "1",
 
-    // 5. Operatividad y Ganancia (Barras deslizables)
+    // 5. Operatividad y Ganancia (Fase 1: Ganancia Flexible)
     val porcentajeOperativo: Float = 10f, // 10% por defecto para luz/desgaste
-    val porcentajeGanancia: Float = 40f,  // 40% por defecto de margen libre
+    val porcentajeGanancia: Float = 40f,  // 40% por defecto de margen
+    val tipoGanancia: com.example.gestor_deudores.data.utils.TipoGanancia = com.example.gestor_deudores.data.utils.TipoGanancia.SOBRE_COSTO,
+    val gananciaFijaUsd: String = "0.0",
     
     // 6. Configuración Venta al Mayor
     val esPlantillaMayor: Boolean = false,
@@ -78,7 +80,11 @@ data class CotizadorUiState(
     
     // Resultados
     val precioSugeridoUsd: Double = 0.0,
-    val gananciaNetaUsd: Double = 0.0
+    val gananciaNetaUsd: Double = 0.0,
+    val precioDocenaUsd: Double = 0.0,
+    val gananciaDocenaUsd: Double = 0.0,
+    val margenSobreVentaPct: Float = 0f,
+    val esPerdida: Boolean = false
 )
 
 class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
@@ -221,8 +227,18 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
     }
 
     fun onPorcentajeGananciaChange(valor: Float) {
-        val margenSeguro = if (valor >= 100f) 99.9f else valor
+        val margenSeguro = if (valor >= 300f) 300f else valor
         _uiState.update { it.copy(porcentajeGanancia = margenSeguro) }
+        calcularResultados()
+    }
+
+    fun onTipoGananciaChange(tipo: com.example.gestor_deudores.data.utils.TipoGanancia) {
+        _uiState.update { it.copy(tipoGanancia = tipo) }
+        calcularResultados()
+    }
+
+    fun onGananciaFijaChange(valor: String) {
+        _uiState.update { it.copy(gananciaFijaUsd = valor) }
         calcularResultados()
     }
 
@@ -387,61 +403,58 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
         val estado = _uiState.value
         val tasaActiva = if (tasaBcvActual > 0.0) tasaBcvActual else 1.0
 
-        fun parseD(texto: String): Double = texto.replace(",", ".").toDoubleOrNull() ?: 0.0
-        fun parseCant(texto: String): Double {
-            val num = texto.toDoubleOrNull() ?: 1.0
-            return if (num > 0) num else 1.0
-        }
+        fun parseD(texto: String): Double = texto.trim().replace(",", ".").toDoubleOrNull() ?: 0.0
+        fun parseCantInt(texto: String): Int = (texto.toIntOrNull() ?: 1).coerceAtLeast(1)
 
-        fun aUsd(valor: Double, moneda: String): Double {
-            return if (moneda == "VES") valor / tasaActiva else valor
-        }
+        val gananciaFijaD = parseD(estado.gananciaFijaUsd)
 
-        val costoPiezaBruto = parseD(estado.precioPaquetePieza) / parseCant(estado.cantidadPaquetePieza)
-        val costoUnitarioPieza = aUsd(costoPiezaBruto, estado.monedaPaquetePieza)
+        val plantillaTemporal = PlantillaCotizacion(
+            id = estado.idActual,
+            nombrePlantilla = estado.nombrePlantilla,
+            precioPaquetePieza = parseD(estado.precioPaquetePieza),
+            monedaPaquetePieza = estado.monedaPaquetePieza,
+            cantidadPaquetePieza = parseCantInt(estado.cantidadPaquetePieza),
+            precioPaqueteEmpaque = parseD(estado.precioPaqueteEmpaque),
+            monedaPaqueteEmpaque = estado.monedaPaqueteEmpaque,
+            cantidadPaqueteEmpaque = parseCantInt(estado.cantidadPaqueteEmpaque),
+            precioPaquetePapel = parseD(estado.precioPaquetePapel),
+            monedaPaquetePapel = estado.monedaPaquetePapel,
+            cantidadPaquetePapel = parseCantInt(estado.cantidadPaquetePapel),
+            precioTotalDtf = parseD(estado.precioTotalDtf),
+            monedaDtf = estado.monedaDtf,
+            rendimientoDtf = parseCantInt(estado.rendimientoDtf),
+            costoTransporte = parseD(estado.costoTransporte),
+            monedaTransporte = estado.monedaTransporte,
+            rendimientoTransporte = parseCantInt(estado.rendimientoTransporte),
+            costoDiseno = parseD(estado.costoDiseno),
+            monedaDiseno = estado.monedaDiseno,
+            rendimientoDiseno = parseCantInt(estado.rendimientoDiseno),
+            costoExtra = parseD(estado.costoExtra),
+            monedaExtra = estado.monedaExtra,
+            rendimientoExtra = parseCantInt(estado.rendimientoExtra),
+            porcentajeOperativo = estado.porcentajeOperativo,
+            porcentajeGanancia = estado.porcentajeGanancia,
+            esPlantillaMayor = estado.esPlantillaMayor,
+            minimoUnidadesMayor = parseCantInt(estado.minimoUnidadesMayor),
+            costosAdicionalesJson = com.google.gson.Gson().toJson(estado.listaInsumos)
+        )
 
-        val costoEmpaqueBruto = parseD(estado.precioPaqueteEmpaque) / parseCant(estado.cantidadPaqueteEmpaque)
-        val costoUnitarioEmpaque = aUsd(costoEmpaqueBruto, estado.monedaPaqueteEmpaque)
-        
-        val costoPapelBruto = parseD(estado.precioPaquetePapel) / parseCant(estado.cantidadPaquetePapel)
-        val costoUnitarioPapel = aUsd(costoPapelBruto, estado.monedaPaquetePapel)
-
-        // 2. Sumamos los servicios logísticos en USD
-        val precioTotalDtf = aUsd(parseD(estado.precioTotalDtf), estado.monedaDtf)
-        val dtfPorPieza = precioTotalDtf / parseCant(estado.rendimientoDtf)
-        
-        val totalTransporte = aUsd(parseD(estado.costoTransporte), estado.monedaTransporte)
-        val transportePorPieza = totalTransporte / parseCant(estado.rendimientoTransporte)
-        
-        val totalDiseno = aUsd(parseD(estado.costoDiseno), estado.monedaDiseno)
-        val disenoPorPieza = totalDiseno / parseCant(estado.rendimientoDiseno)
-
-        val totalExtra = aUsd(parseD(estado.costoExtra), estado.monedaExtra)
-        val extraPorPieza = totalExtra / parseCant(estado.rendimientoExtra)
-
-        val costoEstatico = costoUnitarioPieza + costoUnitarioEmpaque + costoUnitarioPapel + dtfPorPieza + transportePorPieza + disenoPorPieza + extraPorPieza
-        val costoDinamico = estado.listaInsumos.sumOf { it.calcularCostoUnitarioUsd(tasaActiva) }
-        val subtotalMateriales = costoEstatico + costoDinamico
-
-        val costoOperativo = subtotalMateriales * (estado.porcentajeOperativo / 100.0)
-        val costoTotalProduccion = subtotalMateriales + costoOperativo
-
-        var precioVentaSug = 0.0
-        var ganancia = 0.0
-        if (costoTotalProduccion > 0.0) {
-            val margenDecimal = estado.porcentajeGanancia / 100.0
-            precioVentaSug = costoTotalProduccion / (1.0 - margenDecimal)
-            ganancia = precioVentaSug - costoTotalProduccion
-        }
-
-        fun redondear2(valor: Double): Double = 
-            BigDecimal.valueOf(valor).setScale(2, RoundingMode.HALF_UP).toDouble()
+        val costos = com.example.gestor_deudores.data.utils.calcularCostosPlantilla(
+            plantilla = plantillaTemporal,
+            tasaBcv = tasaActiva,
+            tipoGanancia = estado.tipoGanancia,
+            gananciaFijaUsd = gananciaFijaD
+        )
 
         _uiState.update {
             it.copy(
-                costoTotalProduccionUsd = redondear2(costoTotalProduccion),
-                precioSugeridoUsd = redondear2(precioVentaSug),
-                gananciaNetaUsd = redondear2(ganancia)
+                costoTotalProduccionUsd = costos.costoTotalProduccionUsd,
+                precioSugeridoUsd = costos.precioSugeridoUsd,
+                gananciaNetaUsd = costos.gananciaUsd,
+                precioDocenaUsd = costos.precioDocenaUsd,
+                gananciaDocenaUsd = costos.gananciaDocenaUsd,
+                margenSobreVentaPct = costos.margenSobreVentaPorcentaje,
+                esPerdida = costos.esPerdida
             )
         }
     }

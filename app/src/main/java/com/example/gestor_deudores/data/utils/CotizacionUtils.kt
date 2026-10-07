@@ -5,13 +5,23 @@ import com.google.gson.reflect.TypeToken
 import com.example.gestor_deudores.data.database.InsumoCotizacion
 import com.example.gestor_deudores.data.database.PlantillaCotizacion
 
+enum class TipoGanancia {
+    SOBRE_COSTO,  // Markup: Costo x (1 + %)
+    SOBRE_VENTA,  // Margen Real: Costo / (1 - %)
+    GANANCIA_FIJA // Dólares Fijos por Pieza: Costo + $Fijo
+}
+
 data class DesgloseCostosPlantilla(
     val costoPiezaBaseUsd: Double,
     val costoPasajeUsd: Double,
     val costoInsumosUsd: Double,
     val costoTotalProduccionUsd: Double,
     val precioSugeridoUsd: Double,
-    val gananciaUsd: Double
+    val gananciaUsd: Double,
+    val precioDocenaUsd: Double = 0.0,
+    val gananciaDocenaUsd: Double = 0.0,
+    val margenSobreVentaPorcentaje: Float = 0f,
+    val esPerdida: Boolean = false
 )
 
 /**
@@ -19,7 +29,12 @@ data class DesgloseCostosPlantilla(
  * Soporta Insumos Dinámicos ilimitados (Materia Prima, Insumos Extras, Servicios)
  * y mantiene retrocompatibilidad con los campos tradicionales.
  */
-fun calcularCostosPlantilla(plantilla: PlantillaCotizacion, tasaBcv: Double = 1.0): DesgloseCostosPlantilla {
+fun calcularCostosPlantilla(
+    plantilla: PlantillaCotizacion,
+    tasaBcv: Double = 1.0,
+    tipoGanancia: TipoGanancia = TipoGanancia.SOBRE_COSTO,
+    gananciaFijaUsd: Double = 0.0
+): DesgloseCostosPlantilla {
     val tasaActiva = if (tasaBcv > 0.0) tasaBcv else 1.0
 
     // Intentamos parsear insumos dinámicos desde JSON
@@ -72,15 +87,32 @@ fun calcularCostosPlantilla(plantilla: PlantillaCotizacion, tasaBcv: Double = 1.
     // 4. Agrupamos el operativo dentro de "Insumos" para tener los 3 grandes bloques
     val costoInsumosFinal = costoInsumosBase + costoOperativo
 
-    // 5. Cálculos de Venta y Ganancia
+    // 5. Cálculos de Venta y Ganancia (Soporta SOBRE_COSTO, SOBRE_VENTA y GANANCIA_FIJA)
     var precioVentaSug = 0.0
     var ganancia = 0.0
 
     if (costoTotalProduccion > 0.0) {
-        val margenDecimal = plantilla.porcentajeGanancia / 100.0
-        precioVentaSug = if (margenDecimal < 1.0) costoTotalProduccion / (1.0 - margenDecimal) else 0.0
-        ganancia = precioVentaSug - costoTotalProduccion
+        val pctDecimal = (plantilla.porcentajeGanancia / 100.0).coerceAtLeast(0.0)
+        when (tipoGanancia) {
+            TipoGanancia.SOBRE_COSTO -> {
+                precioVentaSug = costoTotalProduccion * (1.0 + pctDecimal)
+                ganancia = precioVentaSug - costoTotalProduccion
+            }
+            TipoGanancia.SOBRE_VENTA -> {
+                precioVentaSug = if (pctDecimal < 1.0) costoTotalProduccion / (1.0 - pctDecimal) else costoTotalProduccion * 2.0
+                ganancia = precioVentaSug - costoTotalProduccion
+            }
+            TipoGanancia.GANANCIA_FIJA -> {
+                ganancia = gananciaFijaUsd.coerceAtLeast(0.0)
+                precioVentaSug = costoTotalProduccion + ganancia
+            }
+        }
     }
+
+    val precioDocena = precioVentaSug * 12.0
+    val gananciaDocena = ganancia * 12.0
+    val margenSobreVentaPct = if (precioVentaSug > 0.0) ((ganancia / precioVentaSug) * 100.0).toFloat() else 0f
+    val esPerdida = costoTotalProduccion > 0.0 && precioVentaSug <= costoTotalProduccion
 
     return DesgloseCostosPlantilla(
         costoPiezaBaseUsd = costoUnitarioPieza.redondear2(),
@@ -88,6 +120,10 @@ fun calcularCostosPlantilla(plantilla: PlantillaCotizacion, tasaBcv: Double = 1.
         costoInsumosUsd = costoInsumosFinal.redondear2(),
         costoTotalProduccionUsd = costoTotalProduccion.redondear2(),
         precioSugeridoUsd = precioVentaSug.redondear2(),
-        gananciaUsd = ganancia.redondear2()
+        gananciaUsd = ganancia.redondear2(),
+        precioDocenaUsd = precioDocena.redondear2(),
+        gananciaDocenaUsd = gananciaDocena.redondear2(),
+        margenSobreVentaPorcentaje = margenSobreVentaPct,
+        esPerdida = esPerdida
     )
 }
