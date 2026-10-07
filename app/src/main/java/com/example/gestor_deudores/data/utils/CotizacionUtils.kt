@@ -1,5 +1,8 @@
 package com.example.gestor_deudores.data.utils
 
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
+import com.example.gestor_deudores.data.database.InsumoCotizacion
 import com.example.gestor_deudores.data.database.PlantillaCotizacion
 
 data class DesgloseCostosPlantilla(
@@ -13,28 +16,53 @@ data class DesgloseCostosPlantilla(
 
 /**
  * CEREBRO MATEMÁTICO CENTRALIZADO PARA COTIZACIONES.
- * Toma una plantilla y la tasa BCV actual (para convertir los insumos que estén en Bs a USD)
- * y devuelve todos los costos y ganancias desglosadas.
- * Se usa en el Cotizador, en los Pedidos y en el Resumen para garantizar que todos usen la misma fórmula.
+ * Soporta Insumos Dinámicos ilimitados (Materia Prima, Insumos Extras, Servicios)
+ * y mantiene retrocompatibilidad con los campos tradicionales.
  */
 fun calcularCostosPlantilla(plantilla: PlantillaCotizacion, tasaBcv: Double = 1.0): DesgloseCostosPlantilla {
     val tasaActiva = if (tasaBcv > 0.0) tasaBcv else 1.0
 
-    fun parseCant(cant: Int): Double = if (cant > 0) cant.toDouble() else 1.0
-    fun aUsd(valor: Double, moneda: String): Double = if (moneda == "VES") valor / tasaActiva else valor
+    // Intentamos parsear insumos dinámicos desde JSON
+    val insumosDinamicos: List<InsumoCotizacion> = try {
+        if (plantilla.costosAdicionalesJson.isNotBlank() && plantilla.costosAdicionalesJson != "[]") {
+            val type = object : TypeToken<List<InsumoCotizacion>>() {}.type
+            Gson().fromJson(plantilla.costosAdicionalesJson, type) ?: emptyList()
+        } else emptyList()
+    } catch (e: Exception) {
+        emptyList()
+    }
 
-    // 1. Extraemos los costos unitarios convirtiendo a USD si es necesario
-    val costoUnitarioPieza = aUsd(plantilla.precioPaquetePieza / parseCant(plantilla.cantidadPaquetePieza), plantilla.monedaPaquetePieza)
-    val costoUnitarioEmpaque = aUsd(plantilla.precioPaqueteEmpaque / parseCant(plantilla.cantidadPaqueteEmpaque), plantilla.monedaPaqueteEmpaque)
-    val costoUnitarioPapel = aUsd(plantilla.precioPaquetePapel / parseCant(plantilla.cantidadPaquetePapel), plantilla.monedaPaquetePapel)
-    
-    val dtfPorPieza = aUsd(plantilla.precioTotalDtf / parseCant(plantilla.rendimientoDtf), plantilla.monedaDtf)
-    val transportePorPieza = aUsd(plantilla.costoTransporte / parseCant(plantilla.rendimientoTransporte), plantilla.monedaTransporte)
-    val disenoPorPieza = aUsd(plantilla.costoDiseno / parseCant(plantilla.rendimientoDiseno), plantilla.monedaDiseno)
-    val extraPorPieza = aUsd(plantilla.costoExtra / parseCant(plantilla.rendimientoExtra), plantilla.monedaExtra)
+    val costoUnitarioPieza: Double
+    val transportePorPieza: Double
+    val costoInsumosBase: Double
 
-    // 2. Agrupación por categorías (para los sobres/fondos del Resumen)
-    val costoInsumosBase = costoUnitarioEmpaque + costoUnitarioPapel + dtfPorPieza + disenoPorPieza + extraPorPieza
+    if (insumosDinamicos.isNotEmpty()) {
+        // --- CÁLCULO VÍA INSUMOS DINÁMICOS ILIMITADOS ---
+        costoUnitarioPieza = insumosDinamicos.filter { it.categoria == "MATERIA_PRIMA" }
+            .sumOf { it.calcularCostoUnitarioUsd(tasaActiva) }
+        transportePorPieza = insumosDinamicos.filter { it.categoria == "SERVICIO" }
+            .sumOf { it.calcularCostoUnitarioUsd(tasaActiva) }
+        costoInsumosBase = insumosDinamicos.filter { it.categoria == "INSUMO_EXTRA" }
+            .sumOf { it.calcularCostoUnitarioUsd(tasaActiva) }
+    } else {
+        // --- CÁLCULO TRADICIONAL (FALLBACK) ---
+        fun parseCant(cant: Int): Double = if (cant > 0) cant.toDouble() else 1.0
+        fun aUsd(valor: Double, moneda: String): Double = if (moneda == "VES") valor / tasaActiva else valor
+
+        val cPieza = aUsd(plantilla.precioPaquetePieza / parseCant(plantilla.cantidadPaquetePieza), plantilla.monedaPaquetePieza)
+        val cEmpaque = aUsd(plantilla.precioPaqueteEmpaque / parseCant(plantilla.cantidadPaqueteEmpaque), plantilla.monedaPaqueteEmpaque)
+        val cPapel = aUsd(plantilla.precioPaquetePapel / parseCant(plantilla.cantidadPaquetePapel), plantilla.monedaPaquetePapel)
+        val dtf = aUsd(plantilla.precioTotalDtf / parseCant(plantilla.rendimientoDtf), plantilla.monedaDtf)
+        val transp = aUsd(plantilla.costoTransporte / parseCant(plantilla.rendimientoTransporte), plantilla.monedaTransporte)
+        val diseno = aUsd(plantilla.costoDiseno / parseCant(plantilla.rendimientoDiseno), plantilla.monedaDiseno)
+        val extra = aUsd(plantilla.costoExtra / parseCant(plantilla.rendimientoExtra), plantilla.monedaExtra)
+
+        costoUnitarioPieza = cPieza
+        transportePorPieza = transp
+        costoInsumosBase = cEmpaque + cPapel + dtf + diseno + extra
+    }
+
+    // 2. Subtotal Materiales
     val subtotalMateriales = costoUnitarioPieza + transportePorPieza + costoInsumosBase
     
     // 3. Costo Operativo

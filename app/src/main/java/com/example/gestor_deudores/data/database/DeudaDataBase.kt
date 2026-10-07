@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [Deudor::class, Deuda::class, Pedido::class, PlantillaCotizacion::class, CuentaBancaria::class, PerfilNegocio::class],
-    version = 18,
+    version = 19,
     exportSchema = true
 )
 abstract class DeudaDataBase : RoomDatabase() {
@@ -181,7 +181,8 @@ abstract class DeudaDataBase : RoomDatabase() {
                     `porcentajeOperativo` REAL NOT NULL DEFAULT 10.0,
                     `porcentajeGanancia` REAL NOT NULL DEFAULT 40.0,
                     `esPlantillaMayor` INTEGER NOT NULL DEFAULT 0,
-                    `minimoUnidadesMayor` INTEGER NOT NULL DEFAULT 6
+                    `minimoUnidadesMayor` INTEGER NOT NULL DEFAULT 6,
+                    `costosAdicionalesJson` TEXT NOT NULL DEFAULT '[]'
                 )
             """)
 
@@ -209,7 +210,7 @@ abstract class DeudaDataBase : RoomDatabase() {
                         "costoTransporte", "monedaTransporte", "rendimientoTransporte",
                         "costoDiseno", "monedaDiseno", "rendimientoDiseno",
                         "costoExtra", "monedaExtra", "rendimientoExtra", "porcentajeOperativo",
-                        "esPlantillaMayor", "minimoUnidadesMayor"
+                        "esPlantillaMayor", "minimoUnidadesMayor", "costosAdicionalesJson"
                     ).filter { columnasExistentes.contains(it) }
 
                     val selectColsSql = (colsToCopy + "$colGanancia AS porcentajeGanancia").joinToString(", ")
@@ -329,6 +330,12 @@ abstract class DeudaDataBase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_18_19 = object : Migration(18, 19) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                recrearTablaPlantillasSegura(db)
+            }
+        }
+
         fun getDatabase(context: Context): DeudaDataBase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -340,7 +347,8 @@ abstract class DeudaDataBase : RoomDatabase() {
                         MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, 
                         MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, 
                         MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
-                        MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18
+                        MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17,
+                        MIGRATION_17_18, MIGRATION_18_19
                     )
                     .build()
 

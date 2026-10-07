@@ -68,6 +68,9 @@ data class CotizadorUiState(
     val esPlantillaMayor: Boolean = false,
     val minimoUnidadesMayor: String = "6",
 
+    // 7. LISTA DINÁMICA DE INSUMOS Y SERVICIOS (Lego Style)
+    val listaInsumos: List<com.example.gestor_deudores.data.database.InsumoCotizacion> = emptyList(),
+
     // ==========================================
     // RESULTADOS MATEMÁTICOS (Calculados en vivo)
     // ==========================================
@@ -233,6 +236,23 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
         }
     }
 
+    // --- ACCIONES SOBRE INSUMOS DINÁMICOS ---
+    fun agregarInsumo(nuevoInsumo: com.example.gestor_deudores.data.database.InsumoCotizacion) {
+        _uiState.update { actual ->
+            val listaActualizada = actual.listaInsumos + nuevoInsumo
+            actual.copy(listaInsumos = listaActualizada)
+        }
+        calcularResultados()
+    }
+
+    fun eliminarInsumo(idInsumo: String) {
+        _uiState.update { actual ->
+            val listaActualizada = actual.listaInsumos.filter { it.id != idInsumo }
+            actual.copy(listaInsumos = listaActualizada)
+        }
+        calcularResultados()
+    }
+
     // ==========================================
     // CARGAR Y LIMPIAR PLANTILLAS
     // ==========================================
@@ -270,7 +290,15 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
                 porcentajeOperativo = plantilla.porcentajeOperativo,
                 porcentajeGanancia = plantilla.porcentajeGanancia,
                 esPlantillaMayor = plantilla.esPlantillaMayor,
-                minimoUnidadesMayor = plantilla.minimoUnidadesMayor.toString()
+                minimoUnidadesMayor = plantilla.minimoUnidadesMayor.toString(),
+                listaInsumos = try {
+                    if (plantilla.costosAdicionalesJson.isNotBlank() && plantilla.costosAdicionalesJson != "[]") {
+                        val type = object : com.google.gson.reflect.TypeToken<List<com.example.gestor_deudores.data.database.InsumoCotizacion>>() {}.type
+                        com.google.gson.Gson().fromJson(plantilla.costosAdicionalesJson, type) ?: emptyList()
+                    } else emptyList()
+                } catch (e: Exception) {
+                    emptyList()
+                }
             )
         }
         calcularResultados() // Para que refresque los USD en vivo con la tasa actual
@@ -319,7 +347,8 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
             porcentajeOperativo = estado.porcentajeOperativo,
             porcentajeGanancia = estado.porcentajeGanancia,
             esPlantillaMayor = estado.esPlantillaMayor,
-            minimoUnidadesMayor = parseCant(estado.minimoUnidadesMayor)
+            minimoUnidadesMayor = parseCant(estado.minimoUnidadesMayor),
+            costosAdicionalesJson = com.google.gson.Gson().toJson(estado.listaInsumos)
         )
 
         viewModelScope.launch {
@@ -390,7 +419,10 @@ class CotizadorViewModel(private val plantillaDao: PlantillaDao) : ViewModel() {
         val totalExtra = aUsd(parseD(estado.costoExtra), estado.monedaExtra)
         val extraPorPieza = totalExtra / parseCant(estado.rendimientoExtra)
 
-        val subtotalMateriales = costoUnitarioPieza + costoUnitarioEmpaque + costoUnitarioPapel + dtfPorPieza + transportePorPieza + disenoPorPieza + extraPorPieza
+        val costoEstatico = costoUnitarioPieza + costoUnitarioEmpaque + costoUnitarioPapel + dtfPorPieza + transportePorPieza + disenoPorPieza + extraPorPieza
+        val costoDinamico = estado.listaInsumos.sumOf { it.calcularCostoUnitarioUsd(tasaActiva) }
+        val subtotalMateriales = costoEstatico + costoDinamico
+
         val costoOperativo = subtotalMateriales * (estado.porcentajeOperativo / 100.0)
         val costoTotalProduccion = subtotalMateriales + costoOperativo
 

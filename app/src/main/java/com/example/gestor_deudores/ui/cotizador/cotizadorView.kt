@@ -5,6 +5,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -285,9 +287,9 @@ fun FormularioCotizacion(
             )
         }
 
-            // --- SECCIÓN 3: MATERIA PRIMA (Pieza, Empaque y Extras) ---
-            item {
-                SeccionCard(titulo = "1. Materia Prima (Base)") {
+        // --- SECCIÓN 1: MATERIA PRIMA (Pieza, Empaque y Extras) ---
+        item {
+            SeccionCard(titulo = "1. Materia Prima (Base)") {
                     // Pieza
                     Text("Pieza para sublimar (Franela, Taza, etc):", fontSize = 12.sp, color = Color.Gray)
                     CampoMonedaCantidad(
@@ -430,9 +432,76 @@ fun FormularioCotizacion(
                 }
             }
 
-            // --- SECCIÓN 5: PORCENTAJES (SLIDERS) ---
+            // --- SECCIÓN 3: INSUMOS EXTRAS ADICIONALES (Dynamic Lego Style) ---
             item {
-                SeccionCard(titulo = "3. Operatividad y Ganancia (%)") {
+                var mostrarDialogoInsumo by remember { mutableStateOf(false) }
+
+                if (mostrarDialogoInsumo) {
+                    DialogoAgregarInsumo(
+                        onDismiss = { mostrarDialogoInsumo = false },
+                        onAgregar = { nuevoInsumo ->
+                            viewModel.agregarInsumo(nuevoInsumo)
+                        }
+                    )
+                }
+
+                SeccionCard(titulo = "3. Insumos Extras Adicionales") {
+                    if (uiState.listaInsumos.isEmpty()) {
+                        Text(
+                            text = "Agrega cualquier insumo adicional (Imanes, Resina, Cintas, Cajas especiales, etc.)",
+                            fontSize = 12.sp,
+                            color = Color.Gray,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                    } else {
+                        uiState.listaInsumos.forEach { insumo ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color.Black.copy(alpha = 0.04f))
+                                    .padding(8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    val iconoCat = when (insumo.categoria) {
+                                        "MATERIA_PRIMA" -> "📦"
+                                        "INSUMO_EXTRA" -> "🖨️"
+                                        else -> "🚚"
+                                    }
+                                    Text("$iconoCat ${insumo.nombre}", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    Text(
+                                        "Lote: $${insumo.precioLote} ${insumo.moneda} ÷ ${insumo.rendimientoCantidad} pcs = $${String.format(Locale.US, "%.2f", insumo.calcularCostoUnitarioUsd(1.0))}/u",
+                                        fontSize = 11.sp,
+                                        color = Color.DarkGray
+                                    )
+                                }
+                                IconButton(onClick = { viewModel.eliminarInsumo(insumo.id) }) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = Color.Red, modifier = Modifier.size(20.dp))
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Button(
+                        onClick = { mostrarDialogoInsumo = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = estados),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("➕ Agregar Insumo Extra", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            // --- SECCIÓN 4: PORCENTAJES (SLIDERS) ---
+            item {
+                SeccionCard(titulo = "4. Operatividad y Ganancia (%)") {
                     SliderPorcentaje(
                         titulo = "Costos Operativos (Luz/Merma):",
                         valor = uiState.porcentajeOperativo,
@@ -708,6 +777,103 @@ fun TarjetaResultadosFinancieros(uiState: CotizadorUiState) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Tu ganancia libre por pieza:", color = Color.White.copy(alpha = 0.9f), fontSize = 14.sp)
                 Text("+ " + formatoUSD.format(uiState.gananciaNetaUsd), color = Color.White.copy(alpha = 0.9f), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
+fun DialogoAgregarInsumo(
+    onDismiss: () -> Unit,
+    onAgregar: (com.example.gestor_deudores.data.database.InsumoCotizacion) -> Unit
+) {
+    var nombre by remember { mutableStateOf("") }
+    var categoria by remember { mutableStateOf("MATERIA_PRIMA") }
+    var precioLoteTexto by remember { mutableStateOf("") }
+    var moneda by remember { mutableStateOf("USD") }
+    var rendimientoTexto by remember { mutableStateOf("1") }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(8.dp),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp).verticalScroll(rememberScrollState())
+            ) {
+                Text("➕ Agregar Insumo o Servicio", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = estados)
+                Spacer(modifier = Modifier.height(12.dp))
+
+                OutlinedTextField(
+                    value = nombre,
+                    onValueChange = { nombre = it },
+                    label = { Text("Nombre del Insumo") },
+                    placeholder = { Text("Ej. Taza, Metro DTF, Caja, Pasaje") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Text("Categoría (para los Sobres del Resumen):", fontSize = 12.sp, color = Color.Gray)
+                
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    FilterChip(
+                        selected = categoria == "MATERIA_PRIMA",
+                        onClick = { categoria = "MATERIA_PRIMA" },
+                        label = { Text("📦 Base", fontSize = 11.sp) }
+                    )
+                    FilterChip(
+                        selected = categoria == "INSUMO_EXTRA",
+                        onClick = { categoria = "INSUMO_EXTRA" },
+                        label = { Text("🖨️ Insumo", fontSize = 11.sp) }
+                    )
+                    FilterChip(
+                        selected = categoria == "SERVICIO",
+                        onClick = { categoria = "SERVICIO" },
+                        label = { Text("🚚 Servicio", fontSize = 11.sp) }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                CampoMonedaCantidad(
+                    precio = precioLoteTexto,
+                    moneda = moneda,
+                    cantidad = rendimientoTexto,
+                    labelPrecio = "Precio Lote",
+                    labelCantidad = "Piezas Rinde",
+                    onPrecioChange = { precioLoteTexto = it },
+                    onMonedaChange = { moneda = it },
+                    onCantidadChange = { rendimientoTexto = it }
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    TextButton(onClick = onDismiss) { Text("Cancelar", color = Color.Gray) }
+                    Button(
+                        onClick = {
+                            val pD = precioLoteTexto.replace(",", ".").toDoubleOrNull() ?: 0.0
+                            val rI = rendimientoTexto.toIntOrNull() ?: 1
+                            if (nombre.isNotBlank() && pD > 0) {
+                                onAgregar(
+                                    com.example.gestor_deudores.data.database.InsumoCotizacion(
+                                        nombre = nombre.trim(),
+                                        categoria = categoria,
+                                        precioLote = pD,
+                                        moneda = moneda,
+                                        rendimientoCantidad = if (rI > 0) rI else 1
+                                    )
+                                )
+                                onDismiss()
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = estados)
+                    ) {
+                        Text("Agregar a la Receta", color = Color.White)
+                    }
+                }
             }
         }
     }

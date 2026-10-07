@@ -40,6 +40,7 @@ data class PlantillaCotizacion(
     val porcentajeOperativo: Float,
     val porcentajeGanancia: Float,
     val esPlantillaMayor: Boolean = false,
-    val minimoUnidadesMayor: Int = 6
+    val minimoUnidadesMayor: Int = 6,
+    val costosAdicionalesJson: String = "[]"
 )
 
