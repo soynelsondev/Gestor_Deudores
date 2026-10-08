@@ -8,8 +8,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [Deudor::class, Deuda::class, Pedido::class, PlantillaCotizacion::class, CuentaBancaria::class, PerfilNegocio::class, InsumoBiblioteca::class],
-    version = 21,
+    entities = [Deudor::class, Deuda::class, Pedido::class, PlantillaCotizacion::class, CuentaBancaria::class, PerfilNegocio::class, InsumoBiblioteca::class, HistorialPrecioInsumo::class],
+    version = 22,
     exportSchema = true
 )
 abstract class DeudaDataBase : RoomDatabase() {
@@ -21,6 +21,7 @@ abstract class DeudaDataBase : RoomDatabase() {
     abstract fun cuentaBancariaDao(): CuentaBancariaDao
     abstract fun perfilNegocioDao(): PerfilNegocioDao
     abstract fun insumoBibliotecaDao(): InsumoBibliotecaDao
+    abstract fun historialPrecioInsumoDao(): HistorialPrecioInsumoDao
 
     companion object {
         @Volatile
@@ -187,7 +188,8 @@ abstract class DeudaDataBase : RoomDatabase() {
                     `minutosPorPieza` REAL NOT NULL DEFAULT 0.0,
                     `tarifaPorHoraUsd` REAL NOT NULL DEFAULT 0.0,
                     `comisionPorcentaje` REAL NOT NULL DEFAULT 0.0,
-                    `escalasPrecioJson` TEXT NOT NULL DEFAULT '[]'
+                    `escalasPrecioJson` TEXT NOT NULL DEFAULT '[]',
+                    `modoCosteo` TEXT NOT NULL DEFAULT 'RAPIDO'
                 )
             """)
 
@@ -216,7 +218,7 @@ abstract class DeudaDataBase : RoomDatabase() {
                         "costoDiseno", "monedaDiseno", "rendimientoDiseno",
                         "costoExtra", "monedaExtra", "rendimientoExtra", "porcentajeOperativo",
                         "esPlantillaMayor", "minimoUnidadesMayor", "costosAdicionalesJson",
-                        "minutosPorPieza", "tarifaPorHoraUsd", "comisionPorcentaje", "escalasPrecioJson"
+                        "minutosPorPieza", "tarifaPorHoraUsd", "comisionPorcentaje", "escalasPrecioJson", "modoCosteo"
                     ).filter { columnasExistentes.contains(it) }
 
                     val selectColsSql = (colsToCopy + "$colGanancia AS porcentajeGanancia").joinToString(", ")
@@ -366,6 +368,22 @@ abstract class DeudaDataBase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_21_22 = object : Migration(21, 22) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `historial_precios_insumo` (
+                        `id` TEXT NOT NULL,
+                        `insumoId` TEXT NOT NULL DEFAULT '',
+                        `precioLote` REAL NOT NULL DEFAULT 0.0,
+                        `cantidadLote` INTEGER NOT NULL DEFAULT 1,
+                        `fecha` TEXT NOT NULL DEFAULT '',
+                        PRIMARY KEY(`id`)
+                    )
+                """)
+                recrearTablaPlantillasSegura(db)
+            }
+        }
+
         fun getDatabase(context: Context): DeudaDataBase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -378,7 +396,7 @@ abstract class DeudaDataBase : RoomDatabase() {
                         MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, 
                         MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
                         MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17,
-                        MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21
+                        MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22
                     )
                     .build()
 

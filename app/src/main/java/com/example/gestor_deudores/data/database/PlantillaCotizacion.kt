@@ -45,6 +45,7 @@ data class PlantillaCotizacion(
     val minutosPorPieza: Double = 0.0,
     val tarifaPorHoraUsd: Double = 0.0,
     val comisionPorcentaje: Float = 0f,
-    val escalasPrecioJson: String = "[]"
+    val escalasPrecioJson: String = "[]",
+    val modoCosteo: String = "RAPIDO" // "RAPIDO" o "DETALLADO"
 )
 

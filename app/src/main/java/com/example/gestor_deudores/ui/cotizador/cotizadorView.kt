@@ -524,9 +524,45 @@ fun FormularioCotizacion(
                 }
             }
 
-            // --- SECCIÓN 4: PORCENTAJES Y GANANCIA (Fase 1: Ganancia Flexible) ---
+            // --- SECCIÓN 4: PORCENTAJES Y GANANCIA (Fases 1 a 4) ---
             item {
                 SeccionCard(titulo = "4. Operatividad y Modo de Ganancia") {
+                    Text("Modo de Cotización:", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.SemiBold)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        FilterChip(
+                            selected = uiState.modoCosteo == "RAPIDO",
+                            onClick = { viewModel.onModoCosteoChange("RAPIDO") },
+                            label = { Text("⚡ Modo Rápido", fontSize = 11.sp) }
+                        )
+                        FilterChip(
+                            selected = uiState.modoCosteo == "DETALLADO",
+                            onClick = { viewModel.onModoCosteoChange("DETALLADO") },
+                            label = { Text("🔬 Modo Detallado", fontSize = 11.sp) }
+                        )
+                    }
+
+                    if (uiState.alertaDobleConteo) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFFFFF3E0))
+                                .padding(8.dp)
+                        ) {
+                            Text(
+                                text = "⚠️ Nota: Tienes un % Operativo activo además de insumos detallados. Asegúrate de no estar contando dos veces los mismos gastos.",
+                                color = Color(0xFFE65100),
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
                     SliderPorcentaje(
                         titulo = "Costos Operativos (Luz/Merma):",
                         valor = uiState.porcentajeOperativo,

@@ -76,6 +76,10 @@ data class CotizadorUiState(
     // 7. LISTA DINÁMICA DE INSUMOS Y SERVICIOS (Lego Style)
     val listaInsumos: List<com.example.gestor_deudores.data.database.InsumoCotizacion> = emptyList(),
 
+    // 8. Modo de Costeo (Rápido vs Detallado)
+    val modoCosteo: String = "RAPIDO", // "RAPIDO" o "DETALLADO"
+    val alertaDobleConteo: Boolean = false,
+
     // ==========================================
     // RESULTADOS MATEMÁTICOS (Calculados en vivo)
     // ==========================================
@@ -95,7 +99,8 @@ data class CotizadorUiState(
 
 class CotizadorViewModel(
     private val plantillaDao: PlantillaDao,
-    private val insumoBibliotecaDao: com.example.gestor_deudores.data.database.InsumoBibliotecaDao
+    private val insumoBibliotecaDao: com.example.gestor_deudores.data.database.InsumoBibliotecaDao,
+    private val historialPrecioInsumoDao: com.example.gestor_deudores.data.database.HistorialPrecioInsumoDao
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CotizadorUiState())
@@ -118,7 +123,21 @@ class CotizadorViewModel(
     fun guardarInsumoBiblioteca(insumo: com.example.gestor_deudores.data.database.InsumoBiblioteca) {
         viewModelScope.launch {
             insumoBibliotecaDao.guardarInsumo(insumo)
+            val fechaHoy = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(java.util.Date())
+            historialPrecioInsumoDao.guardarHistorial(
+                com.example.gestor_deudores.data.database.HistorialPrecioInsumo(
+                    insumoId = insumo.id,
+                    precioLote = insumo.precioLote,
+                    cantidadLote = insumo.cantidadLote,
+                    fecha = fechaHoy
+                )
+            )
         }
+    }
+
+    fun onModoCosteoChange(nuevoModo: String) {
+        _uiState.update { it.copy(modoCosteo = nuevoModo) }
+        calcularResultados()
     }
 
     fun eliminarInsumoBiblioteca(insumo: com.example.gestor_deudores.data.database.InsumoBiblioteca) {
@@ -370,6 +389,7 @@ class CotizadorViewModel(
                 minutosPorPieza = if (plantilla.minutosPorPieza > 0) plantilla.minutosPorPieza.toString() else "",
                 tarifaPorHoraUsd = if (plantilla.tarifaPorHoraUsd > 0) plantilla.tarifaPorHoraUsd.toString() else "",
                 comisionPorcentaje = plantilla.comisionPorcentaje,
+                modoCosteo = plantilla.modoCosteo,
                 esPlantillaMayor = plantilla.esPlantillaMayor,
                 minimoUnidadesMayor = plantilla.minimoUnidadesMayor.toString(),
                 listaInsumos = try {
@@ -432,7 +452,8 @@ class CotizadorViewModel(
             costosAdicionalesJson = com.google.gson.Gson().toJson(estado.listaInsumos),
             minutosPorPieza = parseD(estado.minutosPorPieza),
             tarifaPorHoraUsd = parseD(estado.tarifaPorHoraUsd),
-            comisionPorcentaje = estado.comisionPorcentaje
+            comisionPorcentaje = estado.comisionPorcentaje,
+            modoCosteo = estado.modoCosteo
         )
 
         viewModelScope.launch {
@@ -517,6 +538,10 @@ class CotizadorViewModel(
             gananciaFijaUsd = gananciaFijaD
         )
 
+        val tieneDobleConteo = estado.modoCosteo == "DETALLADO" && 
+                estado.listaInsumos.size >= 2 && 
+                estado.porcentajeOperativo > 0f
+
         _uiState.update {
             it.copy(
                 costoTotalProduccionUsd = costos.costoTotalProduccionUsd,
@@ -528,6 +553,7 @@ class CotizadorViewModel(
                 gananciaDocenaUsd = costos.gananciaDocenaUsd,
                 margenSobreVentaPct = costos.margenSobreVentaPorcentaje,
                 esPerdida = costos.esPerdida,
+                alertaDobleConteo = tieneDobleConteo,
                 tablaEscalasResultado = costos.tablaEscalasResultado
             )
         }
