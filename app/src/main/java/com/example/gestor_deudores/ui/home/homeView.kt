@@ -113,7 +113,11 @@ import java.util.Locale
 
 
 @Composable
-fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
+fun homePrincipal(
+    viewModel: HomeViewModel, 
+    navController: NavController,
+    cotizadorViewModel: com.example.gestor_deudores.ui.cotizador.CotizadorViewModel? = null
+){
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -343,6 +347,21 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
                     ),
                     modifier = Modifier.padding(horizontal = 12.dp)
                 )
+
+                // Opción 4: Mis Insumos y Materiales (Biblioteca)
+                NavigationDrawerItem(
+                    label = { Text("Mis Insumos y Materiales", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = estados) },
+                    selected = false,
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        mostrarBibliotecaInsumos = true
+                    },
+                    icon = { Text("📦", fontSize = 18.sp) },
+                    colors = NavigationDrawerItemDefaults.colors(
+                        unselectedContainerColor = Color.Transparent
+                    ),
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
             }
         }
     ) {
@@ -392,8 +411,7 @@ fun homePrincipal(viewModel: HomeViewModel, navController: NavController){
             )
         }
 
-        if (mostrarBibliotecaInsumos) {
-            val cotizadorViewModel: com.example.gestor_deudores.ui.cotizador.CotizadorViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+        if (mostrarBibliotecaInsumos && cotizadorViewModel != null) {
             DialogoGestionBibliotecaInsumos(
                 cotizadorViewModel = cotizadorViewModel,
                 onDismiss = { mostrarBibliotecaInsumos = false }

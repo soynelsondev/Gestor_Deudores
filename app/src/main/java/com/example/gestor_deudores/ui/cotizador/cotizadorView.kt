@@ -19,6 +19,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.*
@@ -383,7 +384,7 @@ fun FormularioCotizacion(
             item {
                 SeccionCard(titulo = "2. Servicios Directos (DTF, Pasajes, Diseño)") {
                     // DTF
-                    Text("Costo de Impresión / DTF:", fontSize = 12.sp, color = Color.Gray)
+                    Text("Costo de Impresión / DTF por Metro:", fontSize = 12.sp, color = Color.Gray)
                     CampoMonedaCantidad(
                         precio = uiState.precioTotalDtf,
                         moneda = uiState.monedaDtf,
@@ -392,6 +393,65 @@ fun FormularioCotizacion(
                         onMonedaChange = { viewModel.onMonedaDtfChange(it) },
                         onCantidadChange = { viewModel.onRendimientoDtfChange(it) }
                     )
+
+                    // --- AYUDANTE CALCULADOR DE DTF ---
+                    var mostrarAyudanteDtf by remember { mutableStateOf(false) }
+                    var anchoRolloDtf by remember { mutableStateOf("30") }
+                    var anchoDisenoDtf by remember { mutableStateOf("10") }
+                    var altoDisenoDtf by remember { mutableStateOf("10") }
+
+                    if (mostrarAyudanteDtf) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.Black.copy(alpha = 0.04f))
+                                .padding(8.dp)
+                        ) {
+                            Column {
+                                Text("📐 Calculador de Estampas por Metro DTF", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = estados)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    OutlinedTextField(
+                                        value = anchoRolloDtf,
+                                        onValueChange = { 
+                                            anchoRolloDtf = it
+                                            viewModel.calcularAyudanteDtf(anchoRolloDtf, anchoDisenoDtf, altoDisenoDtf)
+                                        },
+                                        label = { Text("Rollo cm") },
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    OutlinedTextField(
+                                        value = anchoDisenoDtf,
+                                        onValueChange = { 
+                                            anchoDisenoDtf = it
+                                            viewModel.calcularAyudanteDtf(anchoRolloDtf, anchoDisenoDtf, altoDisenoDtf)
+                                        },
+                                        label = { Text("Ancho cm") },
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    OutlinedTextField(
+                                        value = altoDisenoDtf,
+                                        onValueChange = { 
+                                            altoDisenoDtf = it
+                                            viewModel.calcularAyudanteDtf(anchoRolloDtf, anchoDisenoDtf, altoDisenoDtf)
+                                        },
+                                        label = { Text("Alto cm") },
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        TextButton(onClick = { mostrarAyudanteDtf = true }) {
+                            Text("📐 ¿No sabes cuántas estampas salen por metro? Calcular aquí", fontSize = 11.sp, color = estados)
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(12.dp))
 
                     // Transporte
@@ -460,12 +520,26 @@ fun FormularioCotizacion(
             item {
                 var mostrarDialogoInsumo by remember { mutableStateOf(false) }
 
+                var insumoAEditar by remember { mutableStateOf<com.example.gestor_deudores.data.database.InsumoCotizacion?>(null) }
+
                 if (mostrarDialogoInsumo) {
                     DialogoAgregarInsumo(
                         viewModel = viewModel,
                         onDismiss = { mostrarDialogoInsumo = false },
                         onAgregar = { nuevoInsumo ->
                             viewModel.agregarInsumo(nuevoInsumo)
+                        }
+                    )
+                }
+
+                if (insumoAEditar != null) {
+                    DialogoAgregarInsumo(
+                        viewModel = viewModel,
+                        insumoInicial = insumoAEditar,
+                        onDismiss = { insumoAEditar = null },
+                        onAgregar = { insumoActualizado ->
+                            viewModel.editarInsumo(insumoActualizado)
+                            insumoAEditar = null
                         }
                     )
                 }
@@ -503,8 +577,13 @@ fun FormularioCotizacion(
                                         color = Color.DarkGray
                                     )
                                 }
-                                IconButton(onClick = { viewModel.eliminarInsumo(insumo.id) }) {
-                                    Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = Color.Red, modifier = Modifier.size(20.dp))
+                                Row {
+                                    IconButton(onClick = { insumoAEditar = insumo }) {
+                                        Icon(Icons.Default.Edit, contentDescription = "Editar", tint = estados, modifier = Modifier.size(18.dp))
+                                    }
+                                    IconButton(onClick = { viewModel.eliminarInsumo(insumo.id) }) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = Color.Red, modifier = Modifier.size(18.dp))
+                                    }
                                 }
                             }
                         }
@@ -561,6 +640,46 @@ fun FormularioCotizacion(
                         }
                     }
 
+                    if (uiState.modoCosteo == "DETALLADO") {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        HorizontalDivider()
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("🔬 Consumibles y Desgaste de Equipos:", fontSize = 12.sp, color = estados, fontWeight = FontWeight.Bold)
+
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("Papel de Sublimación (Resma):", fontSize = 11.sp, color = Color.Gray)
+                        CampoMonedaCantidad(
+                            precio = uiState.precioPaquetePapel,
+                            moneda = uiState.monedaPaquetePapel,
+                            cantidad = uiState.cantidadPaquetePapel,
+                            onPrecioChange = { viewModel.onPrecioPaquetePapelChange(it) },
+                            onMonedaChange = { viewModel.onMonedaPaquetePapelChange(it) },
+                            onCantidadChange = { viewModel.onCantidadPaquetePapelChange(it) }
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Tinta de Sublimación (Botella/ml):", fontSize = 11.sp, color = Color.Gray)
+                        CampoMonedaCantidad(
+                            precio = uiState.costoExtra,
+                            moneda = uiState.monedaExtra,
+                            cantidad = uiState.rendimientoExtra,
+                            onPrecioChange = { viewModel.onCostoExtraChange(it) },
+                            onMonedaChange = { viewModel.onMonedaExtraChange(it) },
+                            onCantidadChange = { viewModel.onRendimientoExtraChange(it) }
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Desgaste de Prensa / Plancha ($/pcs):", fontSize = 11.sp, color = Color.Gray)
+                        CampoMonedaCantidad(
+                            precio = uiState.costoDiseno,
+                            moneda = uiState.monedaDiseno,
+                            cantidad = uiState.rendimientoDiseno,
+                            onPrecioChange = { viewModel.onCostoDisenoChange(it) },
+                            onMonedaChange = { viewModel.onMonedaDisenoChange(it) },
+                            onCantidadChange = { viewModel.onRendimientoDisenoChange(it) }
+                        )
+                    }
+
                     Spacer(modifier = Modifier.height(8.dp))
 
                     SliderPorcentaje(
@@ -581,64 +700,52 @@ fun FormularioCotizacion(
                         FilterChip(
                             selected = uiState.tipoGanancia == com.example.gestor_deudores.data.utils.TipoGanancia.SOBRE_COSTO,
                             onClick = { viewModel.onTipoGananciaChange(com.example.gestor_deudores.data.utils.TipoGanancia.SOBRE_COSTO) },
-                            label = { Text("% s/ Costo", fontSize = 11.sp) }
+                            label = { Text("Por Costo", fontSize = 11.sp, maxLines = 1) },
+                            modifier = Modifier.weight(1f)
                         )
                         FilterChip(
                             selected = uiState.tipoGanancia == com.example.gestor_deudores.data.utils.TipoGanancia.SOBRE_VENTA,
                             onClick = { viewModel.onTipoGananciaChange(com.example.gestor_deudores.data.utils.TipoGanancia.SOBRE_VENTA) },
-                            label = { Text("% s/ Venta", fontSize = 11.sp) }
+                            label = { Text("En Venta", fontSize = 11.sp, maxLines = 1) },
+                            modifier = Modifier.weight(1f)
                         )
                         FilterChip(
                             selected = uiState.tipoGanancia == com.example.gestor_deudores.data.utils.TipoGanancia.GANANCIA_FIJA,
                             onClick = { viewModel.onTipoGananciaChange(com.example.gestor_deudores.data.utils.TipoGanancia.GANANCIA_FIJA) },
-                            label = { Text("$ Fija / pc", fontSize = 11.sp) }
+                            label = { Text("$ Fija ", fontSize = 11.sp, maxLines = 1) },
+                            modifier = Modifier.weight(1f)
                         )
                     }
 
                     if (uiState.tipoGanancia == com.example.gestor_deudores.data.utils.TipoGanancia.GANANCIA_FIJA) {
                         OutlinedTextField(
                             value = uiState.gananciaFijaUsd,
-                            onValueChange = { viewModel.onGananciaFijaChange(it) },
-                            label = { Text("Ganancia Fija Deseada por Pieza ($)") },
+                            onValueChange = { nuevoTexto ->
+                                if (nuevoTexto.all { c -> c.isDigit() || c == '.' || c == ',' } &&
+                                    nuevoTexto.count { c -> c == '.' || c == ',' } <= 1) {
+                                    viewModel.onGananciaFijaChange(nuevoTexto)
+                                }
+                            },
+                            placeholder = { Text("Ej. 3.50", fontSize = 12.sp, color = Color.Gray) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                             shape = RoundedCornerShape(12.dp)
                         )
                     } else {
                         SliderPorcentaje(
-                            titulo = if (uiState.tipoGanancia == com.example.gestor_deudores.data.utils.TipoGanancia.SOBRE_COSTO) 
-                                "Porcentaje sobre el Costo (%):" else "Margen sobre la Venta (%):",
+                            titulo = "Ganancia al Detal:",
                             valor = uiState.porcentajeGanancia,
                             rango = 0f..300f,
                             colorActivo = estados,
                             onValorChange = { viewModel.onPorcentajeGananciaChange(it) }
                         )
-                    }
 
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Checkbox(
-                            checked = uiState.esPlantillaMayor,
-                            onCheckedChange = { viewModel.onEsPlantillaMayorChange(it) }
-                        )
-                        Text(
-                            text = "🏷️ Es Tarifa de Venta al Mayor",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
-                        )
-                    }
-
-                    if (uiState.esPlantillaMayor) {
-                        OutlinedTextField(
-                            value = uiState.minimoUnidadesMayor,
-                            onValueChange = { viewModel.onMinimoUnidadesMayorChange(it) },
-                            label = { Text("Aplica a partir de cuántas piezas:") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                        SliderPorcentaje(
+                            titulo = "Ganancia al Mayor:",
+                            valor = uiState.porcentajeGananciaMayor,
+                            rango = 0f..100f,
+                            colorActivo = Color(0xFFE29578),
+                            onValorChange = { viewModel.onPorcentajeGananciaMayorChange(it) }
                         )
                     }
 
@@ -811,8 +918,13 @@ fun CampoMonedaCantidad(
             // Campo de Precio
             OutlinedTextField(
                 value = precio,
-                onValueChange = { if (it.all { c -> c.isDigit() || c == '.' || c == ',' }) onPrecioChange(it) },
-                label = { Text(labelPrecio, fontSize = 11.sp) },
+                onValueChange = { nuevoTexto ->
+                    if (nuevoTexto.all { c -> c.isDigit() || c == '.' || c == ',' } &&
+                        nuevoTexto.count { c -> c == '.' || c == ',' } <= 1) {
+                        onPrecioChange(nuevoTexto)
+                    }
+                },
+                placeholder = { Text(labelPrecio, fontSize = 12.sp, color = Color.Gray) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 modifier = Modifier.weight(1.5f),
                 shape = RoundedCornerShape(12.dp),
@@ -834,7 +946,7 @@ fun CampoMonedaCantidad(
             OutlinedTextField(
                 value = cantidad,
                 onValueChange = { if (it.all { c -> c.isDigit() }) onCantidadChange(it) },
-                label = { Text(labelCantidad, fontSize = 11.sp) },
+                placeholder = { Text(labelCantidad, fontSize = 12.sp, color = Color.Gray) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(12.dp),
@@ -962,17 +1074,17 @@ fun TarjetaResultadosFinancieros(uiState: CotizadorUiState) {
                 }
                 HorizontalDivider(color = Color.White.copy(alpha = 0.3f), modifier = Modifier.padding(vertical = 8.dp))
 
-                // PRECIO DE VENTA
+                // PRECIO DE VENTA DETAL
                 val descGanancia = when (uiState.tipoGanancia) {
-                    com.example.gestor_deudores.data.utils.TipoGanancia.SOBRE_COSTO -> "${uiState.porcentajeGanancia.toInt()}% s/ Costo (${String.format(Locale.US, "%.1f", uiState.margenSobreVentaPct)}% s/ Venta)"
-                    com.example.gestor_deudores.data.utils.TipoGanancia.SOBRE_VENTA -> "${uiState.porcentajeGanancia.toInt()}% Margen s/ Venta"
-                    else -> "Ganancia Fija $${uiState.gananciaFijaUsd}/u"
+                    com.example.gestor_deudores.data.utils.TipoGanancia.SOBRE_COSTO -> "${uiState.porcentajeGanancia.toInt()}% Ganancia"
+                    com.example.gestor_deudores.data.utils.TipoGanancia.SOBRE_VENTA -> "${uiState.porcentajeGanancia.toInt()}% Margen"
+                    else -> "$${uiState.gananciaFijaUsd} Fijo/pc"
                 }
 
-                Text("PRECIO DE VENTA ($descGanancia):", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Text("PRECIO VENTA DETAL ($descGanancia):", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("Precio Sugerido Unitario:", color = Color.White, fontSize = 14.sp)
+                    Text("Precio Sugerido Detal:", color = Color.White, fontSize = 14.sp)
                     Text(formatoUSD.format(uiState.precioSugeridoUsd), color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
                 }
 
@@ -983,14 +1095,17 @@ fun TarjetaResultadosFinancieros(uiState: CotizadorUiState) {
 
                 HorizontalDivider(color = Color.White.copy(alpha = 0.2f), modifier = Modifier.padding(vertical = 8.dp))
 
-                // DOCENA
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Precio por Docena (12 pcs):", color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp)
-                    Text(formatoUSD.format(uiState.precioDocenaUsd), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                // PRECIO DE VENTA MAYOR (6+ pcs)
+                Text("PRECIO VENTA MAYOR (${uiState.porcentajeGananciaMayor.toInt()}% Ganancia):", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Precio Sugerido Mayor:", color = Color.White, fontSize = 13.sp)
+                    Text(formatoUSD.format(uiState.precioSugeridoMayorUsd), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
+
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Ganancia libre por Docena:", color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp)
-                    Text("+ " + formatoUSD.format(uiState.gananciaDocenaUsd), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text("Tu ganancia libre por pieza:", color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
+                    Text("+ " + formatoUSD.format(uiState.gananciaNetaMayorUsd), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
 
                 // Botón Tabla de Escalas por Cantidad
@@ -1041,22 +1156,24 @@ fun DialogoTablaEscalas(
                     modifier = Modifier.fillMaxWidth().background(Color.LightGray.copy(alpha = 0.3f)).padding(8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Volumen", fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.weight(1f))
-                    Text("Costo /u", fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.weight(1f))
-                    Text("Precio /u", fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.weight(1f))
-                    Text("Total Lote", fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                    Text("Volumen", fontWeight = FontWeight.Bold, fontSize = 10.sp, modifier = Modifier.weight(1f))
+                    Text("Costo /u", fontWeight = FontWeight.Bold, fontSize = 10.sp, modifier = Modifier.weight(1f))
+                    Text("Precio /u", fontWeight = FontWeight.Bold, fontSize = 10.sp, modifier = Modifier.weight(1f))
+                    Text("Ganancia /u", fontWeight = FontWeight.Bold, fontSize = 10.sp, color = Color(0xFF2E7D32), modifier = Modifier.weight(1f))
+                    Text("Total Lote", fontWeight = FontWeight.Bold, fontSize = 10.sp, modifier = Modifier.weight(1f))
                 }
 
                 tabla.forEach { fila ->
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp, horizontal = 8.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp, horizontal = 4.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("${fila.desdeCantidad} pcs", fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                        Text(formatoUSD.format(fila.costoUnitarioUsd), fontSize = 11.sp, color = Color.DarkGray, modifier = Modifier.weight(1f))
-                        Text(formatoUSD.format(fila.precioUnitarioUsd), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = estados, modifier = Modifier.weight(1f))
-                        Text(formatoUSD.format(fila.precioTotalLoteUsd), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF2E7D32), modifier = Modifier.weight(1f))
+                        Text("${fila.desdeCantidad} pcs", fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                        Text(formatoUSD.format(fila.costoUnitarioUsd), fontSize = 10.sp, color = Color.DarkGray, modifier = Modifier.weight(1f))
+                        Text(formatoUSD.format(fila.precioUnitarioUsd), fontWeight = FontWeight.Bold, fontSize = 11.sp, color = estados, modifier = Modifier.weight(1f))
+                        Text("+${formatoUSD.format(fila.gananciaUnitarioUsd)}", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color(0xFF2E7D32), modifier = Modifier.weight(1f))
+                        Text(formatoUSD.format(fila.precioTotalLoteUsd), fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color.DarkGray, modifier = Modifier.weight(1f))
                     }
                     HorizontalDivider()
                 }
@@ -1073,18 +1190,19 @@ fun DialogoTablaEscalas(
 @Composable
 fun DialogoAgregarInsumo(
     viewModel: CotizadorViewModel,
+    insumoInicial: com.example.gestor_deudores.data.database.InsumoCotizacion? = null,
     onDismiss: () -> Unit,
     onAgregar: (com.example.gestor_deudores.data.database.InsumoCotizacion) -> Unit
 ) {
     val biblioteca by viewModel.listaInsumosBiblioteca.collectAsState()
     var expandidoBiblioteca by remember { mutableStateOf(false) }
 
-    var nombre by remember { mutableStateOf("") }
-    var categoria by remember { mutableStateOf("MATERIA_PRIMA") }
-    var tipoCosto by remember { mutableStateOf("POR_PIEZA") }
-    var precioLoteTexto by remember { mutableStateOf("") }
-    var moneda by remember { mutableStateOf("USD") }
-    var rendimientoTexto by remember { mutableStateOf("1") }
+    var nombre by remember { mutableStateOf(insumoInicial?.nombre ?: "") }
+    var categoria by remember { mutableStateOf(insumoInicial?.categoria ?: "MATERIA_PRIMA") }
+    var tipoCosto by remember { mutableStateOf(insumoInicial?.tipoCosto ?: "POR_PIEZA") }
+    var precioLoteTexto by remember { mutableStateOf(insumoInicial?.precioLote?.let { if (it > 0) it.toString() else "" } ?: "") }
+    var moneda by remember { mutableStateOf(insumoInicial?.moneda ?: "USD") }
+    var rendimientoTexto by remember { mutableStateOf(insumoInicial?.rendimientoCantidad?.toString() ?: "1") }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -1197,7 +1315,7 @@ fun DialogoAgregarInsumo(
                             val rI = rendimientoTexto.toIntOrNull() ?: 1
                             if (nombre.isNotBlank() && pD > 0) {
                                 onAgregar(
-                                    com.example.gestor_deudores.data.database.InsumoCotizacion(
+                                    (insumoInicial ?: com.example.gestor_deudores.data.database.InsumoCotizacion()).copy(
                                         nombre = nombre.trim(),
                                         categoria = categoria,
                                         precioLote = pD,

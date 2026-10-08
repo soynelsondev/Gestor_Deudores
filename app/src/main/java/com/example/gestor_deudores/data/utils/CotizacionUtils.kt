@@ -37,6 +37,23 @@ data class DesgloseCostosPlantilla(
 )
 
 /**
+ * AYUDANTE DE CÁLCULO DE DTF POR METRO.
+ * Calcula cuántos estampados caben por metro según ancho de rollo y medidas del diseño.
+ */
+fun calcularAprovechamientoDtf(
+    anchoRolloCm: Double = 30.0,
+    anchoDisenoCm: Double = 10.0,
+    altoDisenoCm: Double = 10.0,
+    separacionCm: Double = 1.0
+): Int {
+    if (anchoDisenoCm <= 0 || altoDisenoCm <= 0) return 1
+    val cols = kotlin.math.floor((anchoRolloCm) / (anchoDisenoCm + separacionCm))
+    val filas = kotlin.math.floor(100.0 / (altoDisenoCm + separacionCm))
+    val total = (cols * filas).toInt()
+    return if (total > 0) total else 1
+}
+
+/**
  * CEREBRO MATEMÁTICO CENTRALIZADO PARA COTIZACIONES.
  * Soporta Insumos Dinámicos ilimitados (Materia Prima, Insumos Extras, Servicios)
  * y mantiene retrocompatibilidad con los campos tradicionales.
@@ -134,19 +151,30 @@ fun calcularCostosPlantilla(
     val margenSobreVentaPct = if (precioVentaSug > 0.0) ((ganancia / precioVentaSug) * 100.0).toFloat() else 0f
     val esPerdida = costoTotalProduccion > 0.0 && precioVentaSug <= costoTotalProduccion
 
-    // 7. Generación de Tabla de Escalas por Cantidad (1, 6, 12, 24, 50 pcs) si no estamos en recursión
+    // 7. Generación de Tabla de Escalas por Cantidad usando Ganancia Detal (1 pc) y Ganancia Mayor (6+ pcs)
     val tablaEscalas = if (calcularEscalas) {
-        listOf(1, 6, 12, 24, 50).map { q ->
+        val gDetal = plantilla.porcentajeGanancia
+        val gMayor = if (plantilla.porcentajeGananciaMayor > 0f) plantilla.porcentajeGananciaMayor else (gDetal * 0.75f)
+
+        listOf(
+            Triple("1 pc (Detal)", 1, gDetal),
+            Triple("6 pcs (Mayor)", 6, gMayor),
+            Triple("12 pcs (Docena)", 12, (gMayor * 0.9f)),
+            Triple("24 pcs (Lote 24)", 24, (gMayor * 0.8f)),
+            Triple("50 pcs (Lote 50)", 50, (gMayor * 0.7f))
+        ).map { (nombreEscala, q, margenAjustado) ->
+            val plantillaEscala = plantilla.copy(porcentajeGanancia = margenAjustado)
+            val factorG = if (gDetal > 0f) (margenAjustado / gDetal).toDouble() else 1.0
             val cUnid = calcularCostosPlantilla(
-                plantilla = plantilla,
+                plantilla = plantillaEscala,
                 tasaBcv = tasaBcv,
                 tipoGanancia = tipoGanancia,
-                gananciaFijaUsd = gananciaFijaUsd,
+                gananciaFijaUsd = gananciaFijaUsd * factorG,
                 cantidadPedido = q,
                 calcularEscalas = false
             )
             ResultadoEscalaCantidad(
-                nombreEscala = "Lote de $q pcs",
+                nombreEscala = nombreEscala,
                 desdeCantidad = q,
                 costoUnitarioUsd = cUnid.costoTotalProduccionUsd,
                 precioUnitarioUsd = cUnid.precioSugeridoUsd,

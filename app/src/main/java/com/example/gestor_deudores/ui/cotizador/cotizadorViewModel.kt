@@ -63,8 +63,9 @@ data class CotizadorUiState(
     // 5. Operatividad y Ganancia (Fase 1 y 2: Mano de obra y comisión)
     val porcentajeOperativo: Float = 10f,
     val porcentajeGanancia: Float = 40f,
+    val porcentajeGananciaMayor: Float = 25f,
     val tipoGanancia: com.example.gestor_deudores.data.utils.TipoGanancia = com.example.gestor_deudores.data.utils.TipoGanancia.SOBRE_COSTO,
-    val gananciaFijaUsd: String = "0.0",
+    val gananciaFijaUsd: String = "",
     val minutosPorPieza: String = "",
     val tarifaPorHoraUsd: String = "",
     val comisionPorcentaje: Float = 0f,
@@ -87,9 +88,14 @@ data class CotizadorUiState(
     val costoManoObraUsd: Double = 0.0,
     val comisionUsd: Double = 0.0,
     
-    // Resultados
+    // Resultados Detal
     val precioSugeridoUsd: Double = 0.0,
     val gananciaNetaUsd: Double = 0.0,
+    
+    // Resultados Mayor (6+ pcs)
+    val precioSugeridoMayorUsd: Double = 0.0,
+    val gananciaNetaMayorUsd: Double = 0.0,
+
     val precioDocenaUsd: Double = 0.0,
     val gananciaDocenaUsd: Double = 0.0,
     val margenSobreVentaPct: Float = 0f,
@@ -313,6 +319,12 @@ class CotizadorViewModel(
         calcularResultados()
     }
 
+    fun onPorcentajeGananciaMayorChange(valor: Float) {
+        val margenSeguro = if (valor >= 300f) 300f else valor
+        _uiState.update { it.copy(porcentajeGananciaMayor = margenSeguro) }
+        calcularResultados()
+    }
+
     fun onTipoGananciaChange(tipo: com.example.gestor_deudores.data.utils.TipoGanancia) {
         _uiState.update { it.copy(tipoGanancia = tipo) }
         calcularResultados()
@@ -342,11 +354,28 @@ class CotizadorViewModel(
         calcularResultados()
     }
 
+    fun editarInsumo(insumoActualizado: com.example.gestor_deudores.data.database.InsumoCotizacion) {
+        _uiState.update { actual ->
+            val listaNueva = actual.listaInsumos.map { if (it.id == insumoActualizado.id) insumoActualizado else it }
+            actual.copy(listaInsumos = listaNueva)
+        }
+        calcularResultados()
+    }
+
     fun eliminarInsumo(idInsumo: String) {
         _uiState.update { actual ->
             val listaActualizada = actual.listaInsumos.filter { it.id != idInsumo }
             actual.copy(listaInsumos = listaActualizada)
         }
+        calcularResultados()
+    }
+
+    fun calcularAyudanteDtf(anchoRollo: String, anchoDiseno: String, altoDiseno: String) {
+        val aR = anchoRollo.toDoubleOrNull() ?: 30.0
+        val aD = anchoDiseno.toDoubleOrNull() ?: 10.0
+        val hD = altoDiseno.toDoubleOrNull() ?: 10.0
+        val piezasPorMetro = com.example.gestor_deudores.data.utils.calcularAprovechamientoDtf(aR, aD, hD)
+        _uiState.update { it.copy(rendimientoDtf = piezasPorMetro.toString()) }
         calcularResultados()
     }
 
@@ -386,6 +415,7 @@ class CotizadorViewModel(
                 rendimientoExtra = plantilla.rendimientoExtra.toString(),
                 porcentajeOperativo = plantilla.porcentajeOperativo,
                 porcentajeGanancia = plantilla.porcentajeGanancia,
+                porcentajeGananciaMayor = plantilla.porcentajeGananciaMayor,
                 minutosPorPieza = if (plantilla.minutosPorPieza > 0) plantilla.minutosPorPieza.toString() else "",
                 tarifaPorHoraUsd = if (plantilla.tarifaPorHoraUsd > 0) plantilla.tarifaPorHoraUsd.toString() else "",
                 comisionPorcentaje = plantilla.comisionPorcentaje,
@@ -447,6 +477,7 @@ class CotizadorViewModel(
             rendimientoExtra = parseCant(estado.rendimientoExtra),
             porcentajeOperativo = estado.porcentajeOperativo,
             porcentajeGanancia = estado.porcentajeGanancia,
+            porcentajeGananciaMayor = estado.porcentajeGananciaMayor,
             esPlantillaMayor = estado.esPlantillaMayor,
             minimoUnidadesMayor = parseCant(estado.minimoUnidadesMayor),
             costosAdicionalesJson = com.google.gson.Gson().toJson(estado.listaInsumos),
@@ -523,6 +554,7 @@ class CotizadorViewModel(
             rendimientoExtra = parseCantInt(estado.rendimientoExtra),
             porcentajeOperativo = estado.porcentajeOperativo,
             porcentajeGanancia = estado.porcentajeGanancia,
+            porcentajeGananciaMayor = estado.porcentajeGananciaMayor,
             esPlantillaMayor = estado.esPlantillaMayor,
             minimoUnidadesMayor = parseCantInt(estado.minimoUnidadesMayor),
             costosAdicionalesJson = com.google.gson.Gson().toJson(estado.listaInsumos),
@@ -538,6 +570,16 @@ class CotizadorViewModel(
             gananciaFijaUsd = gananciaFijaD
         )
 
+        val plantillaMayorTemp = plantillaTemporal.copy(porcentajeGanancia = estado.porcentajeGananciaMayor)
+        val costosMayor = com.example.gestor_deudores.data.utils.calcularCostosPlantilla(
+            plantilla = plantillaMayorTemp,
+            tasaBcv = tasaActiva,
+            tipoGanancia = estado.tipoGanancia,
+            gananciaFijaUsd = gananciaFijaD * 0.75,
+            cantidadPedido = 6,
+            calcularEscalas = false
+        )
+
         val tieneDobleConteo = estado.modoCosteo == "DETALLADO" && 
                 estado.listaInsumos.size >= 2 && 
                 estado.porcentajeOperativo > 0f
@@ -549,6 +591,8 @@ class CotizadorViewModel(
                 comisionUsd = costos.comisionUsd,
                 precioSugeridoUsd = costos.precioSugeridoUsd,
                 gananciaNetaUsd = costos.gananciaUsd,
+                precioSugeridoMayorUsd = costosMayor.precioSugeridoUsd,
+                gananciaNetaMayorUsd = costosMayor.gananciaUsd,
                 precioDocenaUsd = costos.precioDocenaUsd,
                 gananciaDocenaUsd = costos.gananciaDocenaUsd,
                 margenSobreVentaPct = costos.margenSobreVentaPorcentaje,

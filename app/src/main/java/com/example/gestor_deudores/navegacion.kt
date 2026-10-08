@@ -44,8 +44,9 @@ fun NavegacionPrincipal(
 
         composable(rutas.HOME){
             homePrincipal(
-                viewModel= viewModelHome,
-                navController = navController
+                viewModel = viewModelHome,
+                navController = navController,
+                cotizadorViewModel = viewModelCotizador
             )
         }
 

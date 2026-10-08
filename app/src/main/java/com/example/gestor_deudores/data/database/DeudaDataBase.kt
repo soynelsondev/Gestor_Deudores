@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [Deudor::class, Deuda::class, Pedido::class, PlantillaCotizacion::class, CuentaBancaria::class, PerfilNegocio::class, InsumoBiblioteca::class, HistorialPrecioInsumo::class],
-    version = 22,
+    version = 23,
     exportSchema = true
 )
 abstract class DeudaDataBase : RoomDatabase() {
@@ -182,6 +182,7 @@ abstract class DeudaDataBase : RoomDatabase() {
                     `rendimientoExtra` INTEGER NOT NULL DEFAULT 1,
                     `porcentajeOperativo` REAL NOT NULL DEFAULT 10.0,
                     `porcentajeGanancia` REAL NOT NULL DEFAULT 40.0,
+                    `porcentajeGananciaMayor` REAL NOT NULL DEFAULT 25.0,
                     `esPlantillaMayor` INTEGER NOT NULL DEFAULT 0,
                     `minimoUnidadesMayor` INTEGER NOT NULL DEFAULT 6,
                     `costosAdicionalesJson` TEXT NOT NULL DEFAULT '[]',
@@ -218,7 +219,7 @@ abstract class DeudaDataBase : RoomDatabase() {
                         "costoDiseno", "monedaDiseno", "rendimientoDiseno",
                         "costoExtra", "monedaExtra", "rendimientoExtra", "porcentajeOperativo",
                         "esPlantillaMayor", "minimoUnidadesMayor", "costosAdicionalesJson",
-                        "minutosPorPieza", "tarifaPorHoraUsd", "comisionPorcentaje", "escalasPrecioJson", "modoCosteo"
+                        "minutosPorPieza", "tarifaPorHoraUsd", "comisionPorcentaje", "escalasPrecioJson", "modoCosteo", "porcentajeGananciaMayor"
                     ).filter { columnasExistentes.contains(it) }
 
                     val selectColsSql = (colsToCopy + "$colGanancia AS porcentajeGanancia").joinToString(", ")
@@ -384,6 +385,12 @@ abstract class DeudaDataBase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_22_23 = object : Migration(22, 23) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                recrearTablaPlantillasSegura(db)
+            }
+        }
+
         fun getDatabase(context: Context): DeudaDataBase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -396,7 +403,7 @@ abstract class DeudaDataBase : RoomDatabase() {
                         MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, 
                         MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
                         MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17,
-                        MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22
+                        MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23
                     )
                     .build()
 
