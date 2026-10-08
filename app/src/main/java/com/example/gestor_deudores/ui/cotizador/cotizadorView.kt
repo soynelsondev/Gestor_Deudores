@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.*
@@ -322,7 +323,10 @@ fun FormularioCotizacion(
         item {
             SeccionCard(titulo = "1. Materia Prima (Base)") {
                     // Pieza
-                    Text("Pieza para sublimar (Franela, Taza, etc):", fontSize = 12.sp, color = Color.Gray)
+                    TextoTituloConAyuda(
+                        titulo = "Pieza para sublimar (Franela, Taza, etc):",
+                        mensajeAyuda = "Compraste una caja de 36 tazas a $45. Escribe 45 en ¿Cuánto pagaste? y 36 en Piezas. Zubli calculará el costo exacto por unidad."
+                    )
                     CampoMonedaCantidad(
                         precio = uiState.precioPaquetePieza,
                         moneda = uiState.monedaPaquetePieza,
@@ -334,7 +338,10 @@ fun FormularioCotizacion(
                     Spacer(modifier = Modifier.height(12.dp))
                     
                     // Empaque
-                    Text("Empaque (Bolsa, Caja):", fontSize = 12.sp, color = Color.Gray)
+                    TextoTituloConAyuda(
+                        titulo = "Empaque (Bolsa, Caja):",
+                        mensajeAyuda = "Compraste un paquete de 100 bolsas a $5. Escribe 5 en ¿Cuánto pagaste? y 100 en Piezas."
+                    )
                     CampoMonedaCantidad(
                         precio = uiState.precioPaqueteEmpaque,
                         moneda = uiState.monedaPaqueteEmpaque,
@@ -350,7 +357,10 @@ fun FormularioCotizacion(
                     
                     if (mostrarPapel) {
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text("Papel de Sublimación (Resma):", fontSize = 12.sp, color = Color.Gray)
+                        TextoTituloConAyuda(
+                            titulo = "Papel de Sublimación (Resma):",
+                            mensajeAyuda = "Si 1 resma de 100 hojas te costó $10 y usas 1/3 de hoja por taza, escribe $10 y 300 piezas (100x3)."
+                        )
                         CampoMonedaCantidad(
                             precio = uiState.precioPaquetePapel,
                             moneda = uiState.monedaPaquetePapel,
@@ -384,7 +394,10 @@ fun FormularioCotizacion(
             item {
                 SeccionCard(titulo = "2. Servicios Directos (DTF, Pasajes, Diseño)") {
                     // DTF
-                    Text("Costo de Impresión / DTF por Metro:", fontSize = 12.sp, color = Color.Gray)
+                    TextoTituloConAyuda(
+                        titulo = "Costo de Impresión / DTF por Metro:",
+                        mensajeAyuda = "Escribe el precio del metro de DTF (ej. $8.50) y cuántas estampas de tu diseño salen por metro. Usa el calculador de abajo si no sabes cuántas entran."
+                    )
                     CampoMonedaCantidad(
                         precio = uiState.precioTotalDtf,
                         moneda = uiState.monedaDtf,
@@ -646,16 +659,7 @@ fun FormularioCotizacion(
                         Spacer(modifier = Modifier.height(8.dp))
                         Text("🔬 Consumibles y Desgaste de Equipos:", fontSize = 12.sp, color = estados, fontWeight = FontWeight.Bold)
 
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("Papel de Sublimación (Resma):", fontSize = 11.sp, color = Color.Gray)
-                        CampoMonedaCantidad(
-                            precio = uiState.precioPaquetePapel,
-                            moneda = uiState.monedaPaquetePapel,
-                            cantidad = uiState.cantidadPaquetePapel,
-                            onPrecioChange = { viewModel.onPrecioPaquetePapelChange(it) },
-                            onMonedaChange = { viewModel.onMonedaPaquetePapelChange(it) },
-                            onCantidadChange = { viewModel.onCantidadPaquetePapelChange(it) }
-                        )
+                        
 
                         Spacer(modifier = Modifier.height(8.dp))
                         Text("Tinta de Sublimación (Botella/ml):", fontSize = 11.sp, color = Color.Gray)
@@ -1334,5 +1338,39 @@ fun DialogoAgregarInsumo(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun TextoTituloConAyuda(
+    titulo: String,
+    mensajeAyuda: String
+) {
+    var mostrarAyuda by remember { mutableStateOf(false) }
+
+    if (mostrarAyuda) {
+        AlertDialog(
+            onDismissRequest = { mostrarAyuda = false },
+            title = { Text("💡 Ayuda del Campo", fontWeight = FontWeight.Bold, color = estados) },
+            text = { Text(mensajeAyuda, fontSize = 13.sp) },
+            confirmButton = {
+                TextButton(onClick = { mostrarAyuda = false }) {
+                    Text("Entendido", color = estados, fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(titulo, fontSize = 12.sp, color = Color.Gray)
+        Spacer(modifier = Modifier.width(4.dp))
+        Icon(
+            imageVector = Icons.Default.Info,
+            contentDescription = "Ayuda",
+            tint = estados,
+            modifier = Modifier
+                .size(16.dp)
+                .clickable { mostrarAyuda = true }
+        )
     }
 }
