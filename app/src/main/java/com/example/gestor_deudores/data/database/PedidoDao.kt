@@ -56,6 +56,9 @@ abstract class PedidoDao {
     @Query("UPDATE pedido_imagenes SET tipo = :nuevoTipo WHERE id = :imagenId")
     abstract suspend fun actualizarTipoImagen(imagenId: Int, nuevoTipo: String)
 
+    @Query("UPDATE pedidos SET estadoDiseno = :nuevoEstado WHERE id = :pedidoId")
+    abstract suspend fun actualizarEstadoDiseno(pedidoId: Int, nuevoEstado: String)
+
     // Guardado Atómico: Pedido + Deuda + Abono Inicial en una sola transacción
     @Transaction
     open suspend fun guardarPedidoCompleto(

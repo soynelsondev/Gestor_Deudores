@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -100,6 +101,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.example.gestor_deudores.data.database.Deudor
 import com.example.gestor_deudores.data.database.PedidoConCliente
 import com.example.gestor_deudores.data.database.PlantillaCotizacion
@@ -484,6 +486,124 @@ fun DialogoVisorImagen(
 }
 
 @Composable
+fun DialogoConfirmarProduccionSinDiseno(
+    onConfirmar: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = fondo)
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text("⚠️ Diseño no aprobado", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Text("El diseño de este pedido aún figura como PENDIENTE. ¿Deseas pasar a producción sin diseño aprobado?", fontSize = 12.sp, color = Color.LightGray)
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancelar", color = Color.Gray)
+                    }
+
+                    Button(
+                        onClick = onConfirmar,
+                        colors = ButtonDefaults.buttonColors(containerColor = estados)
+                    ) {
+                        Text("Producir de todos modos", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DialogoCancelarPedidoConAbono(
+    pedido: PedidoConCliente,
+    onConfirmarCancelacion: (devolverAbono: Boolean, nota: String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var notaCancelacion by remember { mutableStateOf("") }
+    var devolverAbono by remember { mutableStateOf(true) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = fondo)
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text("Cancelar Pedido #${pedido.id}", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.Red)
+                Text("El pedido pasará a estado CANCELADO. ¿Qué deseas hacer con el abono recibido?", fontSize = 12.sp, color = Color.LightGray)
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (devolverAbono) estados else fondo_claro)
+                            .clickable { devolverAbono = true }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("Devolver Abono", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (devolverAbono) Color.White else Color.DarkGray)
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (!devolverAbono) estados else fondo_claro)
+                            .clickable { devolverAbono = false }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("Retener Abono", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (!devolverAbono) Color.White else Color.DarkGray)
+                    }
+                }
+
+                OutlinedTextField(
+                    value = notaCancelacion,
+                    onValueChange = { notaCancelacion = it },
+                    label = { Text("Motivo de cancelación") },
+                    placeholder = { Text("Ej. Cliente solicitó cancelar") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Volver", color = Color.Gray)
+                    }
+
+                    Button(
+                        onClick = { onConfirmarCancelacion(devolverAbono, notaCancelacion) },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                    ) {
+                        Text("Confirmar Cancelación", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun TarjetaPedido(
     item: PedidoConCliente,
     viewModel: PedidoViewModel,
@@ -492,17 +612,46 @@ fun TarjetaPedido(
     val context = LocalContext.current
     val formatoFecha = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
     val fechaCreacionStr = formatoFecha.format(Date(item.fechaCreacionMillis))
+    val fechaEntregaStr = if (item.fechaEntregaMillis > 0) formatoFecha.format(Date(item.fechaEntregaMillis)) else "Sin fecha"
     val formatoUSD = NumberFormat.getCurrencyInstance(Locale("en", "US")).format(item.totalUsd)
+
+    val hoyMillis = System.currentTimeMillis()
+    val esVencido = item.estado != "ENTREGADO" && item.estado != "CANCELADO" && item.fechaEntregaMillis > 0 && item.fechaEntregaMillis < hoyMillis
 
     val imagenesPedido by viewModel.obtenerImagenesPorPedido(item.id).collectAsState(initial = emptyList())
     var imagenSeleccionadaVisor by remember { mutableStateOf<com.example.gestor_deudores.data.database.PedidoImagen?>(null) }
+
+    var mostrarConfirmarProduccion by remember { mutableStateOf(false) }
+    var mostrarCancelarPedido by remember { mutableStateOf(false) }
 
     val colorEstado = when (item.estado) {
         "RECIBIDO" -> fondo2
         "EN_PRODUCCION" -> componentes
         "LISTO" -> estados
         "ENTREGADO" -> textoInactivo
+        "CANCELADO" -> Color.Red
         else -> estados
+    }
+
+    if (mostrarConfirmarProduccion) {
+        DialogoConfirmarProduccionSinDiseno(
+            onConfirmar = {
+                mostrarConfirmarProduccion = false
+                onCambiarEstado("EN_PRODUCCION")
+            },
+            onDismiss = { mostrarConfirmarProduccion = false }
+        )
+    }
+
+    if (mostrarCancelarPedido) {
+        DialogoCancelarPedidoConAbono(
+            pedido = item,
+            onConfirmarCancelacion = { devolver, nota ->
+                mostrarCancelarPedido = false
+                viewModel.cancelarPedidoConDecisionAbono(item, devolver, nota) {}
+            },
+            onDismiss = { mostrarCancelarPedido = false }
+        )
     }
 
     if (imagenSeleccionadaVisor != null) {
@@ -540,16 +689,22 @@ fun TarjetaPedido(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = "${item.clienteNombre} ${item.clienteApellido}",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Black
+                        )
+                        if (item.urgente) {
+                            Text("⚡ URGENTE", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE65100))
+                        }
+                    }
                     Text(
-                        text = "${item.clienteNombre} ${item.clienteApellido}",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.Black
-                    )
-                    Text(
-                        text = "Pedido del $fechaCreacionStr",
-                        fontSize = 12.sp,
-                        color = Color.Gray
+                        text = "Pedido: $fechaCreacionStr · Entrega: $fechaEntregaStr",
+                        fontSize = 11.sp,
+                        color = if (esVencido) Color.Red else Color.Gray,
+                        fontWeight = if (esVencido) FontWeight.Bold else FontWeight.Normal
                     )
                 }
 
@@ -567,14 +722,66 @@ fun TarjetaPedido(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            // ALERTA DE VENCIMIENTO DE FECHA DE ENTREGA
+            if (esVencido) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE))
+                ) {
+                    Text(
+                        text = "⚠️ ¡ENTREGA VENCIDA! Debió entregarse el $fechaEntregaStr",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFD32F2F),
+                        modifier = Modifier.padding(6.dp)
+                    )
+                }
+            }
 
-            Text(
-                text = "${item.producto} (x${item.cantidad})",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Color.DarkGray
-            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${item.producto} (x${item.cantidad})",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.DarkGray
+                )
+
+                // ESTADO DEL DISEÑO (PENDIENTE / ENVIADO / APROBADO) (SECCIÓN 8.1)
+                val colorDiseno = when (item.estadoDiseno) {
+                    "APROBADO" -> Color(0xFF2E7D32)
+                    "ENVIADO" -> Color(0xFF1976D2)
+                    else -> Color(0xFFF57F17)
+                }
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(colorDiseno.copy(alpha = 0.2f))
+                        .clickable {
+                            val sigEstado = when (item.estadoDiseno) {
+                                "PENDIENTE" -> "ENVIADO"
+                                "ENVIADO" -> "APROBADO"
+                                else -> "PENDIENTE"
+                            }
+                            viewModel.cambiarEstadoDiseno(item.id, sigEstado)
+                        }
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "Diseño: ${item.estadoDiseno}",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = colorDiseno
+                    )
+                }
+            }
 
             // VISTA DE IMÁGENES ASOCIADAS Y SUS TIPOS (SECCIONES 6.3 Y 6.4)
             if (imagenesPedido.isNotEmpty()) {
@@ -642,7 +849,7 @@ fun TarjetaPedido(
             ) {
                 Text(
                     text = "Total: $formatoUSD",
-                    fontSize = 18.sp,
+                    fontSize = 17.sp,
                     fontWeight = FontWeight.Bold,
                     color = componentes
                 )
@@ -673,21 +880,30 @@ fun TarjetaPedido(
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            // CAMBIAR ESTADO DE PEDIDO (8.1)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = "Cambiar estado:", fontSize = 12.sp, color = Color.Gray)
+                Text(text = "Estado:", fontSize = 11.sp, color = Color.Gray)
 
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    listOf("RECIBIDO", "EN_PRODUCCION", "LISTO", "ENTREGADO").forEach { e ->
+                    listOf("RECIBIDO", "EN_PRODUCCION", "LISTO", "ENTREGADO", "CANCELADO").forEach { e ->
                         val esActual = item.estado == e
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(50))
-                                .background(if (esActual) estados else fondo2)
-                                .clickable { onCambiarEstado(e) }
+                                .background(if (esActual) (if (e == "CANCELADO") Color.Red else estados) else fondo2)
+                                .clickable {
+                                    if (e == "EN_PRODUCCION" && item.estadoDiseno != "APROBADO") {
+                                        mostrarConfirmarProduccion = true
+                                    } else if (e == "CANCELADO") {
+                                        mostrarCancelarPedido = true
+                                    } else {
+                                        onCambiarEstado(e)
+                                    }
+                                }
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Text(
@@ -696,6 +912,7 @@ fun TarjetaPedido(
                                     "EN_PRODUCCION" -> "En Prod."
                                     "LISTO" -> "Listo"
                                     "ENTREGADO" -> "Entregado"
+                                    "CANCELADO" -> "Cancelar"
                                     else -> e
                                 },
                                 fontSize = 10.sp,
@@ -774,13 +991,23 @@ fun rememberBitmapFromUri(uriString: String): androidx.compose.ui.graphics.Image
         try {
             if (uriString.isBlank()) null
             else {
-                val uri = android.net.Uri.parse(uriString)
-                val inputStream = context.contentResolver.openInputStream(uri)
-                val bitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
-                inputStream?.close()
+                val file = File(uriString)
+                val bitmap = if (file.exists() && file.isFile) {
+                    android.graphics.BitmapFactory.decodeFile(file.absolutePath)
+                } else {
+                    val uri = if (uriString.startsWith("content://") || uriString.startsWith("file://")) {
+                        Uri.parse(uriString)
+                    } else {
+                        Uri.fromFile(file)
+                    }
+                    context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                        android.graphics.BitmapFactory.decodeStream(inputStream)
+                    }
+                }
                 bitmap?.asImageBitmap()
             }
         } catch (e: Exception) {
+            e.printStackTrace()
             null
         }
     }
@@ -911,7 +1138,7 @@ fun IndicadorPrecioYGananciaArticulo(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Precio sugerido $${String.format(java.util.Locale.US, "%.2f", sugeridoVal)} · ${if (plantillaAplica.esPlantillaMayor) "Tarifa al mayor (≥${plantillaAplica.minimoUnidadesMayor} pcs)" else "Tarifa al detal"}",
+                    text = "Precio sugerido ${String.format(java.util.Locale.US, "%.2f", sugeridoVal)} · ${if (plantillaAplica.esPlantillaMayor) "Tarifa al mayor (≥${plantillaAplica.minimoUnidadesMayor} pcs)" else "Tarifa al detal"}",
                     color = Color(0xFF1976D2),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold
@@ -945,9 +1172,9 @@ fun IndicadorPrecioYGananciaArticulo(
                 ) {
                     Text(
                         text = if (esPerdida) {
-                            "Pierdes -$${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(kotlin.math.abs(gananciaPorPieza))} / pc (Costo $${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(costoUnitarioTotal)})"
+                            "Pierdes -${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(kotlin.math.abs(gananciaPorPieza))} / pc (Costo ${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(costoUnitarioTotal)})"
                         } else {
-                            "Ganas +$${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(gananciaPorPieza)} / pc (Margen ${String.format(java.util.Locale.US, "%.0f", porcentajeMargen)}%)"
+                            "Ganas +${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(gananciaPorPieza)} / pc (Margen ${String.format(java.util.Locale.US, "%.0f", porcentajeMargen)}%)"
                         },
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
@@ -1336,23 +1563,50 @@ fun DialogoCrearPedido(
         }
     }
 
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
         Card(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 16.dp),
+                .fillMaxWidth(0.96f)
+                .fillMaxHeight(0.92f)
+                .padding(vertical = 4.dp),
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = fondo)
         ) {
-            LazyColumn(
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                    .fillMaxSize()
+                    .padding(12.dp)
             ) {
-                item {
-                    Text("NUEVO PEDIDO", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = estados)
+                // CABECERA DEL DIÁLOGO
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("NUEVO PEDIDO", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = estados)
+                    IconButton(onClick = {
+                        if (deudorSeleccionado != null || listaArticulos.any { it.producto.isNotBlank() }) {
+                            mostrarDialogoBorradorConfirm = true
+                        } else {
+                            onDismiss()
+                        }
+                    }) {
+                        Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = Color.Gray)
+                    }
                 }
+
+                // ÁREA DE FORMULARIO CON SCROLL
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
 
                 // 1. SECCIÓN CLIENTE (SECCIÓN 4.1)
                 item {
@@ -1750,7 +2004,7 @@ fun DialogoCrearPedido(
                                             }
 
                                             Text(
-                                                text = "Subtotal: $${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(articulo.obtenerSubtotal())}",
+                                                text = "Subtotal: ${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(articulo.obtenerSubtotal())}",
                                                 fontWeight = FontWeight.Bold,
                                                 fontSize = 13.sp,
                                                 color = componentes,
@@ -2467,6 +2721,8 @@ fun DialogoCrearPedido(
                 }
             }
 
+            Spacer(modifier = Modifier.height(6.dp))
+
             // 7. BARRA INFERIOR FIJA (SECCIÓN 4.7)
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -2477,7 +2733,7 @@ fun DialogoCrearPedido(
                     // Alerta de pérdida si totalUsd < costoMateriaPrimaTotal
                     if (totalUsd > 0 && totalUsd < costoMateriaPrimaTotal) {
                         Text(
-                            text = "Con este precio pierdes dinero (Costo materia prima: $${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(costoMateriaPrimaTotal)})",
+                            text = "Con este precio pierdes dinero (Costo materia prima: ${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(costoMateriaPrimaTotal)})",
                             color = Color.Red,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
@@ -2502,7 +2758,7 @@ fun DialogoCrearPedido(
                         }
 
                         Text(
-                            text = if (mostrarGananciaEstimada) "$${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(gananciaEstimadaUsd)}" else "••••••",
+                            text = if (mostrarGananciaEstimada) "${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(gananciaEstimadaUsd)}" else "••••••",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF4CAF50)
@@ -2515,13 +2771,13 @@ fun DialogoCrearPedido(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
-                            Text("TOTAL: $${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(totalUsd)}", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            Text("TOTAL: ${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(totalUsd)}", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                             Text("Bs: ${NumberFormat.getCurrencyInstance(Locale("es", "VE")).format(totalUsd * tasaBcvActual)}", color = Color.LightGray, fontSize = 11.sp)
                         }
 
                         Column(horizontalAlignment = Alignment.End) {
-                            Text("Abono: $${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(abonoCalculadoUsd)}", color = Color(0xFF4CAF50), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            Text("Saldo: $${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(saldoRestanteCalculado)}", color = componentes, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("Abono: ${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(abonoCalculadoUsd)}", color = Color(0xFF4CAF50), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("Saldo: ${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(saldoRestanteCalculado)}", color = componentes, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
 
@@ -2620,7 +2876,7 @@ fun DialogoCrearPedido(
                                         } else ""
                                         
                                         val textoEstamparStr = if (art.textoEstampar.isNotBlank()) " [Estampa: \"${art.textoEstampar}\"]" else ""
-                                        "• $cant ${art.producto}$descVars$textoEstamparStr — $$precioUnStr c/u"
+                                        "• $cant ${art.producto}$descVars$textoEstamparStr — $precioUnStr c/u"
                                     }
 
                                     val msgWhatsApp = com.example.gestor_deudores.data.utils.armarMensajeResumenPedidoCliente(
@@ -2719,4 +2975,6 @@ fun DialogoCrearPedido(
             }
         )
     }
+}
+
 }

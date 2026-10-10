@@ -17,15 +17,19 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 enum class FiltroEstadoPedido {
     TODOS,
+    HOY_SEMANA,
+    PENDIENTE_SALDO,
     RECIBIDO,
     EN_PRODUCCION,
     LISTO,
-    ENTREGADO
+    ENTREGADO,
+    CANCELADO
 }
 
 data class PedidoBorradorState(
@@ -139,18 +143,45 @@ class PedidoViewModel(
         }
     }
 
+    val pedidosPorEntregarHoy: StateFlow<Int> = pedidoDao.obtenerPedidosConCliente()
+        .map { lista ->
+            val calHoy = java.util.Calendar.getInstance()
+            lista.count { item ->
+                if (item.estado == "ENTREGADO" || item.estado == "CANCELADO" || item.fechaEntregaMillis <= 0) false
+                else {
+                    val calEnt = java.util.Calendar.getInstance().apply { timeInMillis = item.fechaEntregaMillis }
+                    calHoy.get(java.util.Calendar.YEAR) == calEnt.get(java.util.Calendar.YEAR) &&
+                    calHoy.get(java.util.Calendar.DAY_OF_YEAR) == calEnt.get(java.util.Calendar.DAY_OF_YEAR)
+                }
+            }
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 0
+        )
+
     val listaPedidos: StateFlow<List<PedidoConCliente>> = combine(
         pedidoDao.obtenerPedidosConCliente(),
         _textoBusqueda,
         _filtroEstado
     ) { pedidos, texto, estadoFiltro ->
+        val hoyMillis = System.currentTimeMillis()
+
         pedidos.filter { item ->
             val coincideEstado = when (estadoFiltro) {
                 FiltroEstadoPedido.TODOS -> true
+                FiltroEstadoPedido.HOY_SEMANA -> {
+                    val calHoy = java.util.Calendar.getInstance()
+                    val calEnt = java.util.Calendar.getInstance().apply { timeInMillis = item.fechaEntregaMillis }
+                    calHoy.get(java.util.Calendar.YEAR) == calEnt.get(java.util.Calendar.YEAR) &&
+                    calHoy.get(java.util.Calendar.WEEK_OF_YEAR) == calEnt.get(java.util.Calendar.WEEK_OF_YEAR)
+                }
+                FiltroEstadoPedido.PENDIENTE_SALDO -> item.estado != "ENTREGADO" && item.estado != "CANCELADO"
                 FiltroEstadoPedido.RECIBIDO -> item.estado == "RECIBIDO"
                 FiltroEstadoPedido.EN_PRODUCCION -> item.estado == "EN_PRODUCCION"
                 FiltroEstadoPedido.LISTO -> item.estado == "LISTO"
                 FiltroEstadoPedido.ENTREGADO -> item.estado == "ENTREGADO"
+                FiltroEstadoPedido.CANCELADO -> item.estado == "CANCELADO"
             }
 
             val coincideTexto = if (texto.isBlank()) true else {
@@ -160,12 +191,82 @@ class PedidoViewModel(
             }
 
             coincideEstado && coincideTexto
-        }
+        }.sortedWith(
+            compareBy<PedidoConCliente> {
+                val esVencido = it.estado != "ENTREGADO" && it.estado != "CANCELADO" && it.fechaEntregaMillis > 0 && it.fechaEntregaMillis < hoyMillis
+                if (esVencido) 0 else 1
+            }.thenBy {
+                if (it.fechaEntregaMillis > 0) it.fechaEntregaMillis else Long.MAX_VALUE
+            }
+        )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
     )
+
+    fun cambiarEstadoDiseno(pedidoId: Int, nuevoEstadoDiseno: String) {
+        viewModelScope.launch {
+            pedidoDao.actualizarEstadoDiseno(pedidoId, nuevoEstadoDiseno)
+        }
+    }
+
+    fun cancelarPedidoConDecisionAbono(
+        pedidoConCliente: PedidoConCliente,
+        devolverAbono: Boolean,
+        notaCancelacion: String,
+        onExito: () -> Unit
+    ) {
+        viewModelScope.launch {
+            val pedidoEditado = Pedido(
+                id = pedidoConCliente.id,
+                deudorId = pedidoConCliente.deudorId,
+                producto = pedidoConCliente.producto,
+                cantidad = pedidoConCliente.cantidad,
+                precioUnitarioUsd = pedidoConCliente.precioUnitarioUsd,
+                totalUsd = pedidoConCliente.totalUsd,
+                fechaCreacionMillis = pedidoConCliente.fechaCreacionMillis,
+                fechaEntregaMillis = pedidoConCliente.fechaEntregaMillis,
+                estado = "CANCELADO",
+                notas = pedidoConCliente.notas + "\n--- CANCELADO: $notaCancelacion",
+                costoPiezaBaseUsd = pedidoConCliente.costoPiezaBaseUsd,
+                costoPasajeUsd = pedidoConCliente.costoPasajeUsd,
+                costoInsumosUsd = pedidoConCliente.costoInsumosUsd,
+                nombrePiezaBase = pedidoConCliente.nombrePiezaBase,
+                costoEnvio = pedidoConCliente.costoEnvio,
+                descuento = pedidoConCliente.descuento,
+                costoDiseno = pedidoConCliente.costoDiseno,
+                tipoEntrega = pedidoConCliente.tipoEntrega,
+                direccionEntrega = pedidoConCliente.direccionEntrega,
+                urgente = pedidoConCliente.urgente,
+                estadoDiseno = pedidoConCliente.estadoDiseno,
+                esBorrador = pedidoConCliente.esBorrador
+            )
+            pedidoDao.actualizarPedido(pedidoEditado)
+
+            if (devolverAbono) {
+                val formatoFecha = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault())
+                val fechaStr = formatoFecha.format(java.util.Date())
+                val reembolsoDeuda = Deuda(
+                    idDeudor = pedidoConCliente.deudorId,
+                    montoInicial = 0.0,
+                    montoRestante = 0.0,
+                    tipoDeuda = "Devolución Abono",
+                    fecha = fechaStr,
+                    fechaMillis = System.currentTimeMillis(),
+                    tipo = "ABONO",
+                    numCuotas = 1,
+                    frecuencia = "MENSUAL",
+                    rol = "PAGO",
+                    descripcion = "Devolución de abono por cancelación de Pedido #${pedidoConCliente.id}",
+                    estado = "Cancelado"
+                )
+                deudaDao.agregarDeuda(reembolsoDeuda)
+            }
+
+            onExito()
+        }
+    }
 
     fun onTextoBusquedaChange(nuevoTexto: String) {
         _textoBusqueda.value = nuevoTexto
