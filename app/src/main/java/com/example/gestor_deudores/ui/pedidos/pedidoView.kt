@@ -620,11 +620,35 @@ fun DialogoCrearPedido(
     var abonoInicialTexto by remember { mutableStateOf("") }
     var frecuenciaSeleccionada by remember { mutableStateOf("AL_ENTREGAR") }
     var numCuotasTexto by remember { mutableStateOf("1") }
-    var fechaEntregaMillis by remember { mutableStateOf(System.currentTimeMillis()) }
     var mostrarCalendario by remember { mutableStateOf(false) }
-    val datePickerState = rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
     var notas by remember { mutableStateOf("") }
     var errorMsg by remember { mutableStateOf("") }
+
+    // Control de Secciones 4, 5 y 6
+    var seccionPagoExpandida by remember { mutableStateOf(false) }
+    var seccionEntregaExpandida by remember { mutableStateOf(false) }
+    var seccionNotasExpandida by remember { mutableStateOf(false) }
+
+    // Abono y Pago (4.4)
+    var esAbonoBs by remember { mutableStateOf(false) } // false = $, true = %
+    var metodoPagoAbono by remember { mutableStateOf("Efectivo") }
+    var referenciaAbono by remember { mutableStateOf("") }
+    val tasaBcvActual = 40.0 // Tasa de referencia por defecto
+
+    // Saldo y Cuotas (4.4)
+    var fechaPrimeraCuotaMillis by remember { mutableStateOf(System.currentTimeMillis() + (7 * 24 * 60 * 60 * 1000L)) }
+    var mostrarCalendarioCuota by remember { mutableStateOf(false) }
+    val datePickerStateCuota = rememberDatePickerState(initialSelectedDateMillis = fechaPrimeraCuotaMillis)
+
+    // Entrega (4.5)
+    var tipoEntrega by remember { mutableStateOf("RETIRO") } // RETIRO vs DELIVERY
+    var direccionEntrega by remember { mutableStateOf("") }
+    var esUrgente by remember { mutableStateOf(false) }
+
+    // Fecha de entrega obligatoria (por defecto 3 días a futuro)
+    val tresDiasFuturo = System.currentTimeMillis() + (3 * 24 * 60 * 60 * 1000L)
+    var fechaEntregaMillis by remember { mutableStateOf<Long?>(tresDiasFuturo) }
+    val datePickerState = rememberDatePickerState(initialSelectedDateMillis = tresDiasFuturo)
 
     // Cálculos de la Sección 4.3
     fun calcularSubtotalArticulos(): Double = listaArticulos.sumOf { it.obtenerSubtotal() }
@@ -671,7 +695,14 @@ fun DialogoCrearPedido(
         "Sin cargos extra ni descuentos"
     }
 
-    val abonoInicial = abonoInicialTexto.replace(",", ".").toDoubleOrNull() ?: 0.0
+    // Cálculos de Abono y Saldo
+    val abonoInputVal = abonoInicialTexto.replace(",", ".").toDoubleOrNull() ?: 0.0
+    val abonoCalculadoUsd = if (esAbonoBs && tasaBcvActual > 0) abonoInputVal / tasaBcvActual else abonoInputVal
+    val saldoRestanteCalculado = (totalUsd - abonoCalculadoUsd).coerceAtLeast(0.0)
+
+    val costoMateriaPrimaTotal = listaArticulos.sumOf { (it.costoPiezaBaseUnitario + it.costoPasajeUnitario + it.costoInsumosUnitario) * it.obtenerCantidadTotal() }
+
+    val abonoInicial = abonoCalculadoUsd
 
     if (mostrarCalendario) {
         DatePickerDialog(
@@ -1393,116 +1424,382 @@ fun DialogoCrearPedido(
                     }
                 }
 
-                // 4. TOTAL CALCULADO AUTOMÁTICAMENTE
+                // 4. SECCIÓN PAGO Y ABONO INICIAL (SECCIÓN 4.4)
                 item {
-                    val formatoUSD = NumberFormat.getCurrencyInstance(Locale("en", "US")).format(totalUsd)
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = fondo2),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
+                    val resumenPago = "Abono $${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(abonoCalculadoUsd)} · Saldo $${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(saldoRestanteCalculado)} (${if (frecuenciaSeleccionada == "AL_ENTREGAR") "Al retirar" else "$numCuotasTexto cuotas"})"
+
+                    SeccionPlegablePedido(
+                        titulo = "4. PAGO Y ABONO INICIAL",
+                        resumen = resumenPago,
+                        expandido = seccionPagoExpandida,
+                        onToggleExpandir = { seccionPagoExpandida = !seccionPagoExpandida },
+                        icono = Icons.Default.ShoppingCart,
+                        completado = abonoCalculadoUsd > 0 || totalUsd > 0
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("Total del pedido:", color = Color.White, fontWeight = FontWeight.Bold)
-                            Text(formatoUSD, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            // LÍNEA INFORMATIVA DE COBERTURA DE MATERIA PRIMA (4.4)
+                            if (costoMateriaPrimaTotal > 0) {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = fondo_claro),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = "Con $${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(costoMateriaPrimaTotal)} de abono cubres la materia prima de este pedido",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFFF57F17)
+                                        )
+                                    }
+                                }
+                            }
 
-                // 5. ABONO INICIAL (ADELANTO)
-                item {
-                    OutlinedTextField(
-                        value = abonoInicialTexto,
-                        onValueChange = { abonoInicialTexto = it },
-                        label = { Text("Abono / Adelanto inicial ($) (Opcional)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                }
-
-                // 6. FORMA DE PAGO DEL SALDO
-                item {
-                    Text("Forma de pago del saldo restante:", fontSize = 12.sp, color = Color.Gray)
-                    val opcionesFrecuencia = listOf(
-                        "AL_ENTREGAR" to "Al retirar / entregar",
-                        "SEMANAL" to "Semanal",
-                        "QUINCENAL" to "Quincenal",
-                        "MENSUAL" to "Mensual"
-                    )
-
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        items(opcionesFrecuencia) { (clave, label) ->
-                            val sel = frecuenciaSeleccionada == clave
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(50))
-                                    .background(if (sel) estados else fondo2)
-                                    .clickable { frecuenciaSeleccionada = clave }
-                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                            // BOTÓN PEDIR 50% DE ABONO
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(label, fontSize = 11.sp, color = if (sel) Color.White else Color.DarkGray, fontWeight = FontWeight.Bold)
+                                Text("Abono / Adelanto inicial", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+
+                                TextButton(
+                                    onClick = {
+                                        val mitad = totalUsd * 0.5
+                                        val montoAjustado = if (esAbonoBs && tasaBcvActual > 0) mitad * tasaBcvActual else mitad
+                                        abonoInicialTexto = String.format(java.util.Locale.US, "%.2f", montoAjustado)
+                                    },
+                                    contentPadding = PaddingValues(0.dp)
+                                ) {
+                                    Text("Pedir 50% ($${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(totalUsd * 0.5)})", fontSize = 11.sp, color = estados, fontWeight = FontWeight.Bold)
+                                }
+                            }
+
+                            // INPUT MONTO DE ABONO + TOGGLE USD / BS
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                OutlinedTextField(
+                                    value = abonoInicialTexto,
+                                    onValueChange = { abonoInicialTexto = it },
+                                    label = { Text(if (esAbonoBs) "Abono (Bs)" else "Abono ($)") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+
+                                // Selector USD vs Bs
+                                Row(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(50))
+                                        .background(fondo_claro)
+                                        .padding(2.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(50))
+                                            .background(if (!esAbonoBs) estados else Color.Transparent)
+                                            .clickable { esAbonoBs = false }
+                                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                                    ) {
+                                        Text("$ USD", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (!esAbonoBs) Color.White else Color.Gray)
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(50))
+                                            .background(if (esAbonoBs) estados else Color.Transparent)
+                                            .clickable { esAbonoBs = true }
+                                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                                    ) {
+                                        Text("Bs", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (esAbonoBs) Color.White else Color.Gray)
+                                    }
+                                }
+                            }
+
+                            if (esAbonoBs && abonoCalculadoUsd > 0) {
+                                Text(
+                                    text = "Equivalente: $${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(abonoCalculadoUsd)} USD (Tasa Bs ${tasaBcvActual})",
+                                    fontSize = 11.sp,
+                                    color = Color.LightGray
+                                )
+                            }
+
+                            // MÉTODO DE PAGO Y REFERENCIA
+                            Text("Método de pago del abono:", fontSize = 11.sp, color = Color.Gray)
+                            val metodosDisponibles = listOf("Efectivo", "Transferencia", "Pago Móvil", "Zinli", "Binance", "Otro")
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                items(metodosDisponibles) { m ->
+                                    val sel = metodoPagoAbono == m
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(50))
+                                            .background(if (sel) estados else fondo_claro)
+                                            .clickable { metodoPagoAbono = m }
+                                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                                    ) {
+                                        Text(m, fontSize = 11.sp, color = if (sel) Color.White else Color.DarkGray, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+
+                            OutlinedTextField(
+                                value = referenciaAbono,
+                                onValueChange = { referenciaAbono = it },
+                                label = { Text("Referencia / N° Comprobante (Opcional)") },
+                                placeholder = { Text("Ej. Ref. 987654") },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+
+                            // FORMA DE PAGO DEL SALDO RESTANTE (CHIPS MULTILÍNEA)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text("Forma de pago del saldo restante:", fontSize = 11.sp, color = Color.Gray)
+                            val opcionesFrecuencia = listOf(
+                                "AL_ENTREGAR" to "Al retirar / entregar",
+                                "SEMANAL" to "Semanal",
+                                "QUINCENAL" to "Quincenal",
+                                "MENSUAL" to "Mensual"
+                            )
+
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    opcionesFrecuencia.take(2).forEach { (clave, label) ->
+                                        val sel = frecuenciaSeleccionada == clave
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(50))
+                                                .background(if (sel) estados else fondo_claro)
+                                                .clickable { frecuenciaSeleccionada = clave }
+                                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                                        ) {
+                                            Text(label, fontSize = 11.sp, color = if (sel) Color.White else Color.DarkGray, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    opcionesFrecuencia.drop(2).forEach { (clave, label) ->
+                                        val sel = frecuenciaSeleccionada == clave
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(50))
+                                                .background(if (sel) estados else fondo_claro)
+                                                .clickable { frecuenciaSeleccionada = clave }
+                                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                                        ) {
+                                            Text(label, fontSize = 11.sp, color = if (sel) Color.White else Color.DarkGray, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (frecuenciaSeleccionada != "AL_ENTREGAR") {
+                                val numC = numCuotasTexto.toIntOrNull() ?: 1
+                                val montoCuota = if (numC > 0) saldoRestanteCalculado / numC else 0.0
+                                val fecha1raStr = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(fechaPrimeraCuotaMillis))
+
+                                OutlinedTextField(
+                                    value = numCuotasTexto,
+                                    onValueChange = { if (it.all { c -> c.isDigit() }) numCuotasTexto = it },
+                                    label = { Text("Número de Cuotas") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("1ra Cuota: $fecha1raStr", fontSize = 12.sp, color = Color.White)
+                                    TextButton(onClick = { mostrarCalendarioCuota = true }) {
+                                        Text("Cambiar fecha", fontSize = 11.sp, color = estados)
+                                    }
+                                }
+
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = fondo_claro)
+                                ) {
+                                    Text(
+                                        text = "$numC cuota(s) de $${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(montoCuota)} / c.u. (1ra cuota: $fecha1raStr)",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.DarkGray,
+                                        modifier = Modifier.padding(8.dp)
+                                    )
+                                }
                             }
                         }
                     }
                 }
 
-                if (frecuenciaSeleccionada != "AL_ENTREGAR") {
-                    item {
+                // 5. SECCIÓN FECHA Y DATOS DE ENTREGA (SECCIÓN 4.5)
+                item {
+                    val fechaEntregaFormatted = if (fechaEntregaMillis != null) {
+                        SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(fechaEntregaMillis!!))
+                    } else {
+                        "¡Obligatoria!"
+                    }
+                    val resumenEntrega = "Entrega: $fechaEntregaFormatted · ${if (tipoEntrega == "DELIVERY") "Delivery" else "Retiro"}${if (esUrgente) " · URGENTE" else ""}"
+
+                    SeccionPlegablePedido(
+                        titulo = "5. DATOS DE ENTREGA",
+                        resumen = resumenEntrega,
+                        expandido = seccionEntregaExpandida,
+                        onToggleExpandir = { seccionEntregaExpandida = !seccionEntregaExpandida },
+                        icono = Icons.Default.DateRange,
+                        completado = fechaEntregaMillis != null
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            // FECHA DE ENTREGA (OBLIGATORIA)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text("Fecha de entrega (Obligatoria)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    Text(if (fechaEntregaMillis != null) "Seleccionada: $fechaEntregaFormatted" else "Sin fecha", fontSize = 11.sp, color = if (fechaEntregaMillis != null) Color.LightGray else Color.Red)
+                                }
+
+                                Button(
+                                    onClick = { mostrarCalendario = true },
+                                    colors = ButtonDefaults.buttonColors(containerColor = fondo_claro)
+                                ) {
+                                    Text("Cambiar", color = Color.DarkGray, fontSize = 11.sp)
+                                }
+                            }
+
+                            // TIPO DE ENTREGA (RETIRO VS DELIVERY)
+                            Text("Modalidad de Despacho:", fontSize = 11.sp, color = Color.Gray)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(if (tipoEntrega == "RETIRO") estados else fondo_claro)
+                                        .clickable { 
+                                            tipoEntrega = "RETIRO"
+                                            cargoEnvioTexto = ""
+                                        }
+                                        .padding(vertical = 10.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("Retiro en Taller", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (tipoEntrega == "RETIRO") Color.White else Color.DarkGray)
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(if (tipoEntrega == "DELIVERY") estados else fondo_claro)
+                                        .clickable { tipoEntrega = "DELIVERY" }
+                                        .padding(vertical = 10.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("Delivery / Envío", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (tipoEntrega == "DELIVERY") Color.White else Color.DarkGray)
+                                }
+                            }
+
+                            if (tipoEntrega == "DELIVERY") {
+                                OutlinedTextField(
+                                    value = direccionEntrega,
+                                    onValueChange = { direccionEntrega = it },
+                                    label = { Text("Dirección de envío / Referencia") },
+                                    placeholder = { Text("Ej. Urb. Las Flores, Calle 3, Casa #12") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                            }
+
+                            // CHECKBOX URGENTE
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (esUrgente) Color(0xFFFFF3E0) else Color.Transparent)
+                                    .clickable { esUrgente = !esUrgente }
+                                    .padding(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(if (esUrgente) "Pedido Marcado como URGENTE" else "Marcar como Pedido Urgente", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (esUrgente) Color(0xFFE65100) else Color.LightGray)
+                            }
+                        }
+                    }
+                }
+
+                // 6. SECCIÓN NOTAS GENERALES (SECCIÓN 4.6)
+                item {
+                    SeccionPlegablePedido(
+                        titulo = "6. NOTAS GENERALES",
+                        resumen = if (notas.isNotBlank()) notas else "Sin notas adicionales",
+                        expandido = seccionNotasExpandida,
+                        onToggleExpandir = { seccionNotasExpandida = !seccionNotasExpandida },
+                        icono = Icons.Default.Star,
+                        completado = notas.isNotBlank()
+                    ) {
                         OutlinedTextField(
-                            value = numCuotasTexto,
-                            onValueChange = { if (it.all { c -> c.isDigit() }) numCuotasTexto = it },
-                            label = { Text("Número de Cuotas") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            value = notas,
+                            onValueChange = { notas = it },
+                            label = { Text("Notas generales del pedido") },
+                            placeholder = { Text("Condiciones, acuerdos o especificaciones de entrega...") },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp)
                         )
                     }
                 }
+            }
 
-                // 7. FECHA DE ENTREGA
-                item {
-                    val fechaEntregaStr = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(fechaEntregaMillis))
-                    OutlinedTextField(
-                        value = fechaEntregaStr,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Fecha de entrega") },
-                        trailingIcon = {
-                            IconButton(onClick = { mostrarCalendario = true }) {
-                                Icon(Icons.Default.DateRange, null, tint = estados)
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                }
-
-                // 8. NOTAS DE PRODUCCIÓN
-                item {
-                    OutlinedTextField(
-                        value = notas,
-                        onValueChange = { notas = it },
-                        label = { Text("Notas de producción (Talla, diseño...)") },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                }
-
-                if (errorMsg.isNotEmpty()) {
-                    item {
-                        Text(errorMsg, color = Color.Red, fontSize = 12.sp)
+            // 7. BARRA INFERIOR FIJA (SECCIÓN 4.7)
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = fondo2),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // Alerta de pérdida si totalUsd < costoMateriaPrimaTotal
+                    if (totalUsd > 0 && totalUsd < costoMateriaPrimaTotal) {
+                        Text(
+                            text = "Con este precio pierdes dinero (Costo materia prima: $${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(costoMateriaPrimaTotal)})",
+                            color = Color.Red,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
-                }
 
-                // BOTONES CANCELAR Y GUARDAR
-                item {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("TOTAL: $${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(totalUsd)}", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            Text("Bs: ${NumberFormat.getCurrencyInstance(Locale("es", "VE")).format(totalUsd * tasaBcvActual)}", color = Color.LightGray, fontSize = 11.sp)
+                        }
+
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("Abono: $${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(abonoCalculadoUsd)}", color = Color(0xFF4CAF50), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("Saldo: $${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(saldoRestanteCalculado)}", color = componentes, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    if (errorMsg.isNotEmpty()) {
+                        Text(errorMsg, color = Color.Red, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         TextButton(onClick = onDismiss) {
                             Text("Cancelar", color = Color.Gray)
@@ -1510,16 +1807,26 @@ fun DialogoCrearPedido(
 
                         Button(
                             onClick = {
+                                val hoyInicioMillis = java.util.Calendar.getInstance().apply {
+                                    set(java.util.Calendar.HOUR_OF_DAY, 0)
+                                    set(java.util.Calendar.MINUTE, 0)
+                                    set(java.util.Calendar.SECOND, 0)
+                                    set(java.util.Calendar.MILLISECOND, 0)
+                                }.timeInMillis
+
                                 if (deudorSeleccionado == null) {
                                     errorMsg = "Debes seleccionar un cliente"
                                 } else if (listaArticulos.any { it.producto.isBlank() }) {
                                     errorMsg = "Completa el nombre de todos los productos"
                                 } else if (totalUsd <= 0.0) {
                                     errorMsg = "El precio total debe ser mayor a cero"
+                                } else if (abonoCalculadoUsd > totalUsd) {
+                                    errorMsg = "El abono ($${String.format(java.util.Locale.US, "%.2f", abonoCalculadoUsd)}) no puede ser mayor que el total ($${String.format(java.util.Locale.US, "%.2f", totalUsd)})"
+                                } else if (fechaEntregaMillis == null || fechaEntregaMillis!! < hoyInicioMillis) {
+                                    errorMsg = "Debes seleccionar una fecha de entrega válida (hoy o futura)"
                                 } else {
                                     val numCuotas = if (frecuenciaSeleccionada == "AL_ENTREGAR") 1 else (numCuotasTexto.toIntOrNull() ?: 1)
-                                    
-                                    // Consolidar la lista de productos en un solo String para la base de datos
+
                                     val nombresProductos = listaArticulos.joinToString(", ") { art ->
                                         val cant = art.obtenerCantidadTotal()
                                         val descVars = if (art.usarVariantes && art.variantes.isNotEmpty()) {
@@ -1527,8 +1834,7 @@ fun DialogoCrearPedido(
                                         } else ""
                                         "${art.producto} (x$cant)$descVars"
                                     }
-                                    
-                                    // Consolidar detalles, estampados y notas de los artículos
+
                                     val detallesArticulosText = listaArticulos.mapIndexedNotNull { idx, art ->
                                         val partes = mutableListOf<String>()
                                         if (art.detalle.isNotBlank()) partes.add("Detalle: ${art.detalle}")
@@ -1537,11 +1843,14 @@ fun DialogoCrearPedido(
                                         if (partes.isNotEmpty()) "Prod #${idx + 1} (${art.producto}): " + partes.joinToString(" | ") else null
                                     }.joinToString("\n")
 
-                                    val notasConsolidadas = listOf(notas, detallesArticulosText).filter { it.isNotBlank() }.joinToString("\n---\n")
+                                    val infoEntregaText = if (tipoEntrega == "DELIVERY" && direccionEntrega.isNotBlank()) "Dirección Delivery: $direccionEntrega" else null
+                                    val infoUrgenteText = if (esUrgente) "⚡ PEDIDO URGENTE" else null
+                                    val infoMetodoText = if (abonoCalculadoUsd > 0) "Método Abono: $metodoPagoAbono" + (if (referenciaAbono.isNotBlank()) " (Ref. $referenciaAbono)" else "") else null
+
+                                    val notasConsolidadas = listOfNotNull(notas.ifBlank { null }, detallesArticulosText.ifBlank { null }, infoEntregaText, infoUrgenteText, infoMetodoText).joinToString("\n---\n")
 
                                     val cantidadTotalGral = listaArticulos.sumOf { it.obtenerCantidadTotal() }
 
-                                    // Promediamos o sumamos los costos reales consolidados del pedido
                                     val costoBaseTotal = listaArticulos.sumOf { 
                                         val c = it.obtenerCantidadTotal()
                                         it.costoPiezaBaseUnitario * c 
@@ -1554,7 +1863,7 @@ fun DialogoCrearPedido(
                                         val c = it.obtenerCantidadTotal()
                                         it.costoInsumosUnitario * c 
                                     }
-                                    
+
                                     val unitarioBaseGral = if(cantidadTotalGral > 0) costoBaseTotal / cantidadTotalGral else 0.0
                                     val unitarioPasajeGral = if(cantidadTotalGral > 0) costoPasajeTotal / cantidadTotalGral else 0.0
                                     val unitarioInsumosGral = if(cantidadTotalGral > 0) costoInsumosTotal / cantidadTotalGral else 0.0
@@ -1564,10 +1873,10 @@ fun DialogoCrearPedido(
                                         producto = nombresProductos,
                                         cantidad = cantidadTotalGral,
                                         precioUnitarioUsd = totalUsd / (if(cantidadTotalGral > 0) cantidadTotalGral else 1),
-                                        abonoInicialUsd = abonoInicial,
+                                        abonoInicialUsd = abonoCalculadoUsd,
                                         numCuotas = numCuotas,
                                         frecuencia = frecuenciaSeleccionada,
-                                        fechaEntregaMillis = fechaEntregaMillis,
+                                        fechaEntregaMillis = fechaEntregaMillis!!,
                                         notas = notasConsolidadas,
                                         costoPiezaBaseUnitario = unitarioBaseGral,
                                         nombrePiezaBase = if(listaArticulos.size == 1) listaArticulos[0].nombrePiezaBase else "Múltiples Productos",
@@ -1583,7 +1892,7 @@ fun DialogoCrearPedido(
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = estados)
                         ) {
-                            Text("Guardar Pedido", color = Color.White)
+                            Text("Guardar Pedido", color = Color.White, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
