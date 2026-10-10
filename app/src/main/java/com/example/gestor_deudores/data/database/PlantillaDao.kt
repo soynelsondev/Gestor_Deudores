@@ -23,4 +23,22 @@ interface PlantillaDao {
 
     @Query("SELECT * FROM plantillas_cotizacion WHERE id = :id LIMIT 1")
     suspend fun obtenerPlantillaPorId(id: Int): PlantillaCotizacion?
+
+    @Insert
+    suspend fun agregarAtributo(atributo: PlantillaAtributo): Long
+
+    @Insert
+    suspend fun agregarOpcionesAtributo(opciones: List<PlantillaAtributoOpcion>)
+
+    @Query("SELECT * FROM plantilla_atributos WHERE plantillaId = :plantillaId ORDER BY orden ASC")
+    fun obtenerAtributosPorPlantilla(plantillaId: Int): Flow<List<PlantillaAtributo>>
+
+    @Query("SELECT * FROM plantilla_atributo_opciones WHERE atributoId = :atributoId ORDER BY orden ASC")
+    fun obtenerOpcionesPorAtributo(atributoId: Int): Flow<List<PlantillaAtributoOpcion>>
+
+    @Query("SELECT * FROM plantilla_atributos WHERE plantillaId = :plantillaId ORDER BY orden ASC")
+    suspend fun obtenerAtributosPorPlantillaSync(plantillaId: Int): List<PlantillaAtributo>
+
+    @Query("SELECT * FROM plantilla_atributo_opciones WHERE atributoId = :atributoId ORDER BY orden ASC")
+    suspend fun obtenerOpcionesPorAtributoSync(atributoId: Int): List<PlantillaAtributoOpcion>
 }

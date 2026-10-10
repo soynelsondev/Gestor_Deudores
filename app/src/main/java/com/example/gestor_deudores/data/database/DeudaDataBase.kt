@@ -8,8 +8,13 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [Deudor::class, Deuda::class, Pedido::class, PlantillaCotizacion::class, CuentaBancaria::class, PerfilNegocio::class, InsumoBiblioteca::class, HistorialPrecioInsumo::class],
-    version = 23,
+    entities = [
+        Deudor::class, Deuda::class, Pedido::class, PlantillaCotizacion::class,
+        CuentaBancaria::class, PerfilNegocio::class, InsumoBiblioteca::class,
+        HistorialPrecioInsumo::class, PlantillaAtributo::class, PlantillaAtributoOpcion::class,
+        PedidoItemAtributo::class
+    ],
+    version = 24,
     exportSchema = true
 )
 abstract class DeudaDataBase : RoomDatabase() {
@@ -391,6 +396,46 @@ abstract class DeudaDataBase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_23_24 = object : Migration(23, 24) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `plantilla_atributos` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `plantillaId` INTEGER NOT NULL,
+                        `nombre` TEXT NOT NULL,
+                        `tipo` TEXT NOT NULL,
+                        `obligatorio` INTEGER NOT NULL DEFAULT 0,
+                        `orden` INTEGER NOT NULL DEFAULT 0,
+                        FOREIGN KEY(`plantillaId`) REFERENCES `plantillas_cotizacion`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                """)
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_plantilla_atributos_plantillaId` ON `plantilla_atributos` (`plantillaId`)")
+
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `plantilla_atributo_opciones` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `atributoId` INTEGER NOT NULL,
+                        `etiqueta` TEXT NOT NULL,
+                        `ajustePrecio` REAL NOT NULL DEFAULT 0.0,
+                        `orden` INTEGER NOT NULL DEFAULT 0,
+                        FOREIGN KEY(`atributoId`) REFERENCES `plantilla_atributos`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                """)
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_plantilla_atributo_opciones_atributoId` ON `plantilla_atributo_opciones` (`atributoId`)")
+
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `pedido_item_atributos` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `pedidoId` INTEGER NOT NULL,
+                        `nombreCampo` TEXT NOT NULL,
+                        `valor` TEXT NOT NULL,
+                        FOREIGN KEY(`pedidoId`) REFERENCES `pedidos`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                """)
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_pedido_item_atributos_pedidoId` ON `pedido_item_atributos` (`pedidoId`)")
+            }
+        }
+
         fun getDatabase(context: Context): DeudaDataBase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -403,7 +448,8 @@ abstract class DeudaDataBase : RoomDatabase() {
                         MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, 
                         MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
                         MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17,
-                        MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23
+                        MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21,
+                        MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24
                     )
                     .build()
 

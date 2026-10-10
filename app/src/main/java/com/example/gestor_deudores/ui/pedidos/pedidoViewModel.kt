@@ -2,6 +2,7 @@ package com.example.gestor_deudores.ui.pedidos
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.gestor_deudores.data.database.Deuda
 import com.example.gestor_deudores.data.database.DeudaDao
 import com.example.gestor_deudores.data.database.Deudor
 import com.example.gestor_deudores.data.database.DeudorDao
@@ -10,6 +11,7 @@ import com.example.gestor_deudores.data.database.PedidoConCliente
 import com.example.gestor_deudores.data.database.PedidoDao
 import com.example.gestor_deudores.data.database.PlantillaCotizacion
 import com.example.gestor_deudores.data.database.PlantillaDao
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -61,6 +63,18 @@ class PedidoViewModel(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
+
+    fun obtenerDeudasPorDeudor(deudorId: Int): Flow<List<Deuda>> {
+        return deudaDao.obtenerDeudasPorDeudor(deudorId)
+    }
+
+    suspend fun obtenerAtributosConOpciones(plantillaId: Int): List<com.example.gestor_deudores.data.database.PlantillaAtributoConOpciones> {
+        val atributos = plantillaDao.obtenerAtributosPorPlantillaSync(plantillaId)
+        return atributos.map { atr ->
+            val opciones = plantillaDao.obtenerOpcionesPorAtributoSync(atr.id)
+            com.example.gestor_deudores.data.database.PlantillaAtributoConOpciones(atr, opciones)
+        }
+    }
 
     val listaPedidos: StateFlow<List<PedidoConCliente>> = combine(
         pedidoDao.obtenerPedidosConCliente(),
