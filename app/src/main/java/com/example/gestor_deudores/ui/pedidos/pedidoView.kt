@@ -182,6 +182,7 @@ fun PedidosPrincipal(viewModel: PedidoViewModel, navController: NavController) {
                 items(listaPedidos) { item ->
                     TarjetaPedido(
                         item = item,
+                        viewModel = viewModel,
                         onCambiarEstado = { nuevoEstado ->
                             viewModel.cambiarEstadoPedido(item, nuevoEstado)
                         }
@@ -261,8 +262,135 @@ fun FiltrosEstadoPedidos(
 }
 
 @Composable
+fun DialogoVisorImagen(
+    imagen: com.example.gestor_deudores.data.database.PedidoImagen,
+    onCambiarTipo: (String) -> Unit,
+    onEliminar: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val bitmap = rememberBitmapFromUri(imagen.ruta)
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = fondo)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Foto del Pedido",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(
+                                when (imagen.tipo) {
+                                    "DISENO" -> Color(0xFF1976D2)
+                                    "COMPROBANTE" -> Color(0xFFF57F17)
+                                    "ENTREGA" -> Color(0xFF2E7D32)
+                                    else -> estados
+                                }
+                            )
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = when (imagen.tipo) {
+                                "DISENO" -> "Diseño"
+                                "COMPROBANTE" -> "Comprobante"
+                                "ENTREGA" -> "Entrega"
+                                else -> imagen.tipo
+                            },
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(240.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.Black),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (bitmap != null) {
+                        Image(
+                            bitmap = bitmap,
+                            contentDescription = "Foto grande",
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Text("No se pudo cargar la imagen", color = Color.Gray, fontSize = 12.sp)
+                    }
+                }
+
+                Text("Cambiar tipo de imagen:", fontSize = 11.sp, color = Color.Gray)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    listOf("DISENO" to "Diseño", "COMPROBANTE" to "Comprobante", "ENTREGA" to "Entrega").forEach { (tipoKey, label) ->
+                        val esActual = imagen.tipo == tipoKey
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(50))
+                                .background(if (esActual) estados else fondo_claro)
+                                .clickable { onCambiarTipo(tipoKey) }
+                                .padding(vertical = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = label,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (esActual) Color.White else Color.DarkGray
+                            )
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onEliminar) {
+                        Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = Color.Red)
+                    }
+
+                    Button(
+                        onClick = onDismiss,
+                        colors = ButtonDefaults.buttonColors(containerColor = fondo2)
+                    ) {
+                        Text("Cerrar", color = Color.White)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun TarjetaPedido(
     item: PedidoConCliente,
+    viewModel: PedidoViewModel,
     onCambiarEstado: (String) -> Unit
 ) {
     val context = LocalContext.current
@@ -270,12 +398,31 @@ fun TarjetaPedido(
     val fechaCreacionStr = formatoFecha.format(Date(item.fechaCreacionMillis))
     val formatoUSD = NumberFormat.getCurrencyInstance(Locale("en", "US")).format(item.totalUsd)
 
+    val imagenesPedido by viewModel.obtenerImagenesPorPedido(item.id).collectAsState(initial = emptyList())
+    var imagenSeleccionadaVisor by remember { mutableStateOf<com.example.gestor_deudores.data.database.PedidoImagen?>(null) }
+
     val colorEstado = when (item.estado) {
         "RECIBIDO" -> fondo2
         "EN_PRODUCCION" -> componentes
         "LISTO" -> estados
         "ENTREGADO" -> textoInactivo
         else -> estados
+    }
+
+    if (imagenSeleccionadaVisor != null) {
+        DialogoVisorImagen(
+            imagen = imagenSeleccionadaVisor!!,
+            onCambiarTipo = { nuevoTipo ->
+                viewModel.cambiarTipoImagen(imagenSeleccionadaVisor!!.id, nuevoTipo)
+                imagenSeleccionadaVisor = null
+            },
+            onEliminar = {
+                val imgAE = imagenSeleccionadaVisor!!
+                viewModel.eliminarImagen(imgAE)
+                imagenSeleccionadaVisor = null
+            },
+            onDismiss = { imagenSeleccionadaVisor = null }
+        )
     }
 
     Card(
@@ -332,6 +479,65 @@ fun TarjetaPedido(
                 fontWeight = FontWeight.SemiBold,
                 color = Color.DarkGray
             )
+
+            // VISTA DE IMÁGENES ASOCIADAS Y SUS TIPOS (SECCIONES 6.3 Y 6.4)
+            if (imagenesPedido.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(imagenesPedido) { imgRecord ->
+                        val bitmap = rememberBitmapFromUri(imgRecord.rutaMiniatura.ifBlank { imgRecord.ruta })
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.clickable { imagenSeleccionadaVisor = imgRecord }
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(54.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color.DarkGray)
+                            ) {
+                                if (bitmap != null) {
+                                    Image(
+                                        bitmap = bitmap,
+                                        contentDescription = imgRecord.tipo,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .padding(top = 2.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(
+                                        when (imgRecord.tipo) {
+                                            "DISENO" -> Color(0xFF1976D2)
+                                            "COMPROBANTE" -> Color(0xFFF57F17)
+                                            "ENTREGA" -> Color(0xFF2E7D32)
+                                            else -> estados
+                                        }
+                                    )
+                                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = when (imgRecord.tipo) {
+                                        "DISENO" -> "Diseño"
+                                        "COMPROBANTE" -> "Pago"
+                                        "ENTREGA" -> "Entrega"
+                                        else -> imgRecord.tipo
+                                    },
+                                    color = Color.White,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -2333,6 +2539,7 @@ fun DialogoCrearPedido(
                                     )
 
                                     viewModel.crearNuevoPedido(
+                                        context = context,
                                         deudorId = deudorSeleccionado!!.id,
                                         producto = nombresProductos,
                                         cantidad = cantidadTotalGral,
@@ -2350,6 +2557,7 @@ fun DialogoCrearPedido(
                                         costoDiseno = montoDisenoCalculado,
                                         costoEnvio = montoEnvioCalculado,
                                         totalCalculadoUsd = totalUsd,
+                                        listaArticulos = listaArticulos,
                                         onExito = {
                                             viewModel.descartarBorrador()
                                             clienteNombreWhatsApp = "${deudorSeleccionado!!.nombre} ${deudorSeleccionado!!.apellido}"

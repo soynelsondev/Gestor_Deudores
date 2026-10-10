@@ -69,6 +69,41 @@ class PedidoViewModel(
         _borradorActual.value = null
     }
 
+    fun obtenerImagenesPorPedido(pedidoId: Int): Flow<List<com.example.gestor_deudores.data.database.PedidoImagen>> {
+        return pedidoDao.obtenerImagenesPorPedido(pedidoId)
+    }
+
+    fun cambiarTipoImagen(imagenId: Int, nuevoTipo: String) {
+        viewModelScope.launch {
+            pedidoDao.actualizarTipoImagen(imagenId, nuevoTipo)
+        }
+    }
+
+    fun eliminarImagen(imagen: com.example.gestor_deudores.data.database.PedidoImagen) {
+        viewModelScope.launch {
+            pedidoDao.eliminarImagenPedido(imagen)
+        }
+    }
+
+    fun guardarNuevaFotoPedido(context: android.content.Context, pedidoId: Int, uriStr: String, tipoImagen: String) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val resultadoImg = com.example.gestor_deudores.data.utils.ImagenUtils.procesarYGuardarImagenPedido(
+                context = context,
+                pedidoId = pedidoId,
+                uriRawString = uriStr
+            )
+            if (resultadoImg != null) {
+                val imagenRecord = com.example.gestor_deudores.data.database.PedidoImagen(
+                    pedidoId = pedidoId,
+                    ruta = resultadoImg.rutaOriginalComprimida,
+                    rutaMiniatura = resultadoImg.rutaMiniatura,
+                    tipo = tipoImagen
+                )
+                pedidoDao.agregarImagenPedido(imagenRecord)
+            }
+        }
+    }
+
     // Lista de clientes disponibles para el selector del formulario
     val listaClientes: StateFlow<List<Deudor>> = deudorDao.obtenerDeudores()
         .stateIn(
@@ -164,6 +199,7 @@ class PedidoViewModel(
 
     // --- GUARDADO TRANSACCIONAL DEL PEDIDO COMPLETO (SOLUCIÓN ELEGANTE) ---
     fun crearNuevoPedido(
+        context: android.content.Context,
         deudorId: Int,
         producto: String,
         cantidad: Int,
@@ -181,6 +217,7 @@ class PedidoViewModel(
         costoDiseno: Double = 0.0,
         costoEnvio: Double = 0.0,
         totalCalculadoUsd: Double? = null,
+        listaArticulos: List<ArticuloPedido> = emptyList(),
         onExito: () -> Unit
     ) {
         val totalUsd = totalCalculadoUsd ?: (cantidad * precioUnitarioUsd)
@@ -209,15 +246,39 @@ class PedidoViewModel(
             costoEnvio = costoEnvio
         )
 
-        viewModelScope.launch {
-            pedidoDao.guardarPedidoCompleto(
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val pedidoId = pedidoDao.guardarPedidoCompleto(
                 pedido = nuevoPedido,
                 deudaDao = deudaDao,
                 abonoInicial = abonoInicialUsd,
                 numCuotas = numCuotas,
                 frecuencia = frecuencia
             )
-            onExito()
+
+            // PROCESAMIENTO Y COMPRESIÓN DE FOTOS DE DISEÑO (SECCIÓN 6.2)
+            listaArticulos.forEach { art ->
+                art.fotosUris.forEach { uriStr ->
+                    val resultadoImg = com.example.gestor_deudores.data.utils.ImagenUtils.procesarYGuardarImagenPedido(
+                        context = context,
+                        pedidoId = pedidoId.toInt(),
+                        uriRawString = uriStr
+                    )
+                    if (resultadoImg != null) {
+                        val imagenRecord = com.example.gestor_deudores.data.database.PedidoImagen(
+                            pedidoId = pedidoId.toInt(),
+                            itemId = art.id,
+                            ruta = resultadoImg.rutaOriginalComprimida,
+                            rutaMiniatura = resultadoImg.rutaMiniatura,
+                            tipo = "DISENO"
+                        )
+                        pedidoDao.agregarImagenPedido(imagenRecord)
+                    }
+                }
+            }
+
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                onExito()
+            }
         }
     }
 }

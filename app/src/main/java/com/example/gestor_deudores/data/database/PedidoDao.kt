@@ -38,6 +38,21 @@ abstract class PedidoDao {
     """)
     abstract fun obtenerPedidosConCliente(): Flow<List<PedidoConCliente>>
 
+    @Insert
+    abstract suspend fun agregarImagenPedido(imagen: PedidoImagen): Long
+
+    @Query("SELECT * FROM pedido_imagenes WHERE pedidoId = :pedidoId ORDER BY fechaMillis ASC")
+    abstract fun obtenerImagenesPorPedido(pedidoId: Int): Flow<List<PedidoImagen>>
+
+    @Query("SELECT * FROM pedido_imagenes WHERE pedidoId = :pedidoId ORDER BY fechaMillis ASC")
+    abstract suspend fun obtenerImagenesPorPedidoSync(pedidoId: Int): List<PedidoImagen>
+
+    @Delete
+    abstract suspend fun eliminarImagenPedido(imagen: PedidoImagen)
+
+    @Query("UPDATE pedido_imagenes SET tipo = :nuevoTipo WHERE id = :imagenId")
+    abstract suspend fun actualizarTipoImagen(imagenId: Int, nuevoTipo: String)
+
     // Guardado Atómico: Pedido + Deuda + Abono Inicial en una sola transacción
     @Transaction
     open suspend fun guardarPedidoCompleto(
@@ -46,7 +61,7 @@ abstract class PedidoDao {
         abonoInicial: Double,
         numCuotas: Int,
         frecuencia: String
-    ) {
+    ): Long {
         val pedidoId = agregarPedido(pedido)
         val formatoFecha = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
         val fechaCreacionStr = formatoFecha.format(Date(pedido.fechaCreacionMillis))
@@ -92,5 +107,7 @@ abstract class PedidoDao {
             )
             deudaDao.agregarDeuda(abonoDeuda)
         }
+
+        return pedidoId
     }
 }
