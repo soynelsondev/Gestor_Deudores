@@ -14,7 +14,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         HistorialPrecioInsumo::class, PlantillaAtributo::class, PlantillaAtributoOpcion::class,
         PedidoItemAtributo::class
     ],
-    version = 24,
+    version = 25,
     exportSchema = true
 )
 abstract class DeudaDataBase : RoomDatabase() {
@@ -436,6 +436,19 @@ abstract class DeudaDataBase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_24_25 = object : Migration(24, 25) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                addColumnIfNotExists(db, "pedidos", "costoEnvio", "`costoEnvio` REAL NOT NULL DEFAULT 0.0")
+                addColumnIfNotExists(db, "pedidos", "descuento", "`descuento` REAL NOT NULL DEFAULT 0.0")
+                addColumnIfNotExists(db, "pedidos", "costoDiseno", "`costoDiseno` REAL NOT NULL DEFAULT 0.0")
+                addColumnIfNotExists(db, "pedidos", "tipoEntrega", "`tipoEntrega` TEXT NOT NULL DEFAULT 'RETIRO'")
+                addColumnIfNotExists(db, "pedidos", "direccionEntrega", "`direccionEntrega` TEXT")
+                addColumnIfNotExists(db, "pedidos", "urgente", "`urgente` INTEGER NOT NULL DEFAULT 0")
+                addColumnIfNotExists(db, "pedidos", "estadoDiseno", "`estadoDiseno` TEXT NOT NULL DEFAULT 'PENDIENTE'")
+                addColumnIfNotExists(db, "pedidos", "esBorrador", "`esBorrador` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun getDatabase(context: Context): DeudaDataBase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -449,7 +462,7 @@ abstract class DeudaDataBase : RoomDatabase() {
                         MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
                         MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17,
                         MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21,
-                        MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24
+                        MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25
                     )
                     .build()
 

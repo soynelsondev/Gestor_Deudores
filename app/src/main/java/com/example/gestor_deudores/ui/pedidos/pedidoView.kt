@@ -605,6 +605,15 @@ fun DialogoCrearPedido(
         }
     }
 
+    // Control de sección 3 (Adicionales y Descuentos)
+    var seccionExtrasExpandida by remember { mutableStateOf(false) }
+
+    // Líneas extra (Sección 4.3)
+    var descuentoTexto by remember { mutableStateOf("") }
+    var esDescuentoPorcentaje by remember { mutableStateOf(false) } // false = $, true = %
+    var cargoDisenoTexto by remember { mutableStateOf("") }
+    var cargoEnvioTexto by remember { mutableStateOf("") }
+
     // --- NUEVA LISTA DINÁMICA DE ARTÍCULOS ---
     val listaArticulos = remember { mutableStateListOf(ArticuloPedido()) }
 
@@ -617,14 +626,51 @@ fun DialogoCrearPedido(
     var notas by remember { mutableStateOf("") }
     var errorMsg by remember { mutableStateOf("") }
 
-    // Función auxiliar para calcular el total
-    fun calcularTotalGeneral(): Double {
-        return listaArticulos.sumOf { it.obtenerSubtotal() }
+    // Cálculos de la Sección 4.3
+    fun calcularSubtotalArticulos(): Double = listaArticulos.sumOf { it.obtenerSubtotal() }
+
+    fun calcularMontoDescuento(): Double {
+        val subtotal = calcularSubtotalArticulos()
+        val valDesc = descuentoTexto.replace(",", ".").toDoubleOrNull() ?: 0.0
+        return if (esDescuentoPorcentaje) {
+            (subtotal * valDesc / 100.0).coerceAtMost(subtotal)
+        } else {
+            valDesc.coerceAtMost(subtotal)
+        }
     }
 
+    fun calcularMontoDiseno(): Double = cargoDisenoTexto.replace(",", ".").toDoubleOrNull() ?: 0.0
+
+    fun calcularMontoEnvio(): Double = cargoEnvioTexto.replace(",", ".").toDoubleOrNull() ?: 0.0
+
+    fun calcularTotalGeneral(): Double {
+        val subtotal = calcularSubtotalArticulos()
+        val desc = calcularMontoDescuento()
+        val diseno = calcularMontoDiseno()
+        val envio = calcularMontoEnvio()
+        val total = (subtotal - desc) + diseno + envio
+        return if (total < 0) 0.0 else total
+    }
+
+    val subtotalArticulos = calcularSubtotalArticulos()
+    val montoDescuentoCalculado = calcularMontoDescuento()
+    val montoDisenoCalculado = calcularMontoDiseno()
+    val montoEnvioCalculado = calcularMontoEnvio()
     val totalUsd = calcularTotalGeneral()
+
     val totalPiezasGral = listaArticulos.sumOf { it.obtenerCantidadTotal() }
-    val resumenProductos = "${listaArticulos.size} prod · $totalPiezasGral pcs · Total ${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(totalUsd)}"
+    val resumenProductos = "${listaArticulos.size} prod · $totalPiezasGral pcs · Subtotal ${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(subtotalArticulos)}"
+
+    val resumenExtras = if (montoDescuentoCalculado > 0 || montoDisenoCalculado > 0 || montoEnvioCalculado > 0) {
+        val partes = mutableListOf<String>()
+        if (montoDescuentoCalculado > 0) partes.add("Desc -$${String.format(java.util.Locale.US, "%.2f", montoDescuentoCalculado)}")
+        if (montoDisenoCalculado > 0) partes.add("Diseño +$${String.format(java.util.Locale.US, "%.2f", montoDisenoCalculado)}")
+        if (montoEnvioCalculado > 0) partes.add("Envío +$${String.format(java.util.Locale.US, "%.2f", montoEnvioCalculado)}")
+        partes.joinToString(" · ")
+    } else {
+        "Sin cargos extra ni descuentos"
+    }
+
     val abonoInicial = abonoInicialTexto.replace(",", ".").toDoubleOrNull() ?: 0.0
 
     if (mostrarCalendario) {
@@ -1220,6 +1266,133 @@ fun DialogoCrearPedido(
                     }
                 }
 
+                // 3. SECCIÓN LÍNEAS EXTRA DEL PEDIDO (SECCIÓN 4.3)
+                item {
+                    SeccionPlegablePedido(
+                        titulo = "3. LÍNEAS EXTRA / DESCUENTO",
+                        resumen = resumenExtras,
+                        expandido = seccionExtrasExpandida,
+                        onToggleExpandir = { seccionExtrasExpandida = !seccionExtrasExpandida },
+                        icono = Icons.Default.Star,
+                        completado = montoDescuentoCalculado > 0 || montoDisenoCalculado > 0 || montoEnvioCalculado > 0
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            // 1. DESCUENTO
+                            Text("Descuento del Pedido", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                OutlinedTextField(
+                                    value = descuentoTexto,
+                                    onValueChange = { descuentoTexto = it },
+                                    label = { Text(if (esDescuentoPorcentaje) "Descuento (%)" else "Descuento ($)") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+
+                                // Selector $ vs %
+                                Row(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(50))
+                                        .background(fondo_claro)
+                                        .padding(2.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(50))
+                                            .background(if (!esDescuentoPorcentaje) estados else Color.Transparent)
+                                            .clickable { esDescuentoPorcentaje = false }
+                                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                                    ) {
+                                        Text("$", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (!esDescuentoPorcentaje) Color.White else Color.Gray)
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(50))
+                                            .background(if (esDescuentoPorcentaje) estados else Color.Transparent)
+                                            .clickable { esDescuentoPorcentaje = true }
+                                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                                    ) {
+                                        Text("%", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (esDescuentoPorcentaje) Color.White else Color.Gray)
+                                    }
+                                }
+                            }
+
+                            if (montoDescuentoCalculado > 0) {
+                                Text(
+                                    text = "Descuento aplicado: -$${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(montoDescuentoCalculado)}",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF2E7D32)
+                                )
+                            }
+
+                            // 2. DISEÑO PERSONALIZADO
+                            OutlinedTextField(
+                                value = cargoDisenoTexto,
+                                onValueChange = { cargoDisenoTexto = it },
+                                label = { Text("Diseño personalizado / Vectorización ($)") },
+                                placeholder = { Text("Ej. 5.00") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+
+                            // 3. ENVÍO / DELIVERY
+                            OutlinedTextField(
+                                value = cargoEnvioTexto,
+                                onValueChange = { cargoEnvioTexto = it },
+                                label = { Text("Envío / Delivery ($)") },
+                                placeholder = { Text("Ej. 3.00") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+
+                            // RESUMEN DE DESGLOSE DE LÍNEAS EXTRA
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = fondo_claro),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Text("Subtotal Productos:", fontSize = 12.sp, color = Color.DarkGray)
+                                        Text("$${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(subtotalArticulos)}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.DarkGray)
+                                    }
+                                    if (montoDescuentoCalculado > 0) {
+                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                            Text("Descuento:", fontSize = 12.sp, color = Color(0xFF2E7D32))
+                                            Text("-$${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(montoDescuentoCalculado)}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
+                                        }
+                                    }
+                                    if (montoDisenoCalculado > 0) {
+                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                            Text("Diseño Personalizado:", fontSize = 12.sp, color = Color.DarkGray)
+                                            Text("+$${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(montoDisenoCalculado)}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.DarkGray)
+                                        }
+                                    }
+                                    if (montoEnvioCalculado > 0) {
+                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                            Text("Envío / Delivery:", fontSize = 12.sp, color = Color.DarkGray)
+                                            Text("+$${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(montoEnvioCalculado)}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.DarkGray)
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Text("TOTAL PEDIDO:", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = estados)
+                                        Text("$${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(totalUsd)}", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = estados)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // 4. TOTAL CALCULADO AUTOMÁTICAMENTE
                 item {
                     val formatoUSD = NumberFormat.getCurrencyInstance(Locale("en", "US")).format(totalUsd)
@@ -1400,6 +1573,10 @@ fun DialogoCrearPedido(
                                         nombrePiezaBase = if(listaArticulos.size == 1) listaArticulos[0].nombrePiezaBase else "Múltiples Productos",
                                         costoPasajeUnitario = unitarioPasajeGral,
                                         costoInsumosUnitario = unitarioInsumosGral,
+                                        descuento = montoDescuentoCalculado,
+                                        costoDiseno = montoDisenoCalculado,
+                                        costoEnvio = montoEnvioCalculado,
+                                        totalCalculadoUsd = totalUsd,
                                         onExito = onDismiss
                                     )
                                 }

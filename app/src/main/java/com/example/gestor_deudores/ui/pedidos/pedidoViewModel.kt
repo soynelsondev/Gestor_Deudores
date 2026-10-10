@@ -149,9 +149,13 @@ class PedidoViewModel(
         nombrePiezaBase: String = "Insumo Base",
         costoPasajeUnitario: Double = 0.0,
         costoInsumosUnitario: Double = 0.0,
+        descuento: Double = 0.0,
+        costoDiseno: Double = 0.0,
+        costoEnvio: Double = 0.0,
+        totalCalculadoUsd: Double? = null,
         onExito: () -> Unit
     ) {
-        val totalUsd = cantidad * precioUnitarioUsd
+        val totalUsd = totalCalculadoUsd ?: (cantidad * precioUnitarioUsd)
         
         // Fotografía de costos: Multiplicamos el costo unitario por la cantidad pedida
         val costoPiezaBaseTotal = costoPiezaBaseUnitario * cantidad
@@ -171,7 +175,10 @@ class PedidoViewModel(
             costoPiezaBaseUsd = costoPiezaBaseTotal,
             costoPasajeUsd = costoPasajeTotal,
             costoInsumosUsd = costoInsumosTotal,
-            nombrePiezaBase = nombrePiezaBase
+            nombrePiezaBase = nombrePiezaBase,
+            descuento = descuento,
+            costoDiseno = costoDiseno,
+            costoEnvio = costoEnvio
         )
 
         viewModelScope.launch {

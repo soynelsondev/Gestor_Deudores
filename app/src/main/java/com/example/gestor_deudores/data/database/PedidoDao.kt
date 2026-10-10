@@ -29,6 +29,8 @@ abstract class PedidoDao {
         SELECT p.id, p.deudorId, p.producto, p.cantidad, p.precioUnitarioUsd, p.totalUsd, 
                p.fechaCreacionMillis, p.fechaEntregaMillis, p.estado, p.notas,
                p.costoPiezaBaseUsd, p.costoPasajeUsd, p.costoInsumosUsd, p.nombrePiezaBase,
+               p.costoEnvio, p.descuento, p.costoDiseno, p.tipoEntrega, p.direccionEntrega,
+               p.urgente, p.estadoDiseno, p.esBorrador,
                d.nombre AS clienteNombre, d.apellido AS clienteApellido, d.telf AS clienteTelefono
         FROM pedidos p
         INNER JOIN deudores d ON p.deudorId = d.id

@@ -33,7 +33,15 @@ data class Pedido(
     val costoPiezaBaseUsd: Double = 0.0, // Antes era costoTextilUsd
     val costoPasajeUsd: Double = 0.0,
     val costoInsumosUsd: Double = 0.0,
-    val nombrePiezaBase: String = "Insumo Base" // Ej: "Camisa", "Taza Mágica", "Cuadro"
+    val nombrePiezaBase: String = "Insumo Base", // Ej: "Camisa", "Taza Mágica", "Cuadro"
+    val costoEnvio: Double = 0.0,
+    val descuento: Double = 0.0,
+    val costoDiseno: Double = 0.0,
+    val tipoEntrega: String = "RETIRO",
+    val direccionEntrega: String? = null,
+    val urgente: Boolean = false,
+    val estadoDiseno: String = "PENDIENTE",
+    val esBorrador: Boolean = false
 )
 
 data class PedidoConCliente(
@@ -51,6 +59,14 @@ data class PedidoConCliente(
     val costoPasajeUsd: Double = 0.0,
     val costoInsumosUsd: Double = 0.0,
     val nombrePiezaBase: String = "Insumo Base",
+    val costoEnvio: Double = 0.0,
+    val descuento: Double = 0.0,
+    val costoDiseno: Double = 0.0,
+    val tipoEntrega: String = "RETIRO",
+    val direccionEntrega: String? = null,
+    val urgente: Boolean = false,
+    val estadoDiseno: String = "PENDIENTE",
+    val esBorrador: Boolean = false,
     val clienteNombre: String,
     val clienteApellido: String,
     val clienteTelefono: String
