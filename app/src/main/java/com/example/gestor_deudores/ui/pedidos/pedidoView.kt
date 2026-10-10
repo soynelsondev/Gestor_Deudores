@@ -46,6 +46,15 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.core.content.FileProvider
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.foundation.Image
+import androidx.compose.ui.layout.ContentScale
+import java.io.File
+import android.net.Uri
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -89,6 +98,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.gestor_deudores.data.database.Deudor
 import com.example.gestor_deudores.data.database.PedidoConCliente
+import com.example.gestor_deudores.data.database.PlantillaCotizacion
 import com.example.gestor_deudores.data.utils.abrirWhatsApp
 import com.example.gestor_deudores.ui.theme.componentes
 import com.example.gestor_deudores.ui.theme.estados
@@ -418,6 +428,7 @@ data class ArticuloPedido(
     var notaItem: String = "", // Notas propias de este artículo
     var usarVariantes: Boolean = false,
     var variantes: MutableList<VarianteArticulo> = mutableListOf(),
+    var fotosUris: MutableList<String> = mutableListOf(), // Fotos del diseño (hasta 4)
     // Costos reales arrastrados del cotizador para la radiografía
     var costoPiezaBaseUnitario: Double = 0.0,
     var nombrePiezaBase: String = "Insumo Base",
@@ -451,6 +462,25 @@ data class ArticuloPedido(
         val totalCant = obtenerCantidadTotal()
         if (totalCant <= 0) return 0.0
         return obtenerSubtotal() / totalCant
+    }
+}
+
+@Composable
+fun rememberBitmapFromUri(uriString: String): androidx.compose.ui.graphics.ImageBitmap? {
+    val context = LocalContext.current
+    return remember(uriString) {
+        try {
+            if (uriString.isBlank()) null
+            else {
+                val uri = android.net.Uri.parse(uriString)
+                val inputStream = context.contentResolver.openInputStream(uri)
+                val bitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
+                inputStream?.close()
+                bitmap?.asImageBitmap()
+            }
+        } catch (e: Exception) {
+            null
+        }
     }
 }
 
@@ -542,6 +572,86 @@ fun SeccionPlegablePedido(
             if (expandido) {
                 Spacer(modifier = Modifier.height(12.dp))
                 content()
+            }
+        }
+    }
+}
+
+@Composable
+fun IndicadorPrecioYGananciaArticulo(
+    articulo: ArticuloPedido,
+    plantillasCotizador: List<PlantillaCotizacion>,
+    onRestablecerPrecioSugerido: (Double) -> Unit
+) {
+    val totalPiezas = articulo.obtenerCantidadTotal()
+    val prodNombre = articulo.producto.trim()
+
+    val plantillaAplica = plantillasCotizador.find { p ->
+        (p.nombrePlantilla.contains(prodNombre, ignoreCase = true) || prodNombre.contains(p.nombrePlantilla, ignoreCase = true)) &&
+        if (p.esPlantillaMayor) totalPiezas >= p.minimoUnidadesMayor else true
+    }
+
+    val sugeridoVal = if (plantillaAplica != null && prodNombre.isNotBlank()) {
+        com.example.gestor_deudores.data.utils.calcularCostosPlantilla(plantillaAplica, cantidadPedido = totalPiezas).precioSugeridoUsd
+    } else null
+
+    val precioIngresado = articulo.precioUnitarioTexto.replace(",", ".").toDoubleOrNull() ?: 0.0
+    val costoUnitarioTotal = articulo.costoPiezaBaseUnitario + articulo.costoPasajeUnitario + articulo.costoInsumosUnitario
+    val gananciaPorPieza = precioIngresado - costoUnitarioTotal
+    val porcentajeMargen = if (precioIngresado > 0) (gananciaPorPieza / precioIngresado) * 100.0 else 0.0
+
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        // 1. Badge de Escala y Precio Sugerido
+        if (sugeridoVal != null && plantillaAplica != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Precio sugerido $${String.format(java.util.Locale.US, "%.2f", sugeridoVal)} · ${if (plantillaAplica.esPlantillaMayor) "Tarifa al mayor (≥${plantillaAplica.minimoUnidadesMayor} pcs)" else "Tarifa al detal"}",
+                    color = Color(0xFF1976D2),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                if (articulo.precioManualEditado) {
+                    TextButton(
+                        onClick = { onRestablecerPrecioSugerido(sugeridoVal) },
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Text("↺ Usar sugerido", fontSize = 11.sp, color = estados, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        // 2. Métrica de Ganancia o Alerta de Pérdida por Pieza (Sección 5)
+        if (costoUnitarioTotal > 0 && precioIngresado > 0) {
+            val esPerdida = precioIngresado < costoUnitarioTotal
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (esPerdida) Color(0xFFFFEBEE) else Color(0xFFE8F5E9)
+                ),
+                shape = RoundedCornerShape(6.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = if (esPerdida) {
+                            "Pierdes -$${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(kotlin.math.abs(gananciaPorPieza))} / pc (Costo $${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(costoUnitarioTotal)})"
+                        } else {
+                            "Ganas +$${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(gananciaPorPieza)} / pc (Margen ${String.format(java.util.Locale.US, "%.0f", porcentajeMargen)}%)"
+                        },
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (esPerdida) Color(0xFFD32F2F) else Color(0xFF2E7D32)
+                    )
+                }
             }
         }
     }
@@ -699,6 +809,65 @@ fun DialogoCrearPedido(
     var clienteTelfWhatsApp by remember { mutableStateOf("") }
     var mostrarDialogoBorradorConfirm by remember { mutableStateOf(false) }
 
+    // --- NUEVA LISTA DINÁMICA DE ARTÍCULOS ---
+    val listaArticulos = remember { mutableStateListOf(ArticuloPedido()) }
+
+    // Launchers de Galería y Cámara para fotos de diseño (Sección 6.1)
+    val context = LocalContext.current
+    var articuloIndexFotoActivo by remember { mutableStateOf<Int?>(null) }
+    var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia(4)
+    ) { uris ->
+        articuloIndexFotoActivo?.let { index ->
+            if (index in listaArticulos.indices) {
+                val art = listaArticulos[index]
+                val fotosActuales = art.fotosUris.toMutableList()
+                uris.forEach { u ->
+                    if (fotosActuales.size < 4) {
+                        fotosActuales.add(u.toString())
+                    }
+                }
+                listaArticulos[index] = art.copy(fotosUris = fotosActuales)
+            }
+        }
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success && tempCameraUri != null) {
+            articuloIndexFotoActivo?.let { index ->
+                if (index in listaArticulos.indices) {
+                    val art = listaArticulos[index]
+                    val fotosActuales = art.fotosUris.toMutableList()
+                    if (fotosActuales.size < 4) {
+                        fotosActuales.add(tempCameraUri.toString())
+                        listaArticulos[index] = art.copy(fotosUris = fotosActuales)
+                    }
+                }
+            }
+        }
+    }
+
+    fun tomarFotoCamara(index: Int) {
+        articuloIndexFotoActivo = index
+        try {
+            val tempFile = File.createTempFile("diseno_", ".jpg", context.cacheDir)
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", tempFile)
+            tempCameraUri = uri
+            cameraLauncher.launch(uri)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun seleccionarFotosGaleria(index: Int) {
+        articuloIndexFotoActivo = index
+        galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    }
+
     // Control de secciones plegables
     var seccionClienteExpandida by remember { mutableStateOf(true) }
     var seccionProductosExpandida by remember { mutableStateOf(true) }
@@ -752,9 +921,6 @@ fun DialogoCrearPedido(
     var esDescuentoPorcentaje by remember { mutableStateOf(false) } // false = $, true = %
     var cargoDisenoTexto by remember { mutableStateOf("") }
     var cargoEnvioTexto by remember { mutableStateOf("") }
-
-    // --- NUEVA LISTA DINÁMICA DE ARTÍCULOS ---
-    val listaArticulos = remember { mutableStateListOf(ArticuloPedido()) }
 
     var abonoInicialTexto by remember { mutableStateOf("") }
     var frecuenciaSeleccionada by remember { mutableStateOf("AL_ENTREGAR") }
@@ -1241,6 +1407,18 @@ fun DialogoCrearPedido(
                                             }
                                         }
 
+                                        // INDICADOR DE PRECIO SUGERIDO, ESCALA Y GANANCIA POR PIEZA (SECCIÓN 5)
+                                        IndicadorPrecioYGananciaArticulo(
+                                            articulo = articulo,
+                                            plantillasCotizador = plantillasCotizador,
+                                            onRestablecerPrecioSugerido = { precioSug ->
+                                                listaArticulos[index] = articulo.copy(
+                                                    precioUnitarioTexto = String.format(java.util.Locale.US, "%.2f", precioSug),
+                                                    precioManualEditado = false
+                                                )
+                                            }
+                                        )
+
                                         // BOTÓN Y DESGLOSE DE VARIANTES LIBRES (4.2.1)
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
@@ -1423,6 +1601,93 @@ fun DialogoCrearPedido(
                                             modifier = Modifier.fillMaxWidth(),
                                             shape = RoundedCornerShape(12.dp)
                                         )
+
+                                        // SECCIÓN FOTOS DEL DISEÑO DEL CLIENTE (SECCIÓN 6.1)
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(fondo2.copy(alpha = 0.3f))
+                                                .padding(8.dp),
+                                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = "Fotos del Diseño (${articulo.fotosUris.size}/4)",
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color.White
+                                                )
+
+                                                if (articulo.fotosUris.size < 4) {
+                                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                        TextButton(
+                                                            onClick = { seleccionarFotosGaleria(index) },
+                                                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                                                        ) {
+                                                            Text("Galería", fontSize = 11.sp, color = estados, fontWeight = FontWeight.Bold)
+                                                        }
+
+                                                        TextButton(
+                                                            onClick = { tomarFotoCamara(index) },
+                                                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                                                        ) {
+                                                            Text("Cámara", fontSize = 11.sp, color = estados, fontWeight = FontWeight.Bold)
+                                                        }
+                                                    }
+                                                } else {
+                                                    Text("Máximo 4 fotos", fontSize = 10.sp, color = Color.Gray)
+                                                }
+                                            }
+
+                                            if (articulo.fotosUris.isNotEmpty()) {
+                                                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    items(articulo.fotosUris.size) { fIdx ->
+                                                        val uriStr = articulo.fotosUris[fIdx]
+                                                        val bitmap = rememberBitmapFromUri(uriStr)
+
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .size(60.dp)
+                                                                .clip(RoundedCornerShape(8.dp))
+                                                                .background(Color.DarkGray)
+                                                        ) {
+                                                            if (bitmap != null) {
+                                                                Image(
+                                                                    bitmap = bitmap,
+                                                                    contentDescription = "Foto diseño ${fIdx + 1}",
+                                                                    contentScale = ContentScale.Crop,
+                                                                    modifier = Modifier.fillMaxSize()
+                                                                )
+                                                            }
+
+                                                            IconButton(
+                                                                onClick = {
+                                                                    val listFotos = articulo.fotosUris.toMutableList()
+                                                                    listFotos.removeAt(fIdx)
+                                                                    listaArticulos[index] = articulo.copy(fotosUris = listFotos)
+                                                                },
+                                                                modifier = Modifier
+                                                                    .size(20.dp)
+                                                                    .align(Alignment.TopEnd)
+                                                                    .background(Color.Black.copy(alpha = 0.6f), shape = CircleShape)
+                                                            ) {
+                                                                Icon(
+                                                                    imageVector = Icons.Default.Close,
+                                                                    contentDescription = "Eliminar foto",
+                                                                    tint = Color.White,
+                                                                    modifier = Modifier.size(12.dp)
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
