@@ -47,6 +47,9 @@ abstract class PedidoDao {
     @Query("SELECT * FROM pedido_imagenes WHERE pedidoId = :pedidoId ORDER BY fechaMillis ASC")
     abstract suspend fun obtenerImagenesPorPedidoSync(pedidoId: Int): List<PedidoImagen>
 
+    @Query("SELECT * FROM pedido_imagenes")
+    abstract suspend fun obtenerTodasLasImagenesSync(): List<PedidoImagen>
+
     @Delete
     abstract suspend fun eliminarImagenPedido(imagen: PedidoImagen)
 

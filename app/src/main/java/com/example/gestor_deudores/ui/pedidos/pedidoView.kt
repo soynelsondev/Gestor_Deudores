@@ -46,6 +46,10 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
+import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.PickVisualMediaRequest
@@ -268,11 +272,55 @@ fun DialogoVisorImagen(
     onEliminar: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
     val bitmap = rememberBitmapFromUri(imagen.ruta)
+    var mostrarConfirmarEliminar by remember { mutableStateOf(false) }
+
+    // Pinch to zoom state (Sección 6.4)
+    var scale by remember { mutableStateOf(1f) }
+    var offsetX by remember { mutableStateOf(0f) }
+    var offsetY by remember { mutableStateOf(0f) }
+
+    if (mostrarConfirmarEliminar) {
+        Dialog(onDismissRequest = { mostrarConfirmarEliminar = false }) {
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = fondo)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text("¿Eliminar esta foto?", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    Text("Esta acción eliminará el archivo de imagen del pedido permanentemente.", fontSize = 12.sp, color = Color.LightGray)
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        TextButton(onClick = { mostrarConfirmarEliminar = false }) {
+                            Text("Cancelar", color = Color.Gray)
+                        }
+
+                        Button(
+                            onClick = {
+                                mostrarConfirmarEliminar = false
+                                onEliminar()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                        ) {
+                            Text("Eliminar", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = fondo)
         ) {
@@ -281,13 +329,14 @@ fun DialogoVisorImagen(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                // Cabecera con Chip de Tipo
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Foto del Pedido",
+                        text = "Visor de Foto",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
@@ -320,26 +369,72 @@ fun DialogoVisorImagen(
                     }
                 }
 
+                // Imagen en grande con Pinch-To-Zoom (Sección 6.4)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(240.dp)
+                        .height(260.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(Color.Black),
+                        .background(Color.Black)
+                        .pointerInput(Unit) {
+                            detectTransformGestures { _, pan, zoom, _ ->
+                                scale = (scale * zoom).coerceIn(1f, 4f)
+                                if (scale > 1f) {
+                                    offsetX += pan.x
+                                    offsetY += pan.y
+                                } else {
+                                    offsetX = 0f
+                                    offsetY = 0f
+                                }
+                            }
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     if (bitmap != null) {
                         Image(
                             bitmap = bitmap,
-                            contentDescription = "Foto grande",
+                            contentDescription = "Visor de foto con zoom",
                             contentScale = ContentScale.Fit,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer(
+                                    scaleX = scale,
+                                    scaleY = scale,
+                                    translationX = offsetX,
+                                    translationY = offsetY
+                                )
                         )
                     } else {
                         Text("No se pudo cargar la imagen", color = Color.Gray, fontSize = 12.sp)
                     }
                 }
 
+                // Botón Compartir Foto por WhatsApp (Sección 6.4)
+                Button(
+                    onClick = {
+                        try {
+                            val archivo = File(imagen.ruta)
+                            if (archivo.exists()) {
+                                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", archivo)
+                                val intent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "image/*"
+                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                    putExtra(Intent.EXTRA_TEXT, "Te compartimos esta imagen del pedido.")
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                context.startActivity(Intent.createChooser(intent, "Compartir imagen"))
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = verdeWhatsapp)
+                ) {
+                    Text("📲 Compartir Foto por WhatsApp", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+
+                // Selector para Cambiar Tipo de Imagen (Sección 6.3)
                 Text("Cambiar tipo de imagen:", fontSize = 11.sp, color = Color.Gray)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -366,12 +461,13 @@ fun DialogoVisorImagen(
                     }
                 }
 
+                // Botones Eliminar y Cerrar
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = onEliminar) {
+                    IconButton(onClick = { mostrarConfirmarEliminar = true }) {
                         Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = Color.Red)
                     }
 
