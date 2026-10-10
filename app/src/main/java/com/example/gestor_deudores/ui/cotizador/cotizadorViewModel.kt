@@ -370,11 +370,12 @@ class CotizadorViewModel(
         calcularResultados()
     }
 
-    fun calcularAyudanteDtf(anchoRollo: String, anchoDiseno: String, altoDiseno: String) {
-        val aR = anchoRollo.toDoubleOrNull() ?: 30.0
-        val aD = anchoDiseno.toDoubleOrNull() ?: 10.0
-        val hD = altoDiseno.toDoubleOrNull() ?: 10.0
-        val piezasPorMetro = com.example.gestor_deudores.data.utils.calcularAprovechamientoDtf(aR, aD, hD)
+    fun calcularAyudanteDtf(anchoRollo: String, largoRollo: String, anchoDiseno: String, altoDiseno: String) {
+        val aR = anchoRollo.replace(",", ".").toDoubleOrNull() ?: 60.0
+        val lR = largoRollo.replace(",", ".").toDoubleOrNull() ?: 100.0
+        val aD = anchoDiseno.replace(",", ".").toDoubleOrNull() ?: 10.0
+        val hD = altoDiseno.replace(",", ".").toDoubleOrNull() ?: 10.0
+        val piezasPorMetro = com.example.gestor_deudores.data.utils.calcularAprovechamientoDtf(aR, lR, aD, hD)
         _uiState.update { it.copy(rendimientoDtf = piezasPorMetro.toString()) }
         calcularResultados()
     }

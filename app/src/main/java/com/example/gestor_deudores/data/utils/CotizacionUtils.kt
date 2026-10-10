@@ -41,16 +41,24 @@ data class DesgloseCostosPlantilla(
  * Calcula cuántos estampados caben por metro según ancho de rollo y medidas del diseño.
  */
 fun calcularAprovechamientoDtf(
-    anchoRolloCm: Double = 30.0,
+    anchoRolloCm: Double = 60.0,
+    largoRolloCm: Double = 100.0,
     anchoDisenoCm: Double = 10.0,
     altoDisenoCm: Double = 10.0,
-    separacionCm: Double = 1.0
+    separacionCm: Double = 0.2
 ): Int {
-    if (anchoDisenoCm <= 0 || altoDisenoCm <= 0) return 1
-    val cols = kotlin.math.floor((anchoRolloCm) / (anchoDisenoCm + separacionCm))
-    val filas = kotlin.math.floor(100.0 / (altoDisenoCm + separacionCm))
-    val total = (cols * filas).toInt()
-    return if (total > 0) total else 1
+    if (anchoDisenoCm <= 0 || altoDisenoCm <= 0 || anchoRolloCm <= 0 || largoRolloCm <= 0) return 1
+    
+    val cols1 = kotlin.math.floor(anchoRolloCm / (anchoDisenoCm + separacionCm))
+    val filas1 = kotlin.math.floor(largoRolloCm / (altoDisenoCm + separacionCm))
+    val total1 = (cols1 * filas1).toInt()
+
+    val cols2 = kotlin.math.floor(anchoRolloCm / (altoDisenoCm + separacionCm))
+    val filas2 = kotlin.math.floor(largoRolloCm / (anchoDisenoCm + separacionCm))
+    val total2 = (cols2 * filas2).toInt()
+
+    val maximo = kotlin.math.max(total1, total2)
+    return if (maximo > 0) maximo else 1
 }
 
 /**

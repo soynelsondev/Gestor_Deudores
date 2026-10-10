@@ -407,54 +407,84 @@ fun FormularioCotizacion(
                         onCantidadChange = { viewModel.onRendimientoDtfChange(it) }
                     )
 
-                    // --- AYUDANTE CALCULADOR DE DTF ---
+                    // --- AYUDANTE CALCULADOR DE DTF EN 2 FILAS ---
                     var mostrarAyudanteDtf by remember { mutableStateOf(false) }
-                    var anchoRolloDtf by remember { mutableStateOf("30") }
+                    var anchoRolloDtf by remember { mutableStateOf("60") }
+                    var largoRolloDtf by remember { mutableStateOf("100") }
                     var anchoDisenoDtf by remember { mutableStateOf("10") }
                     var altoDisenoDtf by remember { mutableStateOf("10") }
 
                     if (mostrarAyudanteDtf) {
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(RoundedCornerShape(10.dp))
                                 .background(Color.Black.copy(alpha = 0.04f))
-                                .padding(8.dp)
+                                .padding(10.dp)
                         ) {
-                            Column {
-                                Text("📐 Calculador de Estampas por Metro DTF", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = estados)
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text("📐 Calculador de Estampas por Rollo DTF", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = estados)
+                                
+                                // FILA 1: MEDIDAS DEL ROLLO
+                                Text("Rollo de Film (cm):", fontSize = 10.sp, color = Color.Gray, fontWeight = FontWeight.SemiBold)
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                     OutlinedTextField(
                                         value = anchoRolloDtf,
                                         onValueChange = { 
-                                            anchoRolloDtf = it
-                                            viewModel.calcularAyudanteDtf(anchoRolloDtf, anchoDisenoDtf, altoDisenoDtf)
+                                            if (it.all { c -> c.isDigit() || c == '.' || c == ',' }) {
+                                                anchoRolloDtf = it
+                                                viewModel.calcularAyudanteDtf(anchoRolloDtf, largoRolloDtf, anchoDisenoDtf, altoDisenoDtf)
+                                            }
                                         },
-                                        label = { Text("Rollo cm") },
+                                        placeholder = { Text("Ancho", fontSize = 11.sp) },
                                         modifier = Modifier.weight(1f),
-                                        shape = RoundedCornerShape(8.dp)
+                                        shape = RoundedCornerShape(8.dp),
+                                        singleLine = true
                                     )
+                                    OutlinedTextField(
+                                        value = largoRolloDtf,
+                                        onValueChange = { 
+                                            if (it.all { c -> c.isDigit() || c == '.' || c == ',' }) {
+                                                largoRolloDtf = it
+                                                viewModel.calcularAyudanteDtf(anchoRolloDtf, largoRolloDtf, anchoDisenoDtf, altoDisenoDtf)
+                                            }
+                                        },
+                                        placeholder = { Text("Largo", fontSize = 11.sp) },
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(8.dp),
+                                        singleLine = true
+                                    )
+                                }
+
+                                // FILA 2: MEDIDAS DEL ESTAMPADO
+                                Text("Tu Estampado (cm):", fontSize = 10.sp, color = Color.Gray, fontWeight = FontWeight.SemiBold)
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                     OutlinedTextField(
                                         value = anchoDisenoDtf,
                                         onValueChange = { 
-                                            anchoDisenoDtf = it
-                                            viewModel.calcularAyudanteDtf(anchoRolloDtf, anchoDisenoDtf, altoDisenoDtf)
+                                            if (it.all { c -> c.isDigit() || c == '.' || c == ',' }) {
+                                                anchoDisenoDtf = it
+                                                viewModel.calcularAyudanteDtf(anchoRolloDtf, largoRolloDtf, anchoDisenoDtf, altoDisenoDtf)
+                                            }
                                         },
-                                        label = { Text("Ancho cm") },
+                                        placeholder = { Text("Ancho", fontSize = 11.sp) },
                                         modifier = Modifier.weight(1f),
-                                        shape = RoundedCornerShape(8.dp)
+                                        shape = RoundedCornerShape(8.dp),
+                                        singleLine = true
                                     )
                                     OutlinedTextField(
                                         value = altoDisenoDtf,
                                         onValueChange = { 
-                                            altoDisenoDtf = it
-                                            viewModel.calcularAyudanteDtf(anchoRolloDtf, anchoDisenoDtf, altoDisenoDtf)
+                                            if (it.all { c -> c.isDigit() || c == '.' || c == ',' }) {
+                                                altoDisenoDtf = it
+                                                viewModel.calcularAyudanteDtf(anchoRolloDtf, largoRolloDtf, anchoDisenoDtf, altoDisenoDtf)
+                                            }
                                         },
-                                        label = { Text("Alto cm") },
+                                        placeholder = { Text("Alto", fontSize = 11.sp) },
                                         modifier = Modifier.weight(1f),
-                                        shape = RoundedCornerShape(8.dp)
+                                        shape = RoundedCornerShape(8.dp),
+                                        singleLine = true
                                     )
                                 }
                             }
