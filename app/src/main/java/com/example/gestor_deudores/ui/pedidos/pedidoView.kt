@@ -605,6 +605,124 @@ fun DialogoCancelarPedidoConAbono(
 }
 
 @Composable
+fun DialogoRegistrarCobroPedido(
+    pedido: PedidoConCliente,
+    tasaBcvActual: Double = 40.0,
+    onConfirmarCobro: (montoUsd: Double, metodo: String, ref: String, esBs: Boolean) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var montoTexto by remember { mutableStateOf(String.format(java.util.Locale.US, "%.2f", pedido.totalUsd)) }
+    var esBs by remember { mutableStateOf(false) }
+    var metodoPago by remember { mutableStateOf("Efectivo ($)") }
+    var referencia by remember { mutableStateOf("") }
+
+    val metodosDisponibles = listOf("Efectivo ($)", "Pago Móvil (Bs)", "Zelle ($)", "Transferencia (Bs)", "Punto de Venta")
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = fondo2)
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("Registrar Cobro · Pedido #${pedido.id}", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Text("Cliente: ${pedido.clienteNombre} ${pedido.clienteApellido}", fontSize = 12.sp, color = Color.LightGray)
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (!esBs) estados else fondo_claro)
+                            .clickable { esBs = false }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("USD ($)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (!esBs) Color.White else Color.DarkGray)
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (esBs) estados else fondo_claro)
+                            .clickable { esBs = true }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("Bolívares (Bs)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (esBs) Color.White else Color.DarkGray)
+                    }
+                }
+
+                val montoVal = montoTexto.replace(",", ".").toDoubleOrNull() ?: 0.0
+                val montoCalcUsd = if (esBs && tasaBcvActual > 0) montoVal / tasaBcvActual else montoVal
+
+                OutlinedTextField(
+                    value = montoTexto,
+                    onValueChange = { montoTexto = it },
+                    label = { Text(if (esBs) "Monto Pagado en Bs" else "Monto Pagado en USD") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                if (esBs && tasaBcvActual > 0) {
+                    Text("Equivalente: $${String.format(java.util.Locale.US, "%.2f", montoCalcUsd)} USD (Tasa BCV: $tasaBcvActual)", fontSize = 11.sp, color = Color(0xFF4CAF50))
+                }
+
+                Text("Método de Pago:", fontSize = 11.sp, color = Color.LightGray)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(metodosDisponibles) { m ->
+                        val sel = metodoPago == m
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .background(if (sel) estados else fondo_claro)
+                                .clickable { metodoPago = m }
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text(m, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (sel) Color.White else Color.DarkGray)
+                        }
+                    }
+                }
+
+                OutlinedTextField(
+                    value = referencia,
+                    onValueChange = { referencia = it },
+                    label = { Text("Número de Referencia (Opcional)") },
+                    placeholder = { Text("Ej. 123456") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancelar", color = Color.LightGray)
+                    }
+
+                    Button(
+                        onClick = {
+                            if (montoCalcUsd > 0) {
+                                onConfirmarCobro(montoCalcUsd, metodoPago, referencia, esBs)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                    ) {
+                        Text("Registrar Pago", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun TarjetaPedido(
     item: PedidoConCliente,
     viewModel: PedidoViewModel,
@@ -624,6 +742,26 @@ fun TarjetaPedido(
 
     var mostrarConfirmarProduccion by remember { mutableStateOf(false) }
     var mostrarCancelarPedido by remember { mutableStateOf(false) }
+    var mostrarDialogoRegistrarCobro by remember { mutableStateOf(false) }
+
+    if (mostrarDialogoRegistrarCobro) {
+        DialogoRegistrarCobroPedido(
+            pedido = item,
+            onConfirmarCobro = { montoUsd, metodo, ref, esBs ->
+                mostrarDialogoRegistrarCobro = false
+                viewModel.registrarCobroSaldoPedido(
+                    deudorId = item.deudorId,
+                    pedidoId = item.id,
+                    montoUsd = montoUsd,
+                    metodoPago = metodo,
+                    referencia = ref,
+                    esBs = esBs,
+                    tasaBcv = 40.0
+                ) {}
+            },
+            onDismiss = { mostrarDialogoRegistrarCobro = false }
+        )
+    }
 
     val colorEstado = when (item.estado) {
         "RECIBIDO" -> fondo2
@@ -842,7 +980,7 @@ fun TarjetaPedido(
                 }
             }
 
-            // TOTAL Y BARRAS DE ACCIÓN
+            // TOTAL Y BARRAS DE ACCIÓN (SECCIÓN 9)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -855,22 +993,31 @@ fun TarjetaPedido(
                     color = componentes
                 )
 
-                if (item.estado == "LISTO" && item.clienteTelefono.isNotBlank()) {
-                    IconButton(
-                        onClick = {
-                            val msg = "Hola ${item.clienteNombre}, te escribimos para avisarte que tu pedido de *${item.producto}* ya está ¡LISTO para retirar/entregar! ¡Muchas gracias!"
-                            abrirWhatsApp(context, item.clienteTelefono, msg)
-                        },
-                        modifier = Modifier
-                            .size(32.dp)
-                            .background(verdeWhatsapp, shape = CircleShape)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(
+                        onClick = { mostrarDialogoRegistrarCobro = true },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Phone,
-                            contentDescription = "Avisar que está listo",
-                            tint = Color.White,
-                            modifier = Modifier.size(16.dp)
-                        )
+                        Text("💰 Cobrar", fontSize = 11.sp, color = estados, fontWeight = FontWeight.Bold)
+                    }
+
+                    if (item.estado == "LISTO") {
+                        IconButton(
+                            onClick = {
+                                val msg = "Hola ${item.clienteNombre}, te escribimos para avisarte que tu pedido de *${item.producto}* ya está ¡LISTO para retirar/entregar! ¡Muchas gracias!"
+                                abrirWhatsApp(context, item.clienteTelefono, msg)
+                            },
+                            modifier = Modifier
+                                .size(32.dp)
+                                .background(verdeWhatsapp, shape = CircleShape)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Phone,
+                                contentDescription = "Avisar que está listo",
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -1338,9 +1485,56 @@ fun DialogoCrearPedido(
     var clienteNombreWhatsApp by remember { mutableStateOf("") }
     var clienteTelfWhatsApp by remember { mutableStateOf("") }
     var mostrarDialogoBorradorConfirm by remember { mutableStateOf(false) }
-
     // --- NUEVA LISTA DINÁMICA DE ARTÍCULOS ---
     val listaArticulos = remember { mutableStateListOf(ArticuloPedido()) }
+
+    var articuloAEliminarIndex by remember { mutableStateOf<Int?>(null) }
+
+    if (articuloAEliminarIndex != null) {
+        val artDel = listaArticulos.getOrNull(articuloAEliminarIndex!!)
+        Dialog(onDismissRequest = { articuloAEliminarIndex = null }) {
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = fondo2)
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text("¿Eliminar ${artDel?.producto?.ifBlank { "este artículo" }}?", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    if (artDel != null && artDel.fotosUris.isNotEmpty()) {
+                        Text("Este artículo tiene ${artDel.fotosUris.size} foto(s) de diseño. Se quitarán del pedido.", fontSize = 12.sp, color = Color.LightGray)
+                    } else {
+                        Text("Se quitará este producto de la lista del pedido.", fontSize = 12.sp, color = Color.LightGray)
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        TextButton(onClick = { articuloAEliminarIndex = null }) {
+                            Text("Cancelar", color = Color.LightGray)
+                        }
+
+                        Button(
+                            onClick = {
+                                articuloAEliminarIndex?.let { idx ->
+                                    if (idx in listaArticulos.indices) {
+                                        listaArticulos.removeAt(idx)
+                                    }
+                                }
+                                articuloAEliminarIndex = null
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                        ) {
+                            Text("Eliminar", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     // Launchers de Galería y Cámara para fotos de diseño (Sección 6.1)
     val context = LocalContext.current
@@ -1780,10 +1974,16 @@ fun DialogoCrearPedido(
                                                     Text("📋", fontSize = 14.sp)
                                                 }
 
-                                                // Botón Eliminar (4.2)
+                                                // Botón Eliminar (4.2 y Sección 10)
                                                 if (listaArticulos.size > 1) {
                                                     IconButton(
-                                                        onClick = { listaArticulos.removeAt(index) },
+                                                        onClick = {
+                                                            if (articulo.producto.isNotBlank() || articulo.fotosUris.isNotEmpty()) {
+                                                                articuloAEliminarIndex = index
+                                                            } else {
+                                                                listaArticulos.removeAt(index)
+                                                            }
+                                                        },
                                                         modifier = Modifier.size(28.dp)
                                                     ) {
                                                         Icon(
@@ -2852,16 +3052,24 @@ fun DialogoCrearPedido(
                                     set(java.util.Calendar.MILLISECOND, 0)
                                 }.timeInMillis
 
+                                val usableBytes = context.filesDir.usableSpace
+
                                 if (deudorSeleccionado == null) {
-                                    errorMsg = "Debes seleccionar un cliente"
-                                } else if (listaArticulos.any { it.producto.isBlank() }) {
-                                    errorMsg = "Completa el nombre de todos los productos"
+                                    errorMsg = "Debes seleccionar un cliente (Obligatorio)"
+                                } else if (listaArticulos.isEmpty() || listaArticulos.any { it.producto.isBlank() }) {
+                                    errorMsg = "Completa el nombre de todos los productos (Obligatorio)"
+                                } else if (listaArticulos.any { (it.cantidadTexto.toIntOrNull() ?: 0) <= 0 && (!it.usarVariantes || it.obtenerCantidadTotal() <= 0) }) {
+                                    errorMsg = "La cantidad de cada producto debe ser un número entero positivo (≥ 1)"
                                 } else if (totalUsd <= 0.0) {
-                                    errorMsg = "El precio total debe ser mayor a cero"
+                                    errorMsg = "El precio total del pedido debe ser mayor a cero"
                                 } else if (abonoCalculadoUsd > totalUsd) {
                                     errorMsg = "El abono (${String.format(java.util.Locale.US, "%.2f", abonoCalculadoUsd)}) no puede ser mayor que el total (${String.format(java.util.Locale.US, "%.2f", totalUsd)})"
                                 } else if (fechaEntregaMillis == null || fechaEntregaMillis!! < hoyInicioMillis) {
                                     errorMsg = "Debes seleccionar una fecha de entrega válida (hoy o futura)"
+                                } else if (frecuenciaSeleccionada != "AL_ENTREGAR" && (numCuotasTexto.toIntOrNull() ?: 0) < 1) {
+                                    errorMsg = "El número de cuotas debe ser al menos 1"
+                                } else if (usableBytes < 5 * 1024 * 1024) {
+                                    errorMsg = "Almacenamiento del teléfono lleno. Libera espacio antes de guardar."
                                 } else {
                                     val numCuotas = if (frecuenciaSeleccionada == "AL_ENTREGAR") 1 else (numCuotasTexto.toIntOrNull() ?: 1)
 

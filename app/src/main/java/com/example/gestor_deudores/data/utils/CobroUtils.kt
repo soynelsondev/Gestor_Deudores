@@ -127,3 +127,33 @@ fun calcularEstadoCobro(deudas: List<Deuda>): EstadoCobro {
 
     return EstadoCobro(saldoTotal, proximaCuotaMonto, proximoVencimiento, vencida, diasAtraso)
 }
+
+data class DesgloseSobresPedido(
+    val sobreInsumosMateriales: Double,
+    val sobreLogisticaEnvio: Double,
+    val sobreGananciaNeta: Double
+)
+
+fun desglosarSobresPedido(
+    abonoTotalRecibidoUsd: Double,
+    costoMateriaPrimaTotalUsd: Double,
+    costoEnvioUsd: Double = 0.0
+): DesgloseSobresPedido {
+    if (abonoTotalRecibidoUsd <= 0.0) {
+        return DesgloseSobresPedido(0.0, 0.0, 0.0)
+    }
+
+    val sobreInsumos = Math.min(abonoTotalRecibidoUsd, costoMateriaPrimaTotalUsd).redondear2()
+    var remanente = abonoTotalRecibidoUsd - sobreInsumos
+
+    val sobreEnvio = Math.min(remanente, costoEnvioUsd).redondear2()
+    remanente -= sobreEnvio
+
+    val sobreGanancia = Math.max(0.0, remanente).redondear2()
+
+    return DesgloseSobresPedido(
+        sobreInsumosMateriales = sobreInsumos,
+        sobreLogisticaEnvio = sobreEnvio,
+        sobreGananciaNeta = sobreGanancia
+    )
+}

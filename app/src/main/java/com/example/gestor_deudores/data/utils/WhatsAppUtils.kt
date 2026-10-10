@@ -21,18 +21,38 @@ fun normalizarTelefono(raw: String): String? {
 fun abrirWhatsApp(context: Context, telefonoRaw: String, mensaje: String) {
     val telefonoLimpio = normalizarTelefono(telefonoRaw)
 
-    if (telefonoLimpio == null) {
-        Toast.makeText(context, "El número de teléfono no es válido para WhatsApp", Toast.LENGTH_LONG).show()
-        return
+    // 1. CONDICIONAL: Si HAY número de teléfono registrado válido -> Abre chat directo
+    if (telefonoLimpio != null && telefonoLimpio.isNotBlank()) {
+        val url = "https://wa.me/$telefonoLimpio?text=${Uri.encode(mensaje)}"
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        try {
+            context.startActivity(intent)
+            return
+        } catch (e: ActivityNotFoundException) {
+            // Si falla abrir el link directo, continua al selector general
+        }
     }
 
-    val url = "https://wa.me/$telefonoLimpio?text=${Uri.encode(mensaje)}"
-    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+    // 2. CONDICIONAL: Si NO HAY número registrado (o está vacío/inválido) -> Abre el selector general de contactos de WhatsApp
+    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TEXT, mensaje)
+        setPackage("com.whatsapp")
+    }
 
     try {
-        context.startActivity(intent)
-    } catch (e: ActivityNotFoundException) {
-        Toast.makeText(context, "WhatsApp no está instalado en este dispositivo", Toast.LENGTH_LONG).show()
+        context.startActivity(Intent.createChooser(sendIntent, "Enviar mensaje por WhatsApp"))
+    } catch (e: Exception) {
+        // Fallback genérico a cualquier app de mensajería si no tiene WhatsApp instalado
+        val generalIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, mensaje)
+        }
+        try {
+            context.startActivity(Intent.createChooser(generalIntent, "Compartir resumen"))
+        } catch (e2: Exception) {
+            Toast.makeText(context, "No se encontró una aplicación de mensajería", Toast.LENGTH_LONG).show()
+        }
     }
 }
 

@@ -268,6 +268,43 @@ class PedidoViewModel(
         }
     }
 
+    fun registrarCobroSaldoPedido(
+        deudorId: Int,
+        pedidoId: Int,
+        montoUsd: Double,
+        metodoPago: String,
+        referencia: String,
+        esBs: Boolean,
+        tasaBcv: Double,
+        onExito: () -> Unit
+    ) {
+        viewModelScope.launch {
+            val formatoFecha = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault())
+            val fechaStr = formatoFecha.format(java.util.Date())
+
+            val infoBsStr = if (esBs && tasaBcv > 0) " (Bs ${String.format(java.util.Locale.US, "%.2f", montoUsd * tasaBcv)})" else ""
+            val infoRefStr = if (referencia.isNotBlank()) " Ref: $referencia" else ""
+
+            val cobroDeuda = Deuda(
+                idDeudor = deudorId,
+                montoInicial = 0.0,
+                montoRestante = -montoUsd,
+                tipoDeuda = "Abono / Pago Pedido #${pedidoId}",
+                fecha = fechaStr,
+                fechaMillis = System.currentTimeMillis(),
+                tipo = "ABONO",
+                numCuotas = 1,
+                frecuencia = "MENSUAL",
+                rol = "PAGO",
+                descripcion = "Pago recibido para Pedido #${pedidoId} vía $metodoPago$infoRefStr$infoBsStr",
+                estado = "Activo"
+            )
+
+            deudaDao.agregarDeuda(cobroDeuda)
+            onExito()
+        }
+    }
+
     fun onTextoBusquedaChange(nuevoTexto: String) {
         _textoBusqueda.value = nuevoTexto
     }
