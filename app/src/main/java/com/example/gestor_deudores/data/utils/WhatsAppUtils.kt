@@ -86,3 +86,43 @@ fun armarMensajePedidoListo(
     |$cierre
     """.trimMargin()
 }
+
+fun armarMensajeResumenPedidoCliente(
+    clienteNombre: String,
+    articulosResumenText: String,
+    totalUsd: Double,
+    tasaBcv: Double,
+    abonoUsd: Double,
+    saldoUsd: Double,
+    frecuenciaPago: String,
+    fechaEntregaStr: String
+): String {
+    val totalBsStr = String.format(java.util.Locale.US, "%.2f", totalUsd * tasaBcv)
+    val totalUsdStr = String.format(java.util.Locale.US, "%.2f", totalUsd)
+    val abonoUsdStr = String.format(java.util.Locale.US, "%.2f", abonoUsd)
+    val saldoUsdStr = String.format(java.util.Locale.US, "%.2f", saldoUsd)
+
+    val textoModoPago = when (frecuenciaPago) {
+        "AL_ENTREGAR" -> "se paga al retirar / entregar"
+        "SEMANAL" -> "pago en cuotas semanales"
+        "QUINCENAL" -> "pago en cuotas quincenales"
+        "MENSUAL" -> "pago en cuotas mensuales"
+        else -> "se paga al retirar"
+    }
+
+    val textoAbono = if (abonoUsd > 0) "Abono recibido: $$abonoUsdStr" else "Abono recibido: $0.00"
+    val textoSaldo = if (saldoUsd > 0) "Saldo pendiente: $$saldoUsdStr — $textoModoPago" else "Estado: ✅ Cancelado en su totalidad"
+
+    return """
+    |Hola *$clienteNombre*, tu pedido quedó registrado con éxito:
+    |
+    |$articulosResumenText
+    |
+    |*Total:* $$totalUsdStr (Bs $totalBsStr)
+    |*$textoAbono*
+    |*$textoSaldo*
+    |*Fecha de entrega:* $fechaEntregaStr
+    |
+    |Si necesitas cambiar algo, por favor escríbenos a la brevedad. ¡Gracias por tu confianza!
+    """.trimMargin()
+}

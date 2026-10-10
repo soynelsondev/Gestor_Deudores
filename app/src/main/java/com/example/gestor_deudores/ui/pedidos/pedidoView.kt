@@ -548,6 +548,138 @@ fun SeccionPlegablePedido(
 }
 
 @Composable
+fun DialogoExitoPedidoConWhatsApp(
+    clienteNombre: String,
+    clienteTelefono: String,
+    mensajeWhatsApp: String,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = fondo)
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = "Éxito",
+                    tint = Color(0xFF2E7D32),
+                    modifier = Modifier.size(48.dp)
+                )
+
+                Text(
+                    text = "¡Pedido Registrado con Éxito!",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+
+                Text(
+                    text = "Resumen para enviar a $clienteNombre por WhatsApp:",
+                    fontSize = 12.sp,
+                    color = Color.LightGray
+                )
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = fondo_claro),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = mensajeWhatsApp,
+                        fontSize = 11.sp,
+                        color = Color.DarkGray,
+                        modifier = Modifier.padding(10.dp)
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cerrar", color = Color.Gray)
+                    }
+
+                    Button(
+                        onClick = {
+                            com.example.gestor_deudores.data.utils.abrirWhatsApp(context, clienteTelefono, mensajeWhatsApp)
+                            onDismiss()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = verdeWhatsapp)
+                    ) {
+                        Text("Enviar por WhatsApp", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DialogoConfirmarBorrador(
+    onGuardarBorrador: () -> Unit,
+    onDescartar: () -> Unit,
+    onSeguirEditando: () -> Unit
+) {
+    Dialog(onDismissRequest = onSeguirEditando) {
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = fondo)
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "¿Guardar como borrador?",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+
+                Text(
+                    text = "Tienes datos en el pedido. ¿Deseas guardarlo como borrador para continuar después?",
+                    fontSize = 12.sp,
+                    color = Color.LightGray
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    TextButton(onClick = onDescartar) {
+                        Text("Descartar", color = Color.Red)
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = onSeguirEditando) {
+                            Text("Seguir editando", color = Color.Gray)
+                        }
+
+                        Button(
+                            onClick = onGuardarBorrador,
+                            colors = ButtonDefaults.buttonColors(containerColor = estados)
+                        ) {
+                            Text("Guardar Borrador", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun DialogoCrearPedido(
     viewModel: PedidoViewModel,
     navController: NavController,
@@ -559,6 +691,13 @@ fun DialogoCrearPedido(
 
     var deudorSeleccionado by remember { mutableStateOf<Deudor?>(null) }
     var expandidoClientes by remember { mutableStateOf(false) }
+
+    // Diálogos de Confirmación WhatsApp y Borrador (4.8 y 4.9)
+    var mostrarDialogoExitoWhatsApp by remember { mutableStateOf(false) }
+    var mensajeWhatsAppGenerado by remember { mutableStateOf("") }
+    var clienteNombreWhatsApp by remember { mutableStateOf("") }
+    var clienteTelfWhatsApp by remember { mutableStateOf("") }
+    var mostrarDialogoBorradorConfirm by remember { mutableStateOf(false) }
 
     // Control de secciones plegables
     var seccionClienteExpandida by remember { mutableStateOf(true) }
@@ -701,6 +840,8 @@ fun DialogoCrearPedido(
     val saldoRestanteCalculado = (totalUsd - abonoCalculadoUsd).coerceAtLeast(0.0)
 
     val costoMateriaPrimaTotal = listaArticulos.sumOf { (it.costoPiezaBaseUnitario + it.costoPasajeUnitario + it.costoInsumosUnitario) * it.obtenerCantidadTotal() }
+    val gananciaEstimadaUsd = (totalUsd - costoMateriaPrimaTotal).coerceAtLeast(0.0)
+    var mostrarGananciaEstimada by remember { mutableStateOf(false) }
 
     val abonoInicial = abonoCalculadoUsd
 
@@ -1776,6 +1917,31 @@ fun DialogoCrearPedido(
                         )
                     }
 
+                    // Ganancia estimada con visibilidad conmutable (4.6 y 4.7)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(
+                            onClick = { mostrarGananciaEstimada = !mostrarGananciaEstimada },
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Text(
+                                text = if (mostrarGananciaEstimada) "Ganancia estimada (Ocultar):" else "Ganancia estimada (Ver):",
+                                fontSize = 11.sp,
+                                color = Color.LightGray
+                            )
+                        }
+
+                        Text(
+                            text = if (mostrarGananciaEstimada) "$${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(gananciaEstimadaUsd)}" else "••••••",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF4CAF50)
+                        )
+                    }
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -1801,7 +1967,13 @@ fun DialogoCrearPedido(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        TextButton(onClick = onDismiss) {
+                        TextButton(onClick = {
+                            if (deudorSeleccionado != null || listaArticulos.any { it.producto.isNotBlank() }) {
+                                mostrarDialogoBorradorConfirm = true
+                            } else {
+                                onDismiss()
+                            }
+                        }) {
                             Text("Cancelar", color = Color.Gray)
                         }
 
@@ -1868,6 +2040,33 @@ fun DialogoCrearPedido(
                                     val unitarioPasajeGral = if(cantidadTotalGral > 0) costoPasajeTotal / cantidadTotalGral else 0.0
                                     val unitarioInsumosGral = if(cantidadTotalGral > 0) costoInsumosTotal / cantidadTotalGral else 0.0
 
+                                    val fechaEntregaStr = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(fechaEntregaMillis!!))
+
+                                    val articulosResumenText = listaArticulos.joinToString("\n") { art ->
+                                        val cant = art.obtenerCantidadTotal()
+                                        val precioUnStr = String.format(java.util.Locale.US, "%.2f", art.obtenerPrecioUnitarioPromedio())
+                                        val descVars = if (art.usarVariantes && art.variantes.isNotEmpty()) {
+                                            val varsFiltradas = art.variantes.filter { (it.cantidadTexto.toIntOrNull() ?: 0) > 0 }
+                                            if (varsFiltradas.isNotEmpty()) {
+                                                " (" + varsFiltradas.joinToString(", ") { "${it.etiqueta} ×${it.cantidadTexto}" } + ")"
+                                            } else ""
+                                        } else ""
+                                        
+                                        val textoEstamparStr = if (art.textoEstampar.isNotBlank()) " [Estampa: \"${art.textoEstampar}\"]" else ""
+                                        "• $cant ${art.producto}$descVars$textoEstamparStr — $$precioUnStr c/u"
+                                    }
+
+                                    val msgWhatsApp = com.example.gestor_deudores.data.utils.armarMensajeResumenPedidoCliente(
+                                        clienteNombre = "${deudorSeleccionado!!.nombre} ${deudorSeleccionado!!.apellido}",
+                                        articulosResumenText = articulosResumenText,
+                                        totalUsd = totalUsd,
+                                        tasaBcv = tasaBcvActual,
+                                        abonoUsd = abonoCalculadoUsd,
+                                        saldoUsd = saldoRestanteCalculado,
+                                        frecuenciaPago = frecuenciaSeleccionada,
+                                        fechaEntregaStr = fechaEntregaStr
+                                    )
+
                                     viewModel.crearNuevoPedido(
                                         deudorId = deudorSeleccionado!!.id,
                                         producto = nombresProductos,
@@ -1886,7 +2085,13 @@ fun DialogoCrearPedido(
                                         costoDiseno = montoDisenoCalculado,
                                         costoEnvio = montoEnvioCalculado,
                                         totalCalculadoUsd = totalUsd,
-                                        onExito = onDismiss
+                                        onExito = {
+                                            viewModel.descartarBorrador()
+                                            clienteNombreWhatsApp = "${deudorSeleccionado!!.nombre} ${deudorSeleccionado!!.apellido}"
+                                            clienteTelfWhatsApp = deudorSeleccionado!!.telf
+                                            mensajeWhatsAppGenerado = msgWhatsApp
+                                            mostrarDialogoExitoWhatsApp = true
+                                        }
                                     )
                                 }
                             },
@@ -1898,5 +2103,51 @@ fun DialogoCrearPedido(
                 }
             }
         }
+    }
+
+    if (mostrarDialogoExitoWhatsApp) {
+        DialogoExitoPedidoConWhatsApp(
+            clienteNombre = clienteNombreWhatsApp,
+            clienteTelefono = clienteTelfWhatsApp,
+            mensajeWhatsApp = mensajeWhatsAppGenerado,
+            onDismiss = {
+                mostrarDialogoExitoWhatsApp = false
+                onDismiss()
+            }
+        )
+    }
+
+    if (mostrarDialogoBorradorConfirm) {
+        DialogoConfirmarBorrador(
+            onGuardarBorrador = {
+                val borrador = PedidoBorradorState(
+                    deudorId = deudorSeleccionado?.id,
+                    busquedaCliente = busquedaCliente,
+                    abonoInicialTexto = abonoInicialTexto,
+                    frecuenciaSeleccionada = frecuenciaSeleccionada,
+                    numCuotasTexto = numCuotasTexto,
+                    fechaEntregaMillis = fechaEntregaMillis,
+                    notas = notas,
+                    descuentoTexto = descuentoTexto,
+                    esDescuentoPorcentaje = esDescuentoPorcentaje,
+                    cargoDisenoTexto = cargoDisenoTexto,
+                    cargoEnvioTexto = cargoEnvioTexto,
+                    tipoEntrega = tipoEntrega,
+                    direccionEntrega = direccionEntrega,
+                    esUrgente = esUrgente
+                )
+                viewModel.guardarBorrador(borrador)
+                mostrarDialogoBorradorConfirm = false
+                onDismiss()
+            },
+            onDescartar = {
+                viewModel.descartarBorrador()
+                mostrarDialogoBorradorConfirm = false
+                onDismiss()
+            },
+            onSeguirEditando = {
+                mostrarDialogoBorradorConfirm = false
+            }
+        )
     }
 }

@@ -28,6 +28,23 @@ enum class FiltroEstadoPedido {
     ENTREGADO
 }
 
+data class PedidoBorradorState(
+    val deudorId: Int? = null,
+    val busquedaCliente: String = "",
+    val abonoInicialTexto: String = "",
+    val frecuenciaSeleccionada: String = "AL_ENTREGAR",
+    val numCuotasTexto: String = "1",
+    val fechaEntregaMillis: Long? = null,
+    val notas: String = "",
+    val descuentoTexto: String = "",
+    val esDescuentoPorcentaje: Boolean = false,
+    val cargoDisenoTexto: String = "",
+    val cargoEnvioTexto: String = "",
+    val tipoEntrega: String = "RETIRO",
+    val direccionEntrega: String = "",
+    val esUrgente: Boolean = false
+)
+
 class PedidoViewModel(
     private val pedidoDao: PedidoDao,
     private val deudorDao: DeudorDao,
@@ -40,6 +57,17 @@ class PedidoViewModel(
 
     private val _filtroEstado = MutableStateFlow(FiltroEstadoPedido.TODOS)
     val filtroEstado: StateFlow<FiltroEstadoPedido> = _filtroEstado.asStateFlow()
+
+    private val _borradorActual = MutableStateFlow<PedidoBorradorState?>(null)
+    val borradorActual: StateFlow<PedidoBorradorState?> = _borradorActual.asStateFlow()
+
+    fun guardarBorrador(borrador: PedidoBorradorState) {
+        _borradorActual.value = borrador
+    }
+
+    fun descartarBorrador() {
+        _borradorActual.value = null
+    }
 
     // Lista de clientes disponibles para el selector del formulario
     val listaClientes: StateFlow<List<Deudor>> = deudorDao.obtenerDeudores()
