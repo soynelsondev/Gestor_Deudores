@@ -33,6 +33,8 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.ui.window.Dialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -79,6 +81,8 @@ fun ResumenPrincipal(
     var mostrarDialogoAgregarCuenta by remember { mutableStateOf(false) }
     var cuentaParaEditarSaldo by remember { mutableStateOf<CuentaBancaria?>(null) }
     var mostrarDialogoAjustarCostos by remember { mutableStateOf(false) }
+    var mostrarDialogoRegistrarGasto by remember { mutableStateOf(false) }
+    var mostrarDialogoRegistrarRetiro by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -156,28 +160,35 @@ fun ResumenPrincipal(
                     onPeriodoCambiado = { viewModel.cambiarPeriodo(it) }
                 )
 
-                // 2. Alertas Financieras de Salud
+                // 2. DISPONIBLE PARA RETIRAR (SECCIÓN 9 Y FASE 2)
+                TarjetaDisponibleParaRetirar(
+                    uiState = uiState,
+                    onAbrirRetiro = { mostrarDialogoRegistrarRetiro = true },
+                    onAbrirGasto = { mostrarDialogoRegistrarGasto = true }
+                )
+
+                // 3. Alertas Financieras de Salud
                 if (uiState.alertasFinancieras.isNotEmpty()) {
                     SeccionAlertasFinancieras(alertas = uiState.alertasFinancieras)
                 }
 
-                // 3. Tarjetas KPI Totales
+                // 4. Tarjetas KPI Totales
                 TarjetasKpiTotales(uiState = uiState)
 
-                // 4. GRÁFICA VISUAL: Evaluación de Ganancias vs. Costos de Producción
+                // 5. GRÁFICA VISUAL: Evaluación de Ganancias vs. Costos de Producción
                 GraficaPerdidasGanancias(uiState = uiState)
 
-                // 5. Carrusel de Sobres / Fondos de Insumos
+                // 6. Carrusel de Sobres / Fondos de Insumos
                 SeccionCarruselSobres(fondos = uiState.fondosInsumos, monedaVista = uiState.monedaVista, tasaBcv = uiState.tasaBcv)
 
-                // 6. Radiografía de Pago Individual y Consolidado con Selector de Cliente
+                // 7. Radiografía de Pago Individual y Consolidado con Selector de Cliente
                 SeccionRadiografiaPagos(
                     uiState = uiState,
                     onSeleccionarAbono = { index -> viewModel.seleccionarAbono(index) },
                     onAbrirAjusteCostos = { mostrarDialogoAjustarCostos = true }
                 )
 
-                // 7. Sección Bancos y Billeteras con Edición/Ajuste de Saldo
+                // 8. Sección Bancos y Billeteras con Edición/Ajuste de Saldo
                 SeccionCuentasBancarias(
                     cuentas = uiState.cuentasBancarias,
                     monedaVista = uiState.monedaVista,
@@ -187,9 +198,34 @@ fun ResumenPrincipal(
                     onEliminarCuentaClick = { viewModel.eliminarCuentaBancaria(it) }
                 )
 
-                // 8. Resumen de Estado de Pedidos
+                // 9. Resumen de Estado de Pedidos
                 SeccionEstadoPedidos(uiState = uiState)
             }
+        }
+
+        // Diálogo modal para registrar compras y gastos del taller (Fase 2)
+        if (mostrarDialogoRegistrarGasto) {
+            DialogoRegistrarGasto(
+                categorias = uiState.listaCategorias,
+                tasaBcv = uiState.tasaBcv,
+                onGuardarGasto = { catId, desc, montoUsd, moneda, montoOrig, tasa, prov ->
+                    mostrarDialogoRegistrarGasto = false
+                    viewModel.agregarGasto(catId, desc, montoUsd, moneda, montoOrig, tasa, null, prov)
+                },
+                onDismiss = { mostrarDialogoRegistrarGasto = false }
+            )
+        }
+
+        // Diálogo modal para registrar retiros de ganancia del dueño (Fase 2)
+        if (mostrarDialogoRegistrarRetiro) {
+            DialogoRegistrarRetiro(
+                tasaBcv = uiState.tasaBcv,
+                onGuardarRetiro = { montoUsd, nota ->
+                    mostrarDialogoRegistrarRetiro = false
+                    viewModel.agregarRetiro(montoUsd, "USD", 0.0, 0.0, null, nota)
+                },
+                onDismiss = { mostrarDialogoRegistrarRetiro = false }
+            )
         }
 
         // Diálogo modal para agregar nueva cuenta bancaria
@@ -225,6 +261,260 @@ fun ResumenPrincipal(
                     mostrarDialogoAjustarCostos = false
                 }
             )
+        }
+    }
+}
+
+@Composable
+fun TarjetaDisponibleParaRetirar(
+    uiState: ResumenUiState,
+    onAbrirRetiro: () -> Unit,
+    onAbrirGasto: () -> Unit
+) {
+    val montoMostrar = if (uiState.monedaVista == "VES" && uiState.tasaBcv > 0) uiState.disponibleParaRetirarUsd * uiState.tasaBcv else uiState.disponibleParaRetirarUsd
+    val simbolo = if (uiState.monedaVista == "VES") "Bs" else "$"
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1B5E20))
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text("💎 DISPONIBLE PARA RETIRAR", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White.copy(alpha = 0.8f))
+                    Text("$simbolo ${String.format(Locale.getDefault(), "%.2f", montoMostrar)}", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Button(
+                        onClick = onAbrirGasto,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF57C00)),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("+ Compras/Gastos", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+
+                    Button(
+                        onClick = onAbrirRetiro,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("Retirar", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            if (uiState.gastosTallerUsd > 0 || uiState.comprasInsumosUsd > 0) {
+                Text(
+                    text = "Ganancia Libre $${String.format(Locale.getDefault(), "%.2f", uiState.gananciaLibreUsd)} − Gastos Taller $${String.format(Locale.getDefault(), "%.2f", uiState.gastosTallerUsd)} = Ganancia Neta $${String.format(Locale.getDefault(), "%.2f", uiState.gananciaNetaUsd)}",
+                    fontSize = 11.sp,
+                    color = Color.White.copy(alpha = 0.9f)
+                )
+            } else {
+                Text(
+                    text = "Registra compras de insumos o gastos del taller para calcular tu ganancia neta real y reservas de caja.",
+                    fontSize = 10.sp,
+                    color = Color.White.copy(alpha = 0.7f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun DialogoRegistrarGasto(
+    categorias: List<com.example.gestor_deudores.data.database.CategoriaGasto>,
+    tasaBcv: Double,
+    onGuardarGasto: (categoriaId: Int, desc: String, montoUsd: Double, moneda: String, montoOrig: Double, tasa: Double, proveedor: String?) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var categoriaSeleccionada by remember { mutableStateOf(categorias.firstOrNull()?.id ?: 1) }
+    var descripcion by remember { mutableStateOf("") }
+    var montoTexto by remember { mutableStateOf("") }
+    var esBs by remember { mutableStateOf(false) }
+    var proveedor by remember { mutableStateOf("") }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = fondo2)
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("Registrar Compra / Gasto del Taller", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White)
+
+                Text("Categoría:", fontSize = 11.sp, color = Color.LightGray)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(categorias) { cat ->
+                        val sel = categoriaSeleccionada == cat.id
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .background(if (sel) estados else com.example.gestor_deudores.ui.theme.fondo_claro)
+                                .clickable { categoriaSeleccionada = cat.id }
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text(cat.nombre, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (sel) Color.White else Color.DarkGray)
+                        }
+                    }
+                }
+
+                OutlinedTextField(
+                    value = descripcion,
+                    onValueChange = { descripcion = it },
+                    label = { Text("Descripción") },
+                    placeholder = { Text("Ej. 10 Tazas Blancas, Recibo Luz, Impresión DTF") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(
+                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(if (!esBs) estados else com.example.gestor_deudores.ui.theme.fondo_claro).clickable { esBs = false }.padding(vertical = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("USD ($)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (!esBs) Color.White else Color.DarkGray)
+                    }
+                    Box(
+                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(if (esBs) estados else com.example.gestor_deudores.ui.theme.fondo_claro).clickable { esBs = true }.padding(vertical = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("Bolívares (Bs)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (esBs) Color.White else Color.DarkGray)
+                    }
+                }
+
+                val montoVal = montoTexto.replace(",", ".").toDoubleOrNull() ?: 0.0
+                val montoUsdCalc = if (esBs && tasaBcv > 0) montoVal / tasaBcv else montoVal
+
+                OutlinedTextField(
+                    value = montoTexto,
+                    onValueChange = { montoTexto = it },
+                    label = { Text(if (esBs) "Monto en Bs" else "Monto en USD") },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                if (esBs && tasaBcv > 0) {
+                    Text("Equivalente: $${String.format(Locale.US, "%.2f", montoUsdCalc)} USD (Tasa BCV: $tasaBcv)", fontSize = 11.sp, color = Color(0xFF4CAF50))
+                }
+
+                OutlinedTextField(
+                    value = proveedor,
+                    onValueChange = { proveedor = it },
+                    label = { Text("Proveedor / Comercio (Opcional)") },
+                    placeholder = { Text("Ej. Dist. Sublimación C.A.") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancelar", color = Color.LightGray)
+                    }
+
+                    Button(
+                        onClick = {
+                            if (montoUsdCalc > 0 && descripcion.isNotBlank()) {
+                                onGuardarGasto(
+                                    categoriaSeleccionada,
+                                    descripcion,
+                                    montoUsdCalc,
+                                    if (esBs) "VES" else "USD",
+                                    montoVal,
+                                    if (esBs) tasaBcv else 0.0,
+                                    proveedor.ifBlank { null }
+                                )
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = estados)
+                    ) {
+                        Text("Guardar Compra/Gasto", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DialogoRegistrarRetiro(
+    tasaBcv: Double,
+    onGuardarRetiro: (montoUsd: Double, nota: String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var montoTexto by remember { mutableStateOf("") }
+    var nota by remember { mutableStateOf("") }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = fondo2)
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("💎 Registrar Retiro de Ganancia (Sueldo Dueño)", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Text("Registra el dinero que retiras para ti como ganancia personal del taller.", fontSize = 12.sp, color = Color.LightGray)
+
+                val montoVal = montoTexto.replace(",", ".").toDoubleOrNull() ?: 0.0
+
+                OutlinedTextField(
+                    value = montoTexto,
+                    onValueChange = { montoTexto = it },
+                    label = { Text("Monto a Retirar ($ USD)") },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                OutlinedTextField(
+                    value = nota,
+                    onValueChange = { nota = it },
+                    label = { Text("Nota / Motivo (Opcional)") },
+                    placeholder = { Text("Ej. Sueldo personal quincena") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancelar", color = Color.LightGray)
+                    }
+
+                    Button(
+                        onClick = {
+                            if (montoVal > 0) {
+                                onGuardarRetiro(montoVal, nota)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32))
+                    ) {
+                        Text("Confirmar Retiro", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
         }
     }
 }
@@ -554,17 +844,26 @@ fun SeccionAlertasFinancieras(alertas: List<AlertaFinanciera>) {
 }
 
 // ==========================================
-// COMPONENTE 5: TARJETAS KPI TOTALES
+// COMPONENTE 5: TARJETAS KPI TOTALES (GLOSARIO Y ETIQUETAS DE PERÍODO)
 // ==========================================
 @Composable
 fun TarjetasKpiTotales(uiState: ResumenUiState) {
+    val etiquetaPeriodo = when (uiState.periodoSeleccionado) {
+        PeriodoFiltro.ESTA_SEMANA -> "Esta semana"
+        PeriodoFiltro.ESTE_MES -> "Este mes"
+        PeriodoFiltro.MES_ANTERIOR -> "Mes anterior"
+        PeriodoFiltro.ULTIMOS_3_MESES -> "Últimos 3 meses"
+        PeriodoFiltro.TODO_EL_HISTORICO -> "Histórico"
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             TarjetaKpiItem(
-                titulo = "Ingresos Cobrados",
+                titulo = "Cobrado",
+                subtitulo = "Abonos ($etiquetaPeriodo)",
                 montoUsd = uiState.ingresosCobradosUsd,
                 monedaVista = uiState.monedaVista,
                 tasaBcv = uiState.tasaBcv,
@@ -572,7 +871,8 @@ fun TarjetasKpiTotales(uiState: ResumenUiState) {
                 modifier = Modifier.weight(1f)
             )
             TarjetaKpiItem(
-                titulo = "Fondo Reposición",
+                titulo = "Reposición",
+                subtitulo = "Insumos ($etiquetaPeriodo)",
                 montoUsd = uiState.fondoReposicionUsd,
                 monedaVista = uiState.monedaVista,
                 tasaBcv = uiState.tasaBcv,
@@ -585,7 +885,8 @@ fun TarjetasKpiTotales(uiState: ResumenUiState) {
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             TarjetaKpiItem(
-                titulo = "Ganancia Neta Libre",
+                titulo = "Ganancia Libre",
+                subtitulo = "Antes de gastos ($etiquetaPeriodo)",
                 montoUsd = uiState.gananciaNetaUsd,
                 monedaVista = uiState.monedaVista,
                 tasaBcv = uiState.tasaBcv,
@@ -593,7 +894,8 @@ fun TarjetasKpiTotales(uiState: ResumenUiState) {
                 modifier = Modifier.weight(1f)
             )
             TarjetaKpiItem(
-                titulo = "Por Cobrar (Calle)",
+                titulo = "Por Cobrar",
+                subtitulo = "Saldo en la calle (Hoy)",
                 montoUsd = uiState.porCobrarUsd,
                 monedaVista = uiState.monedaVista,
                 tasaBcv = uiState.tasaBcv,
@@ -607,6 +909,7 @@ fun TarjetasKpiTotales(uiState: ResumenUiState) {
 @Composable
 fun TarjetaKpiItem(
     titulo: String,
+    subtitulo: String,
     montoUsd: Double,
     monedaVista: String,
     tasaBcv: Double,
@@ -622,13 +925,18 @@ fun TarjetaKpiItem(
         modifier = modifier
     ) {
         Column(
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier.padding(14.dp)
         ) {
             Text(
                 text = titulo,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
                 color = color
+            )
+            Text(
+                text = subtitulo,
+                fontSize = 10.sp,
+                color = color.copy(alpha = 0.8f)
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
@@ -642,7 +950,7 @@ fun TarjetaKpiItem(
 }
 
 // ==========================================
-// COMPONENTE 6: CARRUSEL DE SOBRES DE INSUMOS
+// COMPONENTE 6: SOBRES EN CUADRÍCULA 2x2 (SECCIÓN 19)
 // ==========================================
 @Composable
 fun SeccionCarruselSobres(
@@ -657,54 +965,84 @@ fun SeccionCarruselSobres(
             style = MaterialTheme.typography.titleMedium
         )
 
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(horizontal = 4.dp)
-        ) {
-            items(fondos) { fondo ->
-                val montoMostrar = if (monedaVista == "VES" && tasaBcv > 0) fondo.montoUsd * tasaBcv else fondo.montoUsd
-                val simbolo = if (monedaVista == "VES") "Bs" else "$"
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            val lista0y1 = fondos.take(2)
+            val lista2y3 = fondos.drop(2).take(2)
 
-                Card(
-                    modifier = Modifier.width(200.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(text = fondo.icono, fontSize = 20.sp)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = fondo.nombre,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1
-                            )
-                        }
-                        Text(
-                            text = "$simbolo ${String.format(Locale.getDefault(), "%.2f", montoMostrar)}",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        LinearProgressIndicator(
-                            progress = { (fondo.porcentajeDelTotal / 100f).coerceIn(0f, 1f) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(6.dp)
-                                .clip(RoundedCornerShape(3.dp))
-                        )
-                        Text(
-                            text = "${String.format(Locale.getDefault(), "%.1f", fondo.porcentajeDelTotal)}% del total",
-                            fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                lista0y1.forEach { fondo ->
+                    TarjetaSobreCuadriculaItem(
+                        fondo = fondo,
+                        monedaVista = monedaVista,
+                        tasaBcv = tasaBcv,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            if (lista2y3.isNotEmpty()) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    lista2y3.forEach { fondo ->
+                        TarjetaSobreCuadriculaItem(
+                            fondo = fondo,
+                            monedaVista = monedaVista,
+                            tasaBcv = tasaBcv,
+                            modifier = Modifier.weight(1f)
                         )
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun TarjetaSobreCuadriculaItem(
+    fondo: FondoInsumoItem,
+    monedaVista: String,
+    tasaBcv: Double,
+    modifier: Modifier = Modifier
+) {
+    val montoMostrar = if (monedaVista == "VES" && tasaBcv > 0) fondo.montoUsd * tasaBcv else fondo.montoUsd
+    val simbolo = if (monedaVista == "VES") "Bs" else "$"
+
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(text = fondo.icono, fontSize = 18.sp)
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = fondo.nombre,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
+                )
+            }
+            Text(
+                text = "$simbolo ${String.format(Locale.getDefault(), "%.2f", montoMostrar)}",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            LinearProgressIndicator(
+                progress = { (fondo.porcentajeDelTotal / 100f).coerceIn(0f, 1f) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(5.dp)
+                    .clip(RoundedCornerShape(3.dp))
+            )
+            Text(
+                text = "${String.format(Locale.getDefault(), "%.1f", fondo.porcentajeDelTotal)}% del total",
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

@@ -12,6 +12,13 @@ import com.example.gestor_deudores.data.database.PedidoConCliente
 import com.example.gestor_deudores.data.database.PedidoDao
 import com.example.gestor_deudores.data.database.PlantillaCotizacion
 import com.example.gestor_deudores.data.database.PlantillaDao
+import com.example.gestor_deudores.data.database.DistribucionAbono
+import com.example.gestor_deudores.data.database.DistribucionAbonoDao
+import com.example.gestor_deudores.data.database.Gasto
+import com.example.gestor_deudores.data.database.GastoConCategoria
+import com.example.gestor_deudores.data.database.GastoDao
+import com.example.gestor_deudores.data.database.Retiro
+import com.example.gestor_deudores.data.database.CategoriaGasto
 import com.example.gestor_deudores.data.utils.obtenerFechaMillisValida
 import com.example.gestor_deudores.data.utils.redondear2
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -99,7 +106,16 @@ data class ResumenUiState(
     val costoInsumosMesAnterior: Double = 0.0,
     
     // Perfil del Negocio (para el Encabezado Personalizado del PDF)
-    val perfilNegocio: com.example.gestor_deudores.data.database.PerfilNegocio = com.example.gestor_deudores.data.database.PerfilNegocio()
+    val perfilNegocio: com.example.gestor_deudores.data.database.PerfilNegocio = com.example.gestor_deudores.data.database.PerfilNegocio(),
+    
+    // Métricas de Fase 2 (Sobres, Gastos del Taller, Ganancia Libre vs Neta, Retiros)
+    val gananciaLibreUsd: Double = 0.0,
+    val gastosTallerUsd: Double = 0.0,
+    val comprasInsumosUsd: Double = 0.0,
+    val disponibleParaRetirarUsd: Double = 0.0,
+    val listaGastos: List<GastoConCategoria> = emptyList(),
+    val listaRetiros: List<Retiro> = emptyList(),
+    val listaCategorias: List<CategoriaGasto> = emptyList()
 ) {
     val abonoSeleccionado: DesglosePagoIndividual?
         get() = if (listaAbonosDesglose.isNotEmpty() && abonoSeleccionadoIndex in listaAbonosDesglose.indices) {
@@ -113,6 +129,10 @@ private data class DatosDbCombinados(
     val pedidos: List<PedidoConCliente>,
     val plantillas: List<PlantillaCotizacion>,
     val cuentas: List<CuentaBancaria>,
+    val distribuciones: List<DistribucionAbono>,
+    val gastos: List<GastoConCategoria>,
+    val retiros: List<Retiro>,
+    val categorias: List<CategoriaGasto>,
     val perfil: com.example.gestor_deudores.data.database.PerfilNegocio?
 )
 
@@ -130,8 +150,81 @@ class ResumenViewModel(
     private val pedidoDao: PedidoDao,
     private val plantillaDao: PlantillaDao,
     private val cuentaBancariaDao: CuentaBancariaDao,
-    private val perfilDao: com.example.gestor_deudores.data.database.PerfilNegocioDao
+    private val perfilDao: com.example.gestor_deudores.data.database.PerfilNegocioDao,
+    private val distribucionAbonoDao: DistribucionAbonoDao,
+    private val gastoDao: GastoDao
 ) : ViewModel() {
+
+    // --- ACCIONES DE COMPRAS, GASTOS DEL TALLER Y RETIROS (FASE 2) ---
+    fun agregarGasto(
+        categoriaId: Int,
+        descripcion: String,
+        montoUsd: Double,
+        moneda: String = "USD",
+        montoOriginal: Double = 0.0,
+        tasa: Double = 0.0,
+        cuentaId: Int? = null,
+        proveedor: String? = null
+    ) {
+        viewModelScope.launch {
+            val nuevoGasto = Gasto(
+                categoriaId = categoriaId,
+                descripcion = descripcion.trim(),
+                montoUsd = montoUsd.redondear2(),
+                moneda = moneda,
+                montoOriginal = montoOriginal,
+                tasa = tasa,
+                cuentaId = cuentaId,
+                proveedor = proveedor?.trim()
+            )
+            gastoDao.agregarGasto(nuevoGasto)
+        }
+    }
+
+    fun eliminarGasto(gasto: GastoConCategoria) {
+        viewModelScope.launch {
+            val g = Gasto(
+                id = gasto.id,
+                categoriaId = gasto.categoriaId,
+                descripcion = gasto.descripcion,
+                montoUsd = gasto.montoUsd,
+                moneda = gasto.moneda,
+                montoOriginal = gasto.montoOriginal,
+                tasa = gasto.tasa,
+                cuentaId = gasto.cuentaId,
+                proveedor = gasto.proveedor,
+                fechaMillis = gasto.fechaMillis
+            )
+            gastoDao.eliminarGasto(g)
+        }
+    }
+
+    fun agregarRetiro(
+        montoUsd: Double,
+        moneda: String = "USD",
+        montoOriginal: Double = 0.0,
+        tasa: Double = 0.0,
+        cuentaId: Int? = null,
+        nota: String = ""
+    ) {
+        viewModelScope.launch {
+            val nuevoRetiro = Retiro(
+                montoUsd = montoUsd.redondear2(),
+                moneda = moneda,
+                montoOriginal = montoOriginal,
+                tasa = tasa,
+                cuentaId = cuentaId,
+                nota = nota.trim()
+            )
+            gastoDao.agregarRetiro(nuevoRetiro)
+        }
+    }
+
+    fun eliminarRetiro(retiro: Retiro) {
+        viewModelScope.launch {
+            gastoDao.eliminarRetiro(retiro)
+        }
+    }
 
     private val _periodoSeleccionado = MutableStateFlow(PeriodoFiltro.ESTE_MES)
     val periodoSeleccionado = _periodoSeleccionado.asStateFlow()
@@ -206,9 +299,25 @@ class ResumenViewModel(
         deudorDao.obtenerDeudores(),
         pedidoDao.obtenerPedidosConCliente(),
         plantillaDao.obtenerTodasLasPlantillas(),
-        cuentaBancariaDao.obtenerTodasLasCuentas()
-    ) { deudas, deudores, pedidos, plantillas, cuentas ->
-        DatosDbCombinados(deudas, deudores, pedidos, plantillas, cuentas, null)
+        cuentaBancariaDao.obtenerTodasLasCuentas(),
+        distribucionAbonoDao.obtenerTodas(),
+        gastoDao.obtenerTodosLosGastos(),
+        gastoDao.obtenerTodosLosRetiros(),
+        gastoDao.obtenerCategoriasActivas()
+    ) { flows ->
+        @Suppress("UNCHECKED_CAST")
+        DatosDbCombinados(
+            deudas = flows[0] as List<Deuda>,
+            deudores = flows[1] as List<Deudor>,
+            pedidos = flows[2] as List<PedidoConCliente>,
+            plantillas = flows[3] as List<PlantillaCotizacion>,
+            cuentas = flows[4] as List<CuentaBancaria>,
+            distribuciones = flows[5] as List<DistribucionAbono>,
+            gastos = flows[6] as List<GastoConCategoria>,
+            retiros = flows[7] as List<Retiro>,
+            categorias = flows[8] as List<CategoriaGasto>,
+            perfil = null
+        )
     }
 
     // Combined Flow 2: Filtros de UI
@@ -260,50 +369,47 @@ class ResumenViewModel(
         val totalAbonosHistoricosUsd = deudas.filter { it.tipo == "ABONO" }.sumOf { Math.abs(it.montoRestante) }.redondear2()
         val porCobrarUsd = (totalCargosUsd - totalAbonosHistoricosUsd).coerceAtLeast(0.0).redondear2()
 
-        // 4. Estimación de Fondo de Reposición vs Ganancia Neta usando la FOTOGRAFÍA del Pedido
-        // Buscamos los pedidos vinculados a los abonos del período para extraer sus costos exactos
-        var fondoReposicionTextilUsd = 0.0
-        var fondoReposicionPasajesUsd = 0.0
-        var fondoReposicionInsumosUsd = 0.0
+        // 4. Sumar Distribución de Abonos y Compras/Gastos (Fase 2 - Secciones 7, 9, 10)
+        val distribucionesEnPeriodo = dbData.distribuciones.filter { it.fechaMillis in inicioMillis..finMillis && it.tipoAbono != "NO_AFECTA" }
 
-        for (abono in abonosEnPeriodo) {
-            val montoAbono = Math.abs(abono.montoRestante)
-            val cargoOriginal = cargosActivos.find { it.idDeudor == abono.idDeudor && it.tipoDeuda != "Abono / Pago Parcial" }
-            
-            if (cargoOriginal != null) {
-                // Buscamos si existe un pedido fotográfico asociado a este cargo
-                // (Para esto nos guiaremos por el monto, fecha o cliente, idealmente en la BD habría un pedidoId en Deuda)
-                // Como aproximación, buscamos el pedido del cliente que coincida en monto o fecha cercana
-                val pedidoFotografia = pedidos.find { it.deudorId == abono.idDeudor && it.totalUsd == cargoOriginal.montoInicial }
-                
-                if (pedidoFotografia != null && (pedidoFotografia.costoPiezaBaseUsd > 0 || pedidoFotografia.costoInsumosUsd > 0)) {
-                    // Usar Fotografía Histórica del Pedido
-                    val proporcionAbono = if (pedidoFotografia.totalUsd > 0) montoAbono / pedidoFotografia.totalUsd else 1.0
-                    fondoReposicionTextilUsd += (pedidoFotografia.costoPiezaBaseUsd * proporcionAbono)
-                    fondoReposicionPasajesUsd += (pedidoFotografia.costoPasajeUsd * proporcionAbono)
-                    fondoReposicionInsumosUsd += (pedidoFotografia.costoInsumosUsd * proporcionAbono)
-                } else {
-                    // Si es un pedido viejo sin fotografía o registro suelto, usamos el config base
-                    fondoReposicionTextilUsd += (montoAbono * (config.pctTextil / 100.0))
-                    fondoReposicionPasajesUsd += (montoAbono * (config.pctPasaje / 100.0))
-                    fondoReposicionInsumosUsd += (montoAbono * (config.pctInsumos / 100.0))
-                }
-            } else {
-                fondoReposicionTextilUsd += (montoAbono * (config.pctTextil / 100.0))
-                fondoReposicionPasajesUsd += (montoAbono * (config.pctPasaje / 100.0))
-                fondoReposicionInsumosUsd += (montoAbono * (config.pctInsumos / 100.0))
-            }
-        }
+        val asignadoMaterialUsd = distribucionesEnPeriodo.sumOf { it.material }.redondear2()
+        val asignadoTransporteUsd = distribucionesEnPeriodo.sumOf { it.transporte }.redondear2()
+        val asignadoInsumosUsd = distribucionesEnPeriodo.sumOf { it.insumos }.redondear2()
+        val asignadoMiPagoUsd = distribucionesEnPeriodo.sumOf { it.miPago }.redondear2()
+        val gananciaLibreUsd = distribucionesEnPeriodo.sumOf { it.ganancia }.redondear2()
 
-        val fondoReposicionTotalUsd = (fondoReposicionTextilUsd + fondoReposicionPasajesUsd + fondoReposicionInsumosUsd).redondear2()
-        val gananciaNetaUsd = (ingresosCobradosUsd - fondoReposicionTotalUsd).coerceAtLeast(0.0).redondear2()
+        // Compras de insumos y Gastos del Taller del período
+        val gastosEnPeriodo = dbData.gastos.filter { it.fechaMillis in inicioMillis..finMillis }
+        val comprasMaterialUsd = gastosEnPeriodo.filter { it.sobreAsociado == "MATERIAL" }.sumOf { it.montoUsd }.redondear2()
+        val comprasTransporteUsd = gastosEnPeriodo.filter { it.sobreAsociado == "TRANSPORTE" }.sumOf { it.montoUsd }.redondear2()
+        val comprasInsumosUsd = gastosEnPeriodo.filter { it.sobreAsociado == "INSUMOS" }.sumOf { it.montoUsd }.redondear2()
+        val comprasInsumosTotalUsd = (comprasMaterialUsd + comprasTransporteUsd + comprasInsumosUsd).redondear2()
+
+        // Saldo disponible por sobre = asignado acumulado - compras del sobre (Sección 7)
+        val disponibleMaterialUsd = (asignadoMaterialUsd - comprasMaterialUsd).redondear2()
+        val disponibleTransporteUsd = (asignadoTransporteUsd - comprasTransporteUsd).redondear2()
+        val disponibleInsumosUsd = (asignadoInsumosUsd - comprasInsumosUsd).redondear2()
+
+        val gastosTallerUsd = gastosEnPeriodo.filter { it.categoriaTipo == "GASTO_TALLER" }.sumOf { it.montoUsd }.redondear2()
+        val gananciaNetaUsd = (gananciaLibreUsd - gastosTallerUsd).coerceAtLeast(0.0).redondear2()
+
+        // Retiros acumulados y Disponible para Retirar (Sección 9)
+        val retirosEnPeriodo = dbData.retiros.filter { it.fechaMillis in inicioMillis..finMillis }
+        val retirosAcumuladosUsd = retirosEnPeriodo.sumOf { it.montoUsd }.redondear2()
+        val gananciaPendienteUsd = (gananciaNetaUsd - retirosAcumuladosUsd).coerceAtLeast(0.0).redondear2()
+
+        val cajaUsd = cuentas.sumOf { if (it.moneda == "VES" && tasa > 0) it.saldoActual / tasa else it.saldoActual }.redondear2()
+        val reservasUsd = (disponibleMaterialUsd.coerceAtLeast(0.0) + disponibleTransporteUsd.coerceAtLeast(0.0) + disponibleInsumosUsd.coerceAtLeast(0.0)).redondear2()
+        val disponibleParaRetirarUsd = gananciaPendienteUsd.coerceAtMost((cajaUsd - reservasUsd).coerceAtLeast(0.0)).redondear2()
+
+        val fondoReposicionTotalUsd = (disponibleMaterialUsd + disponibleTransporteUsd + disponibleInsumosUsd + asignadoMiPagoUsd).redondear2()
 
         // 5. Construcción del Carrusel de Sobres / Fondos de Insumos
         val totalFondos = if (ingresosCobradosUsd > 0) ingresosCobradosUsd else 1.0
 
-        val fondoTextil = fondoReposicionTextilUsd.redondear2()
-        val fondoPasajes = fondoReposicionPasajesUsd.redondear2()
-        val fondoTintasPapel = fondoReposicionInsumosUsd.redondear2()
+        val fondoTextil = disponibleMaterialUsd
+        val fondoPasajes = disponibleTransporteUsd
+        val fondoTintasPapel = disponibleInsumosUsd
         val fondoGanancia = gananciaNetaUsd
 
         val fondosInsumos = listOf(
@@ -510,6 +616,10 @@ class ResumenViewModel(
             ingresosCobradosUsd = ingresosCobradosUsd,
             fondoReposicionUsd = fondoReposicionTotalUsd,
             gananciaNetaUsd = gananciaNetaUsd,
+            gananciaLibreUsd = gananciaLibreUsd,
+            gastosTallerUsd = gastosTallerUsd,
+            comprasInsumosUsd = comprasInsumosTotalUsd,
+            disponibleParaRetirarUsd = disponibleParaRetirarUsd,
             porCobrarUsd = porCobrarUsd,
             fondosInsumos = fondosInsumos,
             cuentasBancarias = cuentas,
@@ -522,6 +632,9 @@ class ResumenViewModel(
             pedidosEntregadosCount = entCount,
             alertasFinancieras = alertas,
             topProductos = topProds,
+            listaGastos = dbData.gastos,
+            listaRetiros = dbData.retiros,
+            listaCategorias = dbData.categorias,
             ingresosCobradosMesAnterior = ingresosMesAntUsd,
             gananciaNetaMesAnterior = gananciaMesAntUsd,
             costoPasajesUsd = fondoPasajes,

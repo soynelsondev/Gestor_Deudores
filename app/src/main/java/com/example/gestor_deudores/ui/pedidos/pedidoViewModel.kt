@@ -11,6 +11,8 @@ import com.example.gestor_deudores.data.database.PedidoConCliente
 import com.example.gestor_deudores.data.database.PedidoDao
 import com.example.gestor_deudores.data.database.PlantillaCotizacion
 import com.example.gestor_deudores.data.database.PlantillaDao
+import com.example.gestor_deudores.data.database.DistribucionAbono
+import com.example.gestor_deudores.data.database.DistribucionAbonoDao
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -53,7 +55,8 @@ class PedidoViewModel(
     private val pedidoDao: PedidoDao,
     private val deudorDao: DeudorDao,
     private val deudaDao: DeudaDao,
-    private val plantillaDao: PlantillaDao
+    private val plantillaDao: PlantillaDao,
+    private val distribucionAbonoDao: DistribucionAbonoDao
 ) : ViewModel() {
 
     private val _textoBusqueda = MutableStateFlow("")
@@ -300,7 +303,31 @@ class PedidoViewModel(
                 estado = "Activo"
             )
 
-            deudaDao.agregarDeuda(cobroDeuda)
+            val abonoId = deudaDao.agregarDeuda(cobroDeuda)
+
+            // CALCULAR Y GUARDAR DESGLOSE EN distribucion_abonos (Sección 5)
+            val pedidoObj = pedidoDao.obtenerPedidoPorId(pedidoId)
+            val prop = if (pedidoObj != null && pedidoObj.totalUsd > 0.0) montoUsd / pedidoObj.totalUsd else 1.0
+            val mat = Math.round((pedidoObj?.costoPiezaBaseUsd ?: 0.0) * prop * 100.0) / 100.0
+            val trans = Math.round((pedidoObj?.costoPasajeUsd ?: 0.0) * prop * 100.0) / 100.0
+            val ins = Math.round((pedidoObj?.costoInsumosUsd ?: 0.0) * prop * 100.0) / 100.0
+            val gan = Math.round((montoUsd - (mat + trans + ins)) * 100.0) / 100.0
+
+            val distribucion = DistribucionAbono(
+                abonoId = abonoId.toInt(),
+                pedidoId = pedidoId,
+                tipoAbono = "VENTA_PEDIDO",
+                montoUsd = montoUsd,
+                material = mat,
+                transporte = trans,
+                insumos = ins,
+                miPago = 0.0,
+                ganancia = gan,
+                origen = if (pedidoObj != null && (pedidoObj.costoPiezaBaseUsd > 0.0 || pedidoObj.costoInsumosUsd > 0.0)) "EXACTO" else "ESTIMADO",
+                fechaMillis = System.currentTimeMillis()
+            )
+            distribucionAbonoDao.agregarDistribucion(distribucion)
+
             onExito()
         }
     }
@@ -388,6 +415,7 @@ class PedidoViewModel(
             val pedidoId = pedidoDao.guardarPedidoCompleto(
                 pedido = nuevoPedido,
                 deudaDao = deudaDao,
+                distribucionAbonoDao = distribucionAbonoDao,
                 abonoInicial = abonoInicialUsd,
                 numCuotas = numCuotas,
                 frecuencia = frecuencia

@@ -59,11 +59,12 @@ abstract class PedidoDao {
     @Query("UPDATE pedidos SET estadoDiseno = :nuevoEstado WHERE id = :pedidoId")
     abstract suspend fun actualizarEstadoDiseno(pedidoId: Int, nuevoEstado: String)
 
-    // Guardado Atómico: Pedido + Deuda + Abono Inicial en una sola transacción
+    // Guardado Atómico: Pedido + Deuda + Abono Inicial + DistribucionAbono (Sección 5)
     @Transaction
     open suspend fun guardarPedidoCompleto(
         pedido: Pedido,
         deudaDao: DeudaDao,
+        distribucionAbonoDao: DistribucionAbonoDao,
         abonoInicial: Double,
         numCuotas: Int,
         frecuencia: String
@@ -95,7 +96,7 @@ abstract class PedidoDao {
         )
         deudaDao.agregarDeuda(cargoDeuda)
 
-        // 2. Si dejó abono inicial, insertamos el recibo
+        // 2. Si dejó abono inicial, insertamos el recibo Y GUARDAMOS SU DESGLOSE (Sección 5)
         if (abonoInicial > 0.0) {
             val abonoDeuda = Deuda(
                 idDeudor = pedido.deudorId,
@@ -111,7 +112,28 @@ abstract class PedidoDao {
                 descripcion = "Adelanto entregado al encargar Pedido #${pedidoId}",
                 estado = "Activo"
             )
-            deudaDao.agregarDeuda(abonoDeuda)
+            val abonoId = deudaDao.agregarDeuda(abonoDeuda)
+
+            val prop = if (pedido.totalUsd > 0.0) abonoInicial / pedido.totalUsd else 1.0
+            val mat = Math.round(pedido.costoPiezaBaseUsd * prop * 100.0) / 100.0
+            val trans = Math.round(pedido.costoPasajeUsd * prop * 100.0) / 100.0
+            val ins = Math.round(pedido.costoInsumosUsd * prop * 100.0) / 100.0
+            val gan = Math.round((abonoInicial - (mat + trans + ins)) * 100.0) / 100.0
+
+            val distribucion = DistribucionAbono(
+                abonoId = abonoId.toInt(),
+                pedidoId = pedidoId.toInt(),
+                tipoAbono = "VENTA_PEDIDO",
+                montoUsd = abonoInicial,
+                material = mat,
+                transporte = trans,
+                insumos = ins,
+                miPago = 0.0,
+                ganancia = gan,
+                origen = if (pedido.costoPiezaBaseUsd > 0.0 || pedido.costoInsumosUsd > 0.0) "EXACTO" else "ESTIMADO",
+                fechaMillis = pedido.fechaCreacionMillis
+            )
+            distribucionAbonoDao.agregarDistribucion(distribucion)
         }
 
         return pedidoId

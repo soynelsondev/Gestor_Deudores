@@ -12,9 +12,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         Deudor::class, Deuda::class, Pedido::class, PlantillaCotizacion::class,
         CuentaBancaria::class, PerfilNegocio::class, InsumoBiblioteca::class,
         HistorialPrecioInsumo::class, PlantillaAtributo::class, PlantillaAtributoOpcion::class,
-        PedidoItemAtributo::class, PedidoImagen::class
+        PedidoItemAtributo::class, PedidoImagen::class, DistribucionAbono::class,
+        CategoriaGasto::class, Gasto::class, Retiro::class
     ],
-    version = 26,
+    version = 28,
     exportSchema = true
 )
 abstract class DeudaDataBase : RoomDatabase() {
@@ -27,6 +28,8 @@ abstract class DeudaDataBase : RoomDatabase() {
     abstract fun perfilNegocioDao(): PerfilNegocioDao
     abstract fun insumoBibliotecaDao(): InsumoBibliotecaDao
     abstract fun historialPrecioInsumoDao(): HistorialPrecioInsumoDao
+    abstract fun distribucionAbonoDao(): DistribucionAbonoDao
+    abstract fun gastoDao(): GastoDao
 
     companion object {
         @Volatile
@@ -467,6 +470,149 @@ abstract class DeudaDataBase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_26_27 = object : Migration(26, 27) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `distribucion_abonos` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `abonoId` INTEGER NOT NULL,
+                        `pedidoId` INTEGER,
+                        `tipoAbono` TEXT NOT NULL DEFAULT 'VENTA_PEDIDO',
+                        `montoUsd` REAL NOT NULL DEFAULT 0.0,
+                        `material` REAL NOT NULL DEFAULT 0.0,
+                        `transporte` REAL NOT NULL DEFAULT 0.0,
+                        `insumos` REAL NOT NULL DEFAULT 0.0,
+                        `miPago` REAL NOT NULL DEFAULT 0.0,
+                        `ganancia` REAL NOT NULL DEFAULT 0.0,
+                        `origen` TEXT NOT NULL DEFAULT 'EXACTO',
+                        `fechaMillis` INTEGER NOT NULL DEFAULT 0,
+                        FOREIGN KEY(`abonoId`) REFERENCES `Tabla_Deuda`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                """)
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_distribucion_abonos_abonoId` ON `distribucion_abonos` (`abonoId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_distribucion_abonos_pedidoId` ON `distribucion_abonos` (`pedidoId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_distribucion_abonos_fechaMillis` ON `distribucion_abonos` (`fechaMillis`)")
+
+                try {
+                    val cursorAbonos = db.query("SELECT id, idDeudor, montoRestante, fecha, fechaMillis, descripcion FROM Tabla_Deuda WHERE tipo = 'ABONO'")
+                    while (cursorAbonos.moveToNext()) {
+                        val abonoId = cursorAbonos.getInt(0)
+                        val idDeudor = cursorAbonos.getInt(1)
+                        val montoRestante = cursorAbonos.getDouble(2)
+                        val fechaMillis = cursorAbonos.getLong(4)
+                        val montoUsd = Math.abs(montoRestante)
+
+                        var pedidoId: Int? = null
+                        var mat = 0.0
+                        var trans = 0.0
+                        var ins = 0.0
+                        var gan = 0.0
+                        var origen = "ESTIMADO"
+
+                        val cursorPedido = db.query("SELECT id, totalUsd, costoPiezaBaseUsd, costoPasajeUsd, costoInsumosUsd FROM pedidos WHERE deudorId = $idDeudor AND totalUsd > 0 LIMIT 1")
+                        if (cursorPedido.moveToFirst()) {
+                            pedidoId = cursorPedido.getInt(0)
+                            val totalPed = cursorPedido.getDouble(1)
+                            val cMat = cursorPedido.getDouble(2)
+                            val cTrans = cursorPedido.getDouble(3)
+                            val cIns = cursorPedido.getDouble(4)
+
+                            if (totalPed > 0.0 && (cMat > 0.0 || cIns > 0.0)) {
+                                val prop = montoUsd / totalPed
+                                mat = Math.round(cMat * prop * 100.0) / 100.0
+                                trans = Math.round(cTrans * prop * 100.0) / 100.0
+                                ins = Math.round(cIns * prop * 100.0) / 100.0
+                                gan = Math.round((montoUsd - (mat + trans + ins)) * 100.0) / 100.0
+                                origen = "EXACTO"
+                            } else {
+                                mat = Math.round(montoUsd * 0.50 * 100.0) / 100.0
+                                trans = Math.round(montoUsd * 0.10 * 100.0) / 100.0
+                                ins = Math.round(montoUsd * 0.10 * 100.0) / 100.0
+                                gan = Math.round((montoUsd - (mat + trans + ins)) * 100.0) / 100.0
+                                origen = "ESTIMADO"
+                            }
+                        } else {
+                            mat = Math.round(montoUsd * 0.50 * 100.0) / 100.0
+                            trans = Math.round(montoUsd * 0.10 * 100.0) / 100.0
+                            ins = Math.round(montoUsd * 0.10 * 100.0) / 100.0
+                            gan = Math.round((montoUsd - (mat + trans + ins)) * 100.0) / 100.0
+                            origen = "ESTIMADO"
+                        }
+                        cursorPedido.close()
+
+                        val pIdSql = if (pedidoId != null) "$pedidoId" else "NULL"
+                        db.execSQL("""
+                            INSERT INTO distribucion_abonos (abonoId, pedidoId, tipoAbono, montoUsd, material, transporte, insumos, miPago, ganancia, origen, fechaMillis)
+                            VALUES ($abonoId, $pIdSql, 'VENTA_PEDIDO', $montoUsd, $mat, $trans, $ins, 0.0, $gan, '$origen', $fechaMillis)
+                        """)
+                    }
+                    cursorAbonos.close()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+
+        val MIGRATION_27_28 = object : Migration(27, 28) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `categoria_gastos` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `nombre` TEXT NOT NULL,
+                        `tipo` TEXT NOT NULL DEFAULT 'COMPRA_INSUMO',
+                        `sobreAsociado` TEXT,
+                        `recurrente` INTEGER NOT NULL DEFAULT 0,
+                        `activa` INTEGER NOT NULL DEFAULT 1
+                    )
+                """)
+
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `gastos` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `categoriaId` INTEGER NOT NULL,
+                        `descripcion` TEXT NOT NULL,
+                        `montoUsd` REAL NOT NULL DEFAULT 0.0,
+                        `moneda` TEXT NOT NULL DEFAULT 'USD',
+                        `montoOriginal` REAL NOT NULL DEFAULT 0.0,
+                        `tasa` REAL NOT NULL DEFAULT 0.0,
+                        `cuentaId` INTEGER,
+                        `proveedor` TEXT,
+                        `fechaMillis` INTEGER NOT NULL DEFAULT 0,
+                        FOREIGN KEY(`categoriaId`) REFERENCES `categoria_gastos`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                """)
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_gastos_categoriaId` ON `gastos` (`categoriaId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_gastos_fechaMillis` ON `gastos` (`fechaMillis`)")
+
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `retiros` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `montoUsd` REAL NOT NULL DEFAULT 0.0,
+                        `moneda` TEXT NOT NULL DEFAULT 'USD',
+                        `montoOriginal` REAL NOT NULL DEFAULT 0.0,
+                        `tasa` REAL NOT NULL DEFAULT 0.0,
+                        `cuentaId` INTEGER,
+                        `nota` TEXT NOT NULL DEFAULT '',
+                        `fechaMillis` INTEGER NOT NULL DEFAULT 0
+                    )
+                """)
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_retiros_fechaMillis` ON `retiros` (`fechaMillis`)")
+
+                try {
+                    db.execSQL("INSERT INTO categoria_gastos (nombre, tipo, sobreAsociado, recurrente, activa) VALUES ('Material Base / Textil', 'COMPRA_INSUMO', 'MATERIAL', 0, 1)")
+                    db.execSQL("INSERT INTO categoria_gastos (nombre, tipo, sobreAsociado, recurrente, activa) VALUES ('Pasajes y Fletes', 'COMPRA_INSUMO', 'TRANSPORTE', 0, 1)")
+                    db.execSQL("INSERT INTO categoria_gastos (nombre, tipo, sobreAsociado, recurrente, activa) VALUES ('Tintas, Papel y Empaques', 'COMPRA_INSUMO', 'INSUMOS', 0, 1)")
+                    db.execSQL("INSERT INTO categoria_gastos (nombre, tipo, sobreAsociado, recurrente, activa) VALUES ('Luz y Servicios', 'GASTO_TALLER', 'NONE', 1, 1)")
+                    db.execSQL("INSERT INTO categoria_gastos (nombre, tipo, sobreAsociado, recurrente, activa) VALUES ('Alquiler de Taller', 'GASTO_TALLER', 'NONE', 1, 1)")
+                    db.execSQL("INSERT INTO categoria_gastos (nombre, tipo, sobreAsociado, recurrente, activa) VALUES ('Internet y Teléfono', 'GASTO_TALLER', 'NONE', 1, 1)")
+                    db.execSQL("INSERT INTO categoria_gastos (nombre, tipo, sobreAsociado, recurrente, activa) VALUES ('Mantenimiento de Equipos', 'GASTO_TALLER', 'NONE', 0, 1)")
+                    db.execSQL("INSERT INTO categoria_gastos (nombre, tipo, sobreAsociado, recurrente, activa) VALUES ('Publicidad y Marketing', 'GASTO_TALLER', 'NONE', 0, 1)")
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+
         fun getDatabase(context: Context): DeudaDataBase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -481,7 +627,7 @@ abstract class DeudaDataBase : RoomDatabase() {
                         MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17,
                         MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21,
                         MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25,
-                        MIGRATION_25_26
+                        MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28
                     )
                     .build()
 

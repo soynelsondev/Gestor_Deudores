@@ -57,7 +57,8 @@ class MainActivity : ComponentActivity() {
                         baseDeDatos.pedidoDao(),
                         baseDeDatos.deudorDao(),
                         baseDeDatos.deudaDao(),
-                        baseDeDatos.plantillaDao()
+                        baseDeDatos.plantillaDao(),
+                        baseDeDatos.distribucionAbonoDao()
                     ) as T
                 }
                 if (modelClass.isAssignableFrom(CotizadorViewModel::class.java)) {
@@ -76,7 +77,9 @@ class MainActivity : ComponentActivity() {
                         baseDeDatos.pedidoDao(),
                         baseDeDatos.plantillaDao(),
                         baseDeDatos.cuentaBancariaDao(),
-                        baseDeDatos.perfilNegocioDao()
+                        baseDeDatos.perfilNegocioDao(),
+                        baseDeDatos.distribucionAbonoDao(),
+                        baseDeDatos.gastoDao()
                     ) as T
                 }
                 throw IllegalArgumentException("Clase ViewModel desconocida")

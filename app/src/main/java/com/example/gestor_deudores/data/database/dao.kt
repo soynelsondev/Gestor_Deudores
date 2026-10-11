@@ -31,7 +31,7 @@ interface DeudorDao {
 @Dao
 interface DeudaDao {
     @Insert
-    suspend fun agregarDeuda(deuda: Deuda)
+    suspend fun agregarDeuda(deuda: Deuda): Long
 
     @Update
     suspend fun actualizarDeuda(deuda: Deuda)
