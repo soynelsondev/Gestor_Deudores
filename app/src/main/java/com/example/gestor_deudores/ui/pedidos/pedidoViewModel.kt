@@ -308,10 +308,29 @@ class PedidoViewModel(
             // CALCULAR Y GUARDAR DESGLOSE EN distribucion_abonos (Sección 5)
             val pedidoObj = pedidoDao.obtenerPedidoPorId(pedidoId)
             val prop = if (pedidoObj != null && pedidoObj.totalUsd > 0.0) montoUsd / pedidoObj.totalUsd else 1.0
-            val mat = Math.round((pedidoObj?.costoPiezaBaseUsd ?: 0.0) * prop * 100.0) / 100.0
-            val trans = Math.round((pedidoObj?.costoPasajeUsd ?: 0.0) * prop * 100.0) / 100.0
-            val ins = Math.round((pedidoObj?.costoInsumosUsd ?: 0.0) * prop * 100.0) / 100.0
-            val gan = Math.round((montoUsd - (mat + trans + ins)) * 100.0) / 100.0
+            val mat: Double
+            val trans: Double
+            val ins: Double
+            val gan: Double
+            val origenStr: String
+
+            val cMat = pedidoObj?.costoPiezaBaseUsd ?: 0.0
+            val cTrans = pedidoObj?.costoPasajeUsd ?: 0.0
+            val cIns = pedidoObj?.costoInsumosUsd ?: 0.0
+
+            if (pedidoObj != null && (cMat > 0.0 || cIns > 0.0)) {
+                mat = Math.round(cMat * prop * 100.0) / 100.0
+                trans = Math.round(cTrans * prop * 100.0) / 100.0
+                ins = Math.round(cIns * prop * 100.0) / 100.0
+                gan = Math.round((montoUsd - (mat + trans + ins)) * 100.0) / 100.0
+                origenStr = "EXACTO"
+            } else {
+                mat = Math.round(montoUsd * 0.50 * 100.0) / 100.0
+                trans = Math.round(montoUsd * 0.10 * 100.0) / 100.0
+                ins = Math.round(montoUsd * 0.10 * 100.0) / 100.0
+                gan = Math.round((montoUsd - (mat + trans + ins)) * 100.0) / 100.0
+                origenStr = "ESTIMADO"
+            }
 
             val distribucion = DistribucionAbono(
                 abonoId = abonoId.toInt(),
@@ -323,7 +342,7 @@ class PedidoViewModel(
                 insumos = ins,
                 miPago = 0.0,
                 ganancia = gan,
-                origen = if (pedidoObj != null && (pedidoObj.costoPiezaBaseUsd > 0.0 || pedidoObj.costoInsumosUsd > 0.0)) "EXACTO" else "ESTIMADO",
+                origen = origenStr,
                 fechaMillis = System.currentTimeMillis()
             )
             distribucionAbonoDao.agregarDistribucion(distribucion)

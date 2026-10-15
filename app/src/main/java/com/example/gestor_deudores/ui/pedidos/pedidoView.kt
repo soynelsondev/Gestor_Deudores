@@ -120,7 +120,7 @@ import java.util.Date
 import java.util.Locale
 
 @Composable
-fun PedidosPrincipal(viewModel: PedidoViewModel, navController: NavController) {
+fun PedidosPrincipal(viewModel: PedidoViewModel, navController: NavController, tasaBcvGlobal: Double = 40.0) {
     val textoBusqueda by viewModel.textoBusqueda.collectAsState()
     val filtroEstado by viewModel.filtroEstado.collectAsState()
     val listaPedidos by viewModel.listaPedidos.collectAsState()
@@ -130,6 +130,7 @@ fun PedidosPrincipal(viewModel: PedidoViewModel, navController: NavController) {
         DialogoCrearPedido(
             viewModel = viewModel,
             navController = navController,
+            tasaBcvGlobal = tasaBcvGlobal,
             onDismiss = { mostrarDialogoCrear = false }
         )
     }
@@ -1440,24 +1441,29 @@ fun DialogoConfirmarBorrador(
                     color = Color.LightGray
                 )
 
-                Row(
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    TextButton(onClick = onDescartar) {
-                        Text("Descartar", color = Color(0xFFFF5252))
+                    Button(
+                        onClick = onGuardarBorrador,
+                        colors = ButtonDefaults.buttonColors(containerColor = estados),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("Guardar Borrador", color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1)
                     }
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton(onClick = onSeguirEditando) {
-                            Text("Seguir editando", color = Color.LightGray)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        TextButton(onClick = onDescartar) {
+                            Text("Descartar", color = Color(0xFFFF5252))
                         }
 
-                        Button(
-                            onClick = onGuardarBorrador,
-                            colors = ButtonDefaults.buttonColors(containerColor = estados)
-                        ) {
-                            Text("Guardar Borrador", color = Color.White, fontWeight = FontWeight.Bold)
+                        TextButton(onClick = onSeguirEditando) {
+                            Text("Seguir editando", color = Color.LightGray)
                         }
                     }
                 }
@@ -1470,6 +1476,7 @@ fun DialogoConfirmarBorrador(
 fun DialogoCrearPedido(
     viewModel: PedidoViewModel,
     navController: NavController,
+    tasaBcvGlobal: Double = 40.0,
     onDismiss: () -> Unit
 ) {
     val clientes by viewModel.listaClientes.collectAsState()
@@ -1662,7 +1669,7 @@ fun DialogoCrearPedido(
     var esAbonoBs by remember { mutableStateOf(false) } // false = $, true = %
     var metodoPagoAbono by remember { mutableStateOf("Efectivo") }
     var referenciaAbono by remember { mutableStateOf("") }
-    val tasaBcvActual = 40.0 // Tasa de referencia por defecto
+    val tasaBcvActual = if (tasaBcvGlobal > 0.0) tasaBcvGlobal else 40.0
 
     // Saldo y Cuotas (4.4)
     var fechaPrimeraCuotaMillis by remember { mutableStateOf(System.currentTimeMillis() + (7 * 24 * 60 * 60 * 1000L)) }

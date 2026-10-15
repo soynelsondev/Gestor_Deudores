@@ -83,6 +83,7 @@ fun ResumenPrincipal(
     var mostrarDialogoAjustarCostos by remember { mutableStateOf(false) }
     var mostrarDialogoRegistrarGasto by remember { mutableStateOf(false) }
     var mostrarDialogoRegistrarRetiro by remember { mutableStateOf(false) }
+    var montosOcultos by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -96,10 +97,18 @@ fun ResumenPrincipal(
                         Text(
                             text = "RESUMEN FINANCIERO",
                             fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp,
+                            fontSize = 17.sp,
                             color = Color.White
                         )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                            IconButton(onClick = { montosOcultos = !montosOcultos }) {
+                                Text(if (montosOcultos) "👁️" else "🔒", fontSize = 14.sp)
+                            }
+                            IconButton(onClick = {
+                                com.example.gestor_deudores.data.utils.ExportarCsvUtils.exportarResumenCsv(navController.context, uiState, anonimizarClientes = true)
+                            }) {
+                                Text("📊", fontSize = 14.sp)
+                            }
                             IconButton(
                                 onClick = {
                                     com.example.gestor_deudores.data.utils.generarYCompartirPdf(navController.context, uiState)
@@ -108,7 +117,8 @@ fun ResumenPrincipal(
                                 Icon(
                                     imageVector = Icons.Default.Share,
                                     contentDescription = "Compartir Reporte PDF",
-                                    tint = Color.White
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                             BotonConmutadorMoneda(
@@ -167,12 +177,21 @@ fun ResumenPrincipal(
                     onAbrirGasto = { mostrarDialogoRegistrarGasto = true }
                 )
 
-                // 3. Alertas Financieras de Salud
+                // 3. Proyección de Cobros a 7 y 30 Días (Sección 11)
+                SeccionProyeccionCobros(proyeccion = uiState.proyeccionCobros)
+
+                // 4. Antigüedad de Cartera y Puntualidad (Sección 12)
+                SeccionAntiguedadCartera(
+                    cartera = uiState.antiguedadCartera,
+                    onEnviarRecordatorios = { navController.navigate(rutas.PEDIDOS) }
+                )
+
+                // 5. Alertas Financieras de Salud
                 if (uiState.alertasFinancieras.isNotEmpty()) {
                     SeccionAlertasFinancieras(alertas = uiState.alertasFinancieras)
                 }
 
-                // 4. Tarjetas KPI Totales
+                // 6. Tarjetas KPI Totales
                 TarjetasKpiTotales(uiState = uiState)
 
                 // 5. GRÁFICA VISUAL: Evaluación de Ganancias vs. Costos de Producción
@@ -281,36 +300,35 @@ fun TarjetaDisponibleParaRetirar(
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            Column {
+                Text("💎 DISPONIBLE PARA RETIRAR", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White.copy(alpha = 0.8f))
+                Text("$simbolo ${String.format(Locale.getDefault(), "%.2f", montoMostrar)}", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Column {
-                    Text("💎 DISPONIBLE PARA RETIRAR", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White.copy(alpha = 0.8f))
-                    Text("$simbolo ${String.format(Locale.getDefault(), "%.2f", montoMostrar)}", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Button(
+                    onClick = onAbrirGasto,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF57C00)),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("+ Compras/Gastos", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1)
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Button(
-                        onClick = onAbrirGasto,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF57C00)),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("+ Compras/Gastos", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
-                    }
-
-                    Button(
-                        onClick = onAbrirRetiro,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("Retirar", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
-                    }
+                Button(
+                    onClick = onAbrirRetiro,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Retirar Ganancia", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1)
                 }
             }
 
@@ -1585,4 +1603,84 @@ fun DialogoAjustarCostosBase(
             }
         }
     )
+}
+
+// ==========================================
+// COMPONENTE 11: PROYECCIÓN DE COBROS (SECCIÓN 11)
+// ==========================================
+@Composable
+fun SeccionProyeccionCobros(proyeccion: com.example.gestor_deudores.data.utils.ProyeccionCobrosPagos) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text("📈 Proyección de Cobros (Esperado)", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text("Próximos 7 Días:", fontSize = 11.sp, color = Color.Gray)
+                    Text("$${String.format(Locale.getDefault(), "%.2f", proyeccion.cobros7DiasUsd)} USD", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
+                }
+
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("Próximos 30 Días:", fontSize = 11.sp, color = Color.Gray)
+                    Text("$${String.format(Locale.getDefault(), "%.2f", proyeccion.cobros30DiasUsd)} USD", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
+                }
+            }
+
+            Text("Esta semana esperas cobrar unos $${String.format(Locale.getDefault(), "%.2f", proyeccion.cobros7DiasUsd)} USD de cuotas y entregas.", fontSize = 11.sp, color = Color.DarkGray)
+        }
+    }
+}
+
+// ==========================================
+// COMPONENTE 12: ANTIGÜEDAD DE CARTERA (SECCIÓN 12)
+// ==========================================
+@Composable
+fun SeccionAntiguedadCartera(
+    cartera: com.example.gestor_deudores.data.utils.GrupoAntiguedadCartera,
+    onEnviarRecordatorios: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("📋 Antigüedad de Cartera", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(if (cartera.porcentajePuntualidad >= 80) Color(0xFFE8F5E9) else Color(0xFFFFEBEE))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text("Puntualidad: ${cartera.porcentajePuntualidad}%", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (cartera.porcentajePuntualidad >= 80) Color(0xFF2E7D32) else Color(0xFFD32F2F))
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("• Al día: $${cartera.alDiaMontoUsd} USD (${cartera.alDiaClientesCount} clientes)", fontSize = 11.sp, color = Color(0xFF2E7D32))
+                Text("• 1 a 7 días de atraso: $${cartera.atraso1a7MontoUsd} USD (${cartera.atraso1a7ClientesCount} clientes)", fontSize = 11.sp, color = Color(0xFFF57F17))
+                Text("• 8 a 30 días de atraso: $${cartera.atraso8a30MontoUsd} USD (${cartera.atraso8a30ClientesCount} clientes)", fontSize = 11.sp, color = Color(0xFFE65100))
+                Text("• Más de 30 días de atraso: $${cartera.atrasoMas30MontoUsd} USD (${cartera.atrasoMas30ClientesCount} clientes)", fontSize = 11.sp, color = Color(0xFFD32F2F), fontWeight = FontWeight.Bold)
+            }
+        }
+    }
 }

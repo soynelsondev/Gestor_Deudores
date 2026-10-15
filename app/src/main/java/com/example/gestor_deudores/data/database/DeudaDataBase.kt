@@ -13,9 +13,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         CuentaBancaria::class, PerfilNegocio::class, InsumoBiblioteca::class,
         HistorialPrecioInsumo::class, PlantillaAtributo::class, PlantillaAtributoOpcion::class,
         PedidoItemAtributo::class, PedidoImagen::class, DistribucionAbono::class,
-        CategoriaGasto::class, Gasto::class, Retiro::class, MovimientoCuenta::class
+        CategoriaGasto::class, Gasto::class, Retiro::class, MovimientoCuenta::class,
+        CierreCaja::class
     ],
-    version = 29,
+    version = 30,
     exportSchema = true
 )
 abstract class DeudaDataBase : RoomDatabase() {
@@ -31,6 +32,7 @@ abstract class DeudaDataBase : RoomDatabase() {
     abstract fun distribucionAbonoDao(): DistribucionAbonoDao
     abstract fun gastoDao(): GastoDao
     abstract fun movimientoCuentaDao(): MovimientoCuentaDao
+    abstract fun cierreCajaDao(): CierreCajaDao
 
     companion object {
         @Volatile
@@ -644,6 +646,25 @@ abstract class DeudaDataBase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_29_30 = object : Migration(29, 30) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `cierres_caja` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `cuentaId` INTEGER NOT NULL,
+                        `saldoEsperado` REAL NOT NULL DEFAULT 0.0,
+                        `saldoReal` REAL NOT NULL DEFAULT 0.0,
+                        `diferencia` REAL NOT NULL DEFAULT 0.0,
+                        `nota` TEXT NOT NULL DEFAULT '',
+                        `fechaMillis` INTEGER NOT NULL DEFAULT 0,
+                        FOREIGN KEY(`cuentaId`) REFERENCES `cuentas_bancarias`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                """)
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_cierres_caja_cuentaId` ON `cierres_caja` (`cuentaId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_cierres_caja_fechaMillis` ON `cierres_caja` (`fechaMillis`)")
+            }
+        }
+
         fun getDatabase(context: Context): DeudaDataBase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -658,7 +679,8 @@ abstract class DeudaDataBase : RoomDatabase() {
                         MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17,
                         MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21,
                         MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25,
-                        MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29
+                        MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29,
+                        MIGRATION_29_30
                     )
                     .build()
 

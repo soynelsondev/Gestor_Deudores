@@ -115,10 +115,25 @@ abstract class PedidoDao {
             val abonoId = deudaDao.agregarDeuda(abonoDeuda)
 
             val prop = if (pedido.totalUsd > 0.0) abonoInicial / pedido.totalUsd else 1.0
-            val mat = Math.round(pedido.costoPiezaBaseUsd * prop * 100.0) / 100.0
-            val trans = Math.round(pedido.costoPasajeUsd * prop * 100.0) / 100.0
-            val ins = Math.round(pedido.costoInsumosUsd * prop * 100.0) / 100.0
-            val gan = Math.round((abonoInicial - (mat + trans + ins)) * 100.0) / 100.0
+            val mat: Double
+            val trans: Double
+            val ins: Double
+            val gan: Double
+            val origenStr: String
+
+            if (pedido.costoPiezaBaseUsd > 0.0 || pedido.costoInsumosUsd > 0.0) {
+                mat = Math.round(pedido.costoPiezaBaseUsd * prop * 100.0) / 100.0
+                trans = Math.round(pedido.costoPasajeUsd * prop * 100.0) / 100.0
+                ins = Math.round(pedido.costoInsumosUsd * prop * 100.0) / 100.0
+                gan = Math.round((abonoInicial - (mat + trans + ins)) * 100.0) / 100.0
+                origenStr = "EXACTO"
+            } else {
+                mat = Math.round(abonoInicial * 0.50 * 100.0) / 100.0
+                trans = Math.round(abonoInicial * 0.10 * 100.0) / 100.0
+                ins = Math.round(abonoInicial * 0.10 * 100.0) / 100.0
+                gan = Math.round((abonoInicial - (mat + trans + ins)) * 100.0) / 100.0
+                origenStr = "ESTIMADO"
+            }
 
             val distribucion = DistribucionAbono(
                 abonoId = abonoId.toInt(),
@@ -130,7 +145,7 @@ abstract class PedidoDao {
                 insumos = ins,
                 miPago = 0.0,
                 ganancia = gan,
-                origen = if (pedido.costoPiezaBaseUsd > 0.0 || pedido.costoInsumosUsd > 0.0) "EXACTO" else "ESTIMADO",
+                origen = origenStr,
                 fechaMillis = pedido.fechaCreacionMillis
             )
             distribucionAbonoDao.agregarDistribucion(distribucion)

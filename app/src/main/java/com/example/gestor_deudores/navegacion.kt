@@ -85,7 +85,8 @@ fun NavegacionPrincipal(
         // PANTALLA: PEDIDOS
         // ==========================================
         composable(rutas.PEDIDOS) {
-            PedidosPrincipal(viewModel = viewModelPedido, navController = navController)
+            val tasaBcvActual by viewModelHome.tasaBcvActual.collectAsState()
+            PedidosPrincipal(viewModel = viewModelPedido, navController = navController, tasaBcvGlobal = tasaBcvActual)
         }
 
         // ==========================================
