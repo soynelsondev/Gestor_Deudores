@@ -10,5 +10,7 @@ data class CuentaBancaria(
     val nombre: String, // Ej: "Banco Mercantil", "Zelle", "Efectivo"
     val tipo: String = "BANCO",   // "BANCO", "BILLETERA", "EFECTIVO"
     val moneda: String = "USD", // "USD", "VES"
-    val saldoActual: Double = 0.0
+    val saldoActual: Double = 0.0,
+    val saldoInicial: Double = 0.0,
+    val activa: Boolean = true
 )

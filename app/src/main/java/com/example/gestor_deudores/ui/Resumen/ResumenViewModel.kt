@@ -19,6 +19,8 @@ import com.example.gestor_deudores.data.database.GastoConCategoria
 import com.example.gestor_deudores.data.database.GastoDao
 import com.example.gestor_deudores.data.database.Retiro
 import com.example.gestor_deudores.data.database.CategoriaGasto
+import com.example.gestor_deudores.data.database.MovimientoCuenta
+import com.example.gestor_deudores.data.database.MovimientoCuentaDao
 import com.example.gestor_deudores.data.utils.obtenerFechaMillisValida
 import com.example.gestor_deudores.data.utils.redondear2
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -115,7 +117,12 @@ data class ResumenUiState(
     val disponibleParaRetirarUsd: Double = 0.0,
     val listaGastos: List<GastoConCategoria> = emptyList(),
     val listaRetiros: List<Retiro> = emptyList(),
-    val listaCategorias: List<CategoriaGasto> = emptyList()
+    val listaCategorias: List<CategoriaGasto> = emptyList(),
+
+    // Métricas de Secciones 8, 9, 11 y 12 (Cuentas, Proyección, Antigüedad de Cartera y Puntualidad)
+    val movimientosCuenta: List<MovimientoCuenta> = emptyList(),
+    val proyeccionCobros: com.example.gestor_deudores.data.utils.ProyeccionCobrosPagos = com.example.gestor_deudores.data.utils.ProyeccionCobrosPagos(0.0, 0.0, 0.0, 0.0, emptyList(), emptyList()),
+    val antiguedadCartera: com.example.gestor_deudores.data.utils.GrupoAntiguedadCartera = com.example.gestor_deudores.data.utils.GrupoAntiguedadCartera(0.0, 0, 0.0, 0, 0.0, 0, 0.0, 0, 100.0)
 ) {
     val abonoSeleccionado: DesglosePagoIndividual?
         get() = if (listaAbonosDesglose.isNotEmpty() && abonoSeleccionadoIndex in listaAbonosDesglose.indices) {
@@ -133,6 +140,7 @@ private data class DatosDbCombinados(
     val gastos: List<GastoConCategoria>,
     val retiros: List<Retiro>,
     val categorias: List<CategoriaGasto>,
+    val movimientos: List<MovimientoCuenta>,
     val perfil: com.example.gestor_deudores.data.database.PerfilNegocio?
 )
 
@@ -152,7 +160,8 @@ class ResumenViewModel(
     private val cuentaBancariaDao: CuentaBancariaDao,
     private val perfilDao: com.example.gestor_deudores.data.database.PerfilNegocioDao,
     private val distribucionAbonoDao: DistribucionAbonoDao,
-    private val gastoDao: GastoDao
+    private val gastoDao: GastoDao,
+    private val movimientoCuentaDao: MovimientoCuentaDao
 ) : ViewModel() {
 
     // --- ACCIONES DE COMPRAS, GASTOS DEL TALLER Y RETIROS (FASE 2) ---
@@ -303,7 +312,8 @@ class ResumenViewModel(
         distribucionAbonoDao.obtenerTodas(),
         gastoDao.obtenerTodosLosGastos(),
         gastoDao.obtenerTodosLosRetiros(),
-        gastoDao.obtenerCategoriasActivas()
+        gastoDao.obtenerCategoriasActivas(),
+        movimientoCuentaDao.obtenerTodosLosMovimientos()
     ) { flows ->
         @Suppress("UNCHECKED_CAST")
         DatosDbCombinados(
@@ -316,6 +326,7 @@ class ResumenViewModel(
             gastos = flows[6] as List<GastoConCategoria>,
             retiros = flows[7] as List<Retiro>,
             categorias = flows[8] as List<CategoriaGasto>,
+            movimientos = flows[9] as List<MovimientoCuenta>,
             perfil = null
         )
     }

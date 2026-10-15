@@ -13,9 +13,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         CuentaBancaria::class, PerfilNegocio::class, InsumoBiblioteca::class,
         HistorialPrecioInsumo::class, PlantillaAtributo::class, PlantillaAtributoOpcion::class,
         PedidoItemAtributo::class, PedidoImagen::class, DistribucionAbono::class,
-        CategoriaGasto::class, Gasto::class, Retiro::class
+        CategoriaGasto::class, Gasto::class, Retiro::class, MovimientoCuenta::class
     ],
-    version = 28,
+    version = 29,
     exportSchema = true
 )
 abstract class DeudaDataBase : RoomDatabase() {
@@ -30,6 +30,7 @@ abstract class DeudaDataBase : RoomDatabase() {
     abstract fun historialPrecioInsumoDao(): HistorialPrecioInsumoDao
     abstract fun distribucionAbonoDao(): DistribucionAbonoDao
     abstract fun gastoDao(): GastoDao
+    abstract fun movimientoCuentaDao(): MovimientoCuentaDao
 
     companion object {
         @Volatile
@@ -613,6 +614,36 @@ abstract class DeudaDataBase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_28_29 = object : Migration(28, 29) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                addColumnIfNotExists(db, "cuentas_bancarias", "saldoInicial", "`saldoInicial` REAL NOT NULL DEFAULT 0.0")
+                addColumnIfNotExists(db, "cuentas_bancarias", "activa", "`activa` INTEGER NOT NULL DEFAULT 1")
+
+                try {
+                    db.execSQL("UPDATE cuentas_bancarias SET saldoInicial = saldoActual WHERE saldoInicial = 0.0")
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `movimientos_cuenta` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `cuentaId` INTEGER NOT NULL,
+                        `tipo` TEXT NOT NULL,
+                        `monto` REAL NOT NULL DEFAULT 0.0,
+                        `moneda` TEXT NOT NULL DEFAULT 'USD',
+                        `tasa` REAL NOT NULL DEFAULT 0.0,
+                        `referenciaId` INTEGER,
+                        `nota` TEXT NOT NULL DEFAULT '',
+                        `fechaMillis` INTEGER NOT NULL DEFAULT 0,
+                        FOREIGN KEY(`cuentaId`) REFERENCES `cuentas_bancarias`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                """)
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_movimientos_cuenta_cuentaId` ON `movimientos_cuenta` (`cuentaId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_movimientos_cuenta_fechaMillis` ON `movimientos_cuenta` (`fechaMillis`)")
+            }
+        }
+
         fun getDatabase(context: Context): DeudaDataBase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -627,7 +658,7 @@ abstract class DeudaDataBase : RoomDatabase() {
                         MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17,
                         MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21,
                         MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25,
-                        MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28
+                        MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29
                     )
                     .build()
 

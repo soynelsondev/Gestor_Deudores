@@ -79,7 +79,8 @@ class MainActivity : ComponentActivity() {
                         baseDeDatos.cuentaBancariaDao(),
                         baseDeDatos.perfilNegocioDao(),
                         baseDeDatos.distribucionAbonoDao(),
-                        baseDeDatos.gastoDao()
+                        baseDeDatos.gastoDao(),
+                        baseDeDatos.movimientoCuentaDao()
                     ) as T
                 }
                 throw IllegalArgumentException("Clase ViewModel desconocida")

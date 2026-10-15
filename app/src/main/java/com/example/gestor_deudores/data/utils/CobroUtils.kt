@@ -157,3 +157,139 @@ fun desglosarSobresPedido(
         sobreGananciaNeta = sobreGanancia
     )
 }
+
+// ==========================================
+// SECCIÓN 11: PROYECCIÓN DE COBROS Y PAGOS
+// ==========================================
+data class ProyeccionCobrosPagos(
+    val cobros7DiasUsd: Double,
+    val cobros30DiasUsd: Double,
+    val pagos7DiasUsd: Double,
+    val pagos30DiasUsd: Double,
+    val listaCobrosDetalle7Dias: List<Pair<String, Double>>,
+    val listaCobrosDetalle30Dias: List<Pair<String, Double>>
+)
+
+fun calcularProyeccionCobros(
+    deudas: List<Deuda>,
+    deudores: List<com.example.gestor_deudores.data.database.Deudor>
+): ProyeccionCobrosPagos {
+    val hoyMillis = System.currentTimeMillis()
+    val limite7Dias = hoyMillis + (7 * 24 * 60 * 60 * 1000L)
+    val limite30Dias = hoyMillis + (30 * 24 * 60 * 60 * 1000L)
+
+    var cobros7 = 0.0
+    var cobros30 = 0.0
+    val detalle7 = mutableListOf<Pair<String, Double>>()
+    val detalle30 = mutableListOf<Pair<String, Double>>()
+
+    val deudoresGroup = deudas.groupBy { it.idDeudor }
+    for ((idDeudor, deudasCliente) in deudoresGroup) {
+        val estadoCobro = calcularEstadoCobro(deudasCliente)
+        val cliente = deudores.find { it.id == idDeudor }
+        val nombreCliente = if (cliente != null) "${cliente.nombre} ${cliente.apellido}" else "Cliente #$idDeudor"
+
+        if (estadoCobro.proximoVencimientoMillis != null && estadoCobro.proximaCuotaMonto > 0.0) {
+            val vencMillis = estadoCobro.proximoVencimientoMillis
+            if (vencMillis >= hoyMillis) {
+                if (vencMillis <= limite7Dias) {
+                    cobros7 += estadoCobro.proximaCuotaMonto
+                    detalle7.add(nombreCliente to estadoCobro.proximaCuotaMonto)
+                }
+                if (vencMillis <= limite30Dias) {
+                    cobros30 += estadoCobro.proximaCuotaMonto
+                    detalle30.add(nombreCliente to estadoCobro.proximaCuotaMonto)
+                }
+            }
+        }
+    }
+
+    return ProyeccionCobrosPagos(
+        cobros7DiasUsd = cobros7.redondear2(),
+        cobros30DiasUsd = cobros30.redondear2(),
+        pagos7DiasUsd = 0.0,
+        pagos30DiasUsd = 0.0,
+        listaCobrosDetalle7Dias = detalle7,
+        listaCobrosDetalle30Dias = detalle30
+    )
+}
+
+// ==========================================
+// SECCIÓN 12: ANTIGÜEDAD DE CARTERA Y PUNTUALIDAD
+// ==========================================
+data class GrupoAntiguedadCartera(
+    val alDiaMontoUsd: Double,
+    val alDiaClientesCount: Int,
+    val atraso1a7MontoUsd: Double,
+    val atraso1a7ClientesCount: Int,
+    val atraso8a30MontoUsd: Double,
+    val atraso8a30ClientesCount: Int,
+    val atrasoMas30MontoUsd: Double,
+    val atrasoMas30ClientesCount: Int,
+    val porcentajePuntualidad: Double
+)
+
+fun calcularAntiguedadCartera(
+    deudas: List<Deuda>,
+    diasGracia: Int = 2
+): GrupoAntiguedadCartera {
+    var alDiaM = 0.0
+    var alDiaC = 0
+    var a1a7M = 0.0
+    var a1a7C = 0
+    var a8a30M = 0.0
+    var a8a30C = 0
+    var aMas30M = 0.0
+    var aMas30C = 0
+
+    var totalCuotasVencidas = 0
+    var cuotasATiempo = 0
+
+    val deudoresGroup = deudas.groupBy { it.idDeudor }
+    for ((_, deudasCliente) in deudoresGroup) {
+        val estadoCobro = calcularEstadoCobro(deudasCliente)
+        if (estadoCobro.saldo <= 0.0) {
+            alDiaC++
+            continue
+        }
+
+        if (!estadoCobro.vencida || estadoCobro.diasAtraso <= 0) {
+            alDiaM += estadoCobro.saldo
+            alDiaC++
+        } else {
+            totalCuotasVencidas++
+            val atrasoConGracia = (estadoCobro.diasAtraso - diasGracia).coerceAtLeast(0)
+
+            if (atrasoConGracia <= 0) {
+                cuotasATiempo++
+                alDiaM += estadoCobro.saldo
+                alDiaC++
+            } else if (atrasoConGracia in 1..7) {
+                a1a7M += estadoCobro.saldo
+                a1a7C++
+            } else if (atrasoConGracia in 8..30) {
+                a8a30M += estadoCobro.saldo
+                a8a30C++
+            } else {
+                aMas30M += estadoCobro.saldo
+                aMas30C++
+            }
+        }
+    }
+
+    val pctPuntualidad = if (totalCuotasVencidas > 0) {
+        (cuotasATiempo.toDouble() / totalCuotasVencidas * 100.0).redondear2()
+    } else 100.0
+
+    return GrupoAntiguedadCartera(
+        alDiaMontoUsd = alDiaM.redondear2(),
+        alDiaClientesCount = alDiaC,
+        atraso1a7MontoUsd = a1a7M.redondear2(),
+        atraso1a7ClientesCount = a1a7C,
+        atraso8a30MontoUsd = a8a30M.redondear2(),
+        atraso8a30ClientesCount = a8a30C,
+        atrasoMas30MontoUsd = aMas30M.redondear2(),
+        atrasoMas30ClientesCount = aMas30C,
+        porcentajePuntualidad = pctPuntualidad
+    )
+}
