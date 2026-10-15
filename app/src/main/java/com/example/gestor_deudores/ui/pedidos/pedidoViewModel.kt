@@ -271,6 +271,14 @@ class PedidoViewModel(
         }
     }
 
+    fun obtenerSaldoRestantePedido(pedidoId: Int, totalUsd: Double, deudas: List<Deuda>): Double {
+        val abonosDelPedido = deudas.filter { 
+            it.tipo == "ABONO" && (it.descripcion.contains("Pedido #$pedidoId") || it.tipoDeuda.contains("Pedido #$pedidoId"))
+        }
+        val totalAbonado = abonosDelPedido.sumOf { Math.abs(it.montoRestante) }
+        return (totalUsd - totalAbonado).coerceAtLeast(0.0)
+    }
+
     fun registrarCobroSaldoPedido(
         deudorId: Int,
         pedidoId: Int,

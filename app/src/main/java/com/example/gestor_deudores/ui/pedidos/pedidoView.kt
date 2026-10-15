@@ -608,14 +608,16 @@ fun DialogoCancelarPedidoConAbono(
 @Composable
 fun DialogoRegistrarCobroPedido(
     pedido: PedidoConCliente,
+    saldoRestanteUsd: Double,
     tasaBcvActual: Double = 40.0,
     onConfirmarCobro: (montoUsd: Double, metodo: String, ref: String, esBs: Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var montoTexto by remember { mutableStateOf(String.format(java.util.Locale.US, "%.2f", pedido.totalUsd)) }
+    var montoTexto by remember { mutableStateOf(String.format(java.util.Locale.US, "%.2f", saldoRestanteUsd)) }
     var esBs by remember { mutableStateOf(false) }
     var metodoPago by remember { mutableStateOf("Efectivo ($)") }
     var referencia by remember { mutableStateOf("") }
+    var errorMsgCobro by remember { mutableStateOf("") }
 
     val metodosDisponibles = listOf("Efectivo ($)", "Pago Móvil (Bs)", "Zelle ($)", "Transferencia (Bs)", "Punto de Venta")
 
@@ -630,7 +632,7 @@ fun DialogoRegistrarCobroPedido(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text("Registrar Cobro · Pedido #${pedido.id}", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                Text("Cliente: ${pedido.clienteNombre} ${pedido.clienteApellido}", fontSize = 12.sp, color = Color.LightGray)
+                Text("Cliente: ${pedido.clienteNombre} ${pedido.clienteApellido} · Saldo Pendiente: $${String.format(java.util.Locale.US, "%.2f", saldoRestanteUsd)} USD", fontSize = 12.sp, color = Color.LightGray)
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box(
@@ -663,7 +665,10 @@ fun DialogoRegistrarCobroPedido(
 
                 OutlinedTextField(
                     value = montoTexto,
-                    onValueChange = { montoTexto = it },
+                    onValueChange = { 
+                        montoTexto = it
+                        errorMsgCobro = ""
+                    },
                     label = { Text(if (esBs) "Monto Pagado en Bs" else "Monto Pagado en USD") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
@@ -672,6 +677,10 @@ fun DialogoRegistrarCobroPedido(
 
                 if (esBs && tasaBcvActual > 0) {
                     Text("Equivalente: $${String.format(java.util.Locale.US, "%.2f", montoCalcUsd)} USD (Tasa BCV: $tasaBcvActual)", fontSize = 11.sp, color = Color(0xFF4CAF50))
+                }
+
+                if (errorMsgCobro.isNotEmpty()) {
+                    Text(errorMsgCobro, color = Color.Red, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
 
                 Text("Método de Pago:", fontSize = 11.sp, color = Color.LightGray)
@@ -709,7 +718,11 @@ fun DialogoRegistrarCobroPedido(
 
                     Button(
                         onClick = {
-                            if (montoCalcUsd > 0) {
+                            if (montoCalcUsd <= 0.0) {
+                                errorMsgCobro = "Ingresa un monto válido"
+                            } else if (montoCalcUsd > saldoRestanteUsd + 0.01) {
+                                errorMsgCobro = "El cobro no puede ser mayor al saldo pendiente de este pedido ($${String.format(java.util.Locale.US, "%.2f", saldoRestanteUsd)})"
+                            } else {
                                 onConfirmarCobro(montoCalcUsd, metodoPago, referencia, esBs)
                             }
                         },
@@ -741,6 +754,14 @@ fun TarjetaPedido(
     val imagenesPedido by viewModel.obtenerImagenesPorPedido(item.id).collectAsState(initial = emptyList())
     var imagenSeleccionadaVisor by remember { mutableStateOf<com.example.gestor_deudores.data.database.PedidoImagen?>(null) }
 
+    val deudasCliente by remember(item.deudorId) {
+        viewModel.obtenerDeudasPorDeudor(item.deudorId)
+    }.collectAsState(initial = emptyList())
+
+    val saldoRestantePedido = remember(deudasCliente, item) {
+        viewModel.obtenerSaldoRestantePedido(item.id, item.totalUsd, deudasCliente)
+    }
+
     var mostrarConfirmarProduccion by remember { mutableStateOf(false) }
     var mostrarCancelarPedido by remember { mutableStateOf(false) }
     var mostrarDialogoRegistrarCobro by remember { mutableStateOf(false) }
@@ -748,6 +769,8 @@ fun TarjetaPedido(
     if (mostrarDialogoRegistrarCobro) {
         DialogoRegistrarCobroPedido(
             pedido = item,
+            saldoRestanteUsd = saldoRestantePedido,
+            tasaBcvActual = 40.0,
             onConfirmarCobro = { montoUsd, metodo, ref, esBs ->
                 mostrarDialogoRegistrarCobro = false
                 viewModel.registrarCobroSaldoPedido(
@@ -995,11 +1018,22 @@ fun TarjetaPedido(
                 )
 
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(
-                        onClick = { mostrarDialogoRegistrarCobro = true },
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                    ) {
-                        Text("💰 Cobrar", fontSize = 11.sp, color = estados, fontWeight = FontWeight.Bold)
+                    if (saldoRestantePedido > 0.01) {
+                        TextButton(
+                            onClick = { mostrarDialogoRegistrarCobro = true },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Text("💰 Cobrar ($${String.format(java.util.Locale.US, "%.2f", saldoRestantePedido)})", fontSize = 11.sp, color = estados, fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .background(Color(0xFFE8F5E9))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text("✅ 100% Pagado", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
+                        }
                     }
 
                     if (item.estado == "LISTO") {
