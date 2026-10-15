@@ -380,14 +380,86 @@ class ResumenViewModel(
         val totalAbonosHistoricosUsd = deudas.filter { it.tipo == "ABONO" }.sumOf { Math.abs(it.montoRestante) }.redondear2()
         val porCobrarUsd = (totalCargosUsd - totalAbonosHistoricosUsd).coerceAtLeast(0.0).redondear2()
 
-        // 4. Sumar Distribución de Abonos y Compras/Gastos (Fase 2 - Secciones 7, 9, 10)
-        val distribucionesEnPeriodo = dbData.distribuciones.filter { it.fechaMillis in inicioMillis..finMillis && it.tipoAbono != "NO_AFECTA" }
+        // 4. Sumar Distribución de Abonos de distribucion_abonos o calcular fallback para abonos huérfanos sin distribución
+        var asignadoMaterialUsd = 0.0
+        var asignadoTransporteUsd = 0.0
+        var asignadoInsumosUsd = 0.0
+        var asignadoMiPagoUsd = 0.0
+        var gananciaLibreUsd = 0.0
 
-        val asignadoMaterialUsd = distribucionesEnPeriodo.sumOf { it.material }.redondear2()
-        val asignadoTransporteUsd = distribucionesEnPeriodo.sumOf { it.transporte }.redondear2()
-        val asignadoInsumosUsd = distribucionesEnPeriodo.sumOf { it.insumos }.redondear2()
-        val asignadoMiPagoUsd = distribucionesEnPeriodo.sumOf { it.miPago }.redondear2()
-        val gananciaLibreUsd = distribucionesEnPeriodo.sumOf { it.ganancia }.redondear2()
+        for (abono in abonosEnPeriodo) {
+            val montoAbono = Math.abs(abono.montoRestante).redondear2()
+            val distExistente = dbData.distribuciones.find { it.abonoId == abono.id }
+
+            if (distExistente != null) {
+                if (distExistente.tipoAbono != "NO_AFECTA") {
+                    asignadoMaterialUsd += distExistente.material
+                    asignadoTransporteUsd += distExistente.transporte
+                    asignadoInsumosUsd += distExistente.insumos
+                    asignadoMiPagoUsd += distExistente.miPago
+                    gananciaLibreUsd += distExistente.ganancia
+                }
+            } else {
+                val cargoOriginal = cargosActivos.find { it.idDeudor == abono.idDeudor && it.tipoDeuda != "Abono / Pago Parcial" }
+                val pedidoFotografia = pedidos.find { it.deudorId == abono.idDeudor && it.totalUsd == cargoOriginal?.montoInicial }
+
+                val mat: Double
+                val trans: Double
+                val ins: Double
+                val gan: Double
+                val origenStr: String
+
+                if (pedidoFotografia != null && (pedidoFotografia.costoPiezaBaseUsd > 0.0 || pedidoFotografia.costoInsumosUsd > 0.0)) {
+                    val prop = if (pedidoFotografia.totalUsd > 0.0) montoAbono / pedidoFotografia.totalUsd else 1.0
+                    mat = (pedidoFotografia.costoPiezaBaseUsd * prop).redondear2()
+                    trans = (pedidoFotografia.costoPasajeUsd * prop).redondear2()
+                    ins = (pedidoFotografia.costoInsumosUsd * prop).redondear2()
+                    gan = (montoAbono - (mat + trans + ins)).coerceAtLeast(0.0).redondear2()
+                    origenStr = "EXACTO"
+                } else {
+                    mat = (montoAbono * (config.pctTextil / 100.0)).redondear2()
+                    trans = (montoAbono * (config.pctPasaje / 100.0)).redondear2()
+                    ins = (montoAbono * (config.pctInsumos / 100.0)).redondear2()
+                    gan = (montoAbono - (mat + trans + ins)).coerceAtLeast(0.0).redondear2()
+                    origenStr = "ESTIMADO"
+                }
+
+                asignadoMaterialUsd += mat
+                asignadoTransporteUsd += trans
+                asignadoInsumosUsd += ins
+                gananciaLibreUsd += gan
+
+                val abonoIdAuto = abono.id
+                val pedidoIdAuto = pedidoFotografia?.id
+                val fechaAuto = obtenerFechaMillisValida(abono)
+                viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                    try {
+                        val distAuto = DistribucionAbono(
+                            abonoId = abonoIdAuto,
+                            pedidoId = pedidoIdAuto,
+                            tipoAbono = "VENTA_PEDIDO",
+                            montoUsd = montoAbono,
+                            material = mat,
+                            transporte = trans,
+                            insumos = ins,
+                            miPago = 0.0,
+                            ganancia = gan,
+                            origen = origenStr,
+                            fechaMillis = fechaAuto
+                        )
+                        distribucionAbonoDao.agregarDistribucion(distAuto)
+                    } catch (e: Exception) {
+                        // Ignorar si ya existe
+                    }
+                }
+            }
+        }
+
+        asignadoMaterialUsd = asignadoMaterialUsd.redondear2()
+        asignadoTransporteUsd = asignadoTransporteUsd.redondear2()
+        asignadoInsumosUsd = asignadoInsumosUsd.redondear2()
+        asignadoMiPagoUsd = asignadoMiPagoUsd.redondear2()
+        gananciaLibreUsd = gananciaLibreUsd.redondear2()
 
         // Compras de insumos y Gastos del Taller del período
         val gastosEnPeriodo = dbData.gastos.filter { it.fechaMillis in inicioMillis..finMillis }

@@ -89,44 +89,12 @@ fun ResumenPrincipal(
         topBar = {
             TopAppBar(
                 title = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = "RESUMEN FINANCIERO",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 17.sp,
-                            color = Color.White
-                        )
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                            IconButton(onClick = { montosOcultos = !montosOcultos }) {
-                                Text(if (montosOcultos) "👁️" else "🔒", fontSize = 14.sp)
-                            }
-                            IconButton(onClick = {
-                                com.example.gestor_deudores.data.utils.ExportarCsvUtils.exportarResumenCsv(navController.context, uiState, anonimizarClientes = true)
-                            }) {
-                                Text("📊", fontSize = 14.sp)
-                            }
-                            IconButton(
-                                onClick = {
-                                    com.example.gestor_deudores.data.utils.generarYCompartirPdf(navController.context, uiState)
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Share,
-                                    contentDescription = "Compartir Reporte PDF",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                            BotonConmutadorMoneda(
-                                monedaActual = uiState.monedaVista,
-                                onCambiarMoneda = { viewModel.cambiarMonedaVista(it) }
-                            )
-                        }
-                    }
+                    Text(
+                        text = "RESUMEN FINANCIERO",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 19.sp,
+                        color = Color.White
+                    )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = fondo2,
@@ -170,35 +138,47 @@ fun ResumenPrincipal(
                     onPeriodoCambiado = { viewModel.cambiarPeriodo(it) }
                 )
 
-                // 2. DISPONIBLE PARA RETIRAR (SECCIÓN 9 Y FASE 2)
+                // 2. BARRA DE HERRAMIENTAS Y ACCIONES
+                SeccionBarraHerramientas(
+                    monedaActual = uiState.monedaVista,
+                    montosOcultos = montosOcultos,
+                    onCambiarMoneda = { viewModel.cambiarMonedaVista(it) },
+                    onToggleMontosOcultos = { montosOcultos = !montosOcultos },
+                    onExportarPdf = { com.example.gestor_deudores.data.utils.generarYCompartirPdf(navController.context, uiState) },
+                    onExportarCsv = { com.example.gestor_deudores.data.utils.ExportarCsvUtils.exportarResumenCsv(navController.context, uiState, anonimizarClientes = true) }
+                )
+
+                // 3. DISPONIBLE PARA RETIRAR (SECCIÓN 9 Y FASE 2)
                 TarjetaDisponibleParaRetirar(
                     uiState = uiState,
+                    montosOcultos = montosOcultos,
                     onAbrirRetiro = { mostrarDialogoRegistrarRetiro = true },
                     onAbrirGasto = { mostrarDialogoRegistrarGasto = true }
                 )
 
-                // 3. Proyección de Cobros a 7 y 30 Días (Sección 11)
-                SeccionProyeccionCobros(proyeccion = uiState.proyeccionCobros)
+                // 4. Proyección de Cobros a 7 y 30 Días (Sección 11)
+                SeccionProyeccionCobros(proyeccion = uiState.proyeccionCobros, montosOcultos = montosOcultos)
 
-                // 4. Antigüedad de Cartera y Puntualidad (Sección 12)
+                // 5. Antigüedad de Cartera y Puntualidad (Sección 12)
                 SeccionAntiguedadCartera(
                     cartera = uiState.antiguedadCartera,
+                    montosOcultos = montosOcultos,
                     onEnviarRecordatorios = { navController.navigate(rutas.PEDIDOS) }
                 )
 
-                // 5. Alertas Financieras de Salud
+                // 6. Alertas Financieras de Salud
                 if (uiState.alertasFinancieras.isNotEmpty()) {
                     SeccionAlertasFinancieras(alertas = uiState.alertasFinancieras)
                 }
 
-                // 6. Tarjetas KPI Totales
-                TarjetasKpiTotales(uiState = uiState)
+                // 7. Tarjetas KPI Totales
+                TarjetasKpiTotales(uiState = uiState, montosOcultos = montosOcultos)
 
-                // 5. GRÁFICA VISUAL: Evaluación de Ganancias vs. Costos de Producción
+                // 8. GRÁFICA VISUAL: Evaluación de Ganancias vs. Costos de Producción
                 GraficaPerdidasGanancias(uiState = uiState)
 
-                // 6. Carrusel de Sobres / Fondos de Insumos
-                SeccionCarruselSobres(fondos = uiState.fondosInsumos, monedaVista = uiState.monedaVista, tasaBcv = uiState.tasaBcv)
+                // 9. Sobres en Cuadrícula 2x2
+                SeccionCarruselSobres(fondos = uiState.fondosInsumos, monedaVista = uiState.monedaVista, tasaBcv = uiState.tasaBcv, montosOcultos = montosOcultos)
 
                 // 7. Radiografía de Pago Individual y Consolidado con Selector de Cliente
                 SeccionRadiografiaPagos(
@@ -284,14 +264,85 @@ fun ResumenPrincipal(
     }
 }
 
+fun formatMonto(montoUsd: Double, monedaVista: String, tasaBcv: Double, montosOcultos: Boolean): String {
+    if (montosOcultos) return "••••••"
+    val monto = if (monedaVista == "VES" && tasaBcv > 0) montoUsd * tasaBcv else montoUsd
+    val simbolo = if (monedaVista == "VES") "Bs" else "$"
+    return "$simbolo ${String.format(Locale.US, "%.2f", monto)}"
+}
+
+@Composable
+fun SeccionBarraHerramientas(
+    monedaActual: String,
+    montosOcultos: Boolean,
+    onCambiarMoneda: (String) -> Unit,
+    onToggleMontosOcultos: () -> Unit,
+    onExportarPdf: () -> Unit,
+    onExportarCsv: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = fondo2.copy(alpha = 0.15f))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            BotonConmutadorMoneda(
+                monedaActual = monedaActual,
+                onCambiarMoneda = onCambiarMoneda
+            )
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (montosOcultos) Color(0xFFFFE0B2) else Color.White)
+                        .clickable { onToggleMontosOcultos() }
+                        .padding(horizontal = 8.dp, vertical = 5.dp)
+                ) {
+                    Text(if (montosOcultos) "🔒 Oculto" else "👁️ Montos", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (montosOcultos) Color(0xFFE65100) else Color.DarkGray)
+                }
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color.White)
+                        .clickable { onExportarCsv() }
+                        .padding(horizontal = 8.dp, vertical = 5.dp)
+                ) {
+                    Text("📊 Excel", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = estados)
+                }
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color.White)
+                        .clickable { onExportarPdf() }
+                        .padding(horizontal = 8.dp, vertical = 5.dp)
+                ) {
+                    Text("📄 PDF", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = estados)
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun TarjetaDisponibleParaRetirar(
     uiState: ResumenUiState,
+    montosOcultos: Boolean = false,
     onAbrirRetiro: () -> Unit,
     onAbrirGasto: () -> Unit
 ) {
-    val montoMostrar = if (uiState.monedaVista == "VES" && uiState.tasaBcv > 0) uiState.disponibleParaRetirarUsd * uiState.tasaBcv else uiState.disponibleParaRetirarUsd
-    val simbolo = if (uiState.monedaVista == "VES") "Bs" else "$"
+    val textoMonto = formatMonto(uiState.disponibleParaRetirarUsd, uiState.monedaVista, uiState.tasaBcv, montosOcultos)
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -304,7 +355,7 @@ fun TarjetaDisponibleParaRetirar(
         ) {
             Column {
                 Text("💎 DISPONIBLE PARA RETIRAR", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White.copy(alpha = 0.8f))
-                Text("$simbolo ${String.format(Locale.getDefault(), "%.2f", montoMostrar)}", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Text(textoMonto, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
             }
 
             Row(
@@ -865,7 +916,7 @@ fun SeccionAlertasFinancieras(alertas: List<AlertaFinanciera>) {
 // COMPONENTE 5: TARJETAS KPI TOTALES (GLOSARIO Y ETIQUETAS DE PERÍODO)
 // ==========================================
 @Composable
-fun TarjetasKpiTotales(uiState: ResumenUiState) {
+fun TarjetasKpiTotales(uiState: ResumenUiState, montosOcultos: Boolean = false) {
     val etiquetaPeriodo = when (uiState.periodoSeleccionado) {
         PeriodoFiltro.ESTA_SEMANA -> "Esta semana"
         PeriodoFiltro.ESTE_MES -> "Este mes"
@@ -886,6 +937,7 @@ fun TarjetasKpiTotales(uiState: ResumenUiState) {
                 monedaVista = uiState.monedaVista,
                 tasaBcv = uiState.tasaBcv,
                 color = Color(0xFF2E7D32),
+                montosOcultos = montosOcultos,
                 modifier = Modifier.weight(1f)
             )
             TarjetaKpiItem(
@@ -895,6 +947,7 @@ fun TarjetasKpiTotales(uiState: ResumenUiState) {
                 monedaVista = uiState.monedaVista,
                 tasaBcv = uiState.tasaBcv,
                 color = Color(0xFF1565C0),
+                montosOcultos = montosOcultos,
                 modifier = Modifier.weight(1f)
             )
         }
@@ -909,6 +962,7 @@ fun TarjetasKpiTotales(uiState: ResumenUiState) {
                 monedaVista = uiState.monedaVista,
                 tasaBcv = uiState.tasaBcv,
                 color = Color(0xFFC2185B),
+                montosOcultos = montosOcultos,
                 modifier = Modifier.weight(1f)
             )
             TarjetaKpiItem(
@@ -918,6 +972,7 @@ fun TarjetasKpiTotales(uiState: ResumenUiState) {
                 monedaVista = uiState.monedaVista,
                 tasaBcv = uiState.tasaBcv,
                 color = Color(0xFFE65100),
+                montosOcultos = montosOcultos,
                 modifier = Modifier.weight(1f)
             )
         }
@@ -932,10 +987,10 @@ fun TarjetaKpiItem(
     monedaVista: String,
     tasaBcv: Double,
     color: Color,
+    montosOcultos: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    val montoMostrar = if (monedaVista == "VES" && tasaBcv > 0) montoUsd * tasaBcv else montoUsd
-    val simbolo = if (monedaVista == "VES") "Bs" else "$"
+    val textoMonto = formatMonto(montoUsd, monedaVista, tasaBcv, montosOcultos)
 
     Card(
         colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.1f)),
@@ -958,7 +1013,7 @@ fun TarjetaKpiItem(
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "$simbolo ${String.format(Locale.getDefault(), "%.2f", montoMostrar)}",
+                text = textoMonto,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = color
@@ -974,7 +1029,8 @@ fun TarjetaKpiItem(
 fun SeccionCarruselSobres(
     fondos: List<FondoInsumoItem>,
     monedaVista: String,
-    tasaBcv: Double
+    tasaBcv: Double,
+    montosOcultos: Boolean = false
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
@@ -993,6 +1049,7 @@ fun SeccionCarruselSobres(
                         fondo = fondo,
                         monedaVista = monedaVista,
                         tasaBcv = tasaBcv,
+                        montosOcultos = montosOcultos,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -1005,6 +1062,7 @@ fun SeccionCarruselSobres(
                             fondo = fondo,
                             monedaVista = monedaVista,
                             tasaBcv = tasaBcv,
+                            montosOcultos = montosOcultos,
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -1019,10 +1077,10 @@ fun TarjetaSobreCuadriculaItem(
     fondo: FondoInsumoItem,
     monedaVista: String,
     tasaBcv: Double,
+    montosOcultos: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    val montoMostrar = if (monedaVista == "VES" && tasaBcv > 0) fondo.montoUsd * tasaBcv else fondo.montoUsd
-    val simbolo = if (monedaVista == "VES") "Bs" else "$"
+    val textoMonto = formatMonto(fondo.montoUsd, monedaVista, tasaBcv, montosOcultos)
 
     Card(
         modifier = modifier,
@@ -1044,7 +1102,7 @@ fun TarjetaSobreCuadriculaItem(
                 )
             }
             Text(
-                text = "$simbolo ${String.format(Locale.getDefault(), "%.2f", montoMostrar)}",
+                text = textoMonto,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
@@ -1609,7 +1667,13 @@ fun DialogoAjustarCostosBase(
 // COMPONENTE 11: PROYECCIÓN DE COBROS (SECCIÓN 11)
 // ==========================================
 @Composable
-fun SeccionProyeccionCobros(proyeccion: com.example.gestor_deudores.data.utils.ProyeccionCobrosPagos) {
+fun SeccionProyeccionCobros(
+    proyeccion: com.example.gestor_deudores.data.utils.ProyeccionCobrosPagos,
+    montosOcultos: Boolean = false
+) {
+    val cobros7Text = if (montosOcultos) "••••••" else "$${String.format(Locale.getDefault(), "%.2f", proyeccion.cobros7DiasUsd)} USD"
+    val cobros30Text = if (montosOcultos) "••••••" else "$${String.format(Locale.getDefault(), "%.2f", proyeccion.cobros30DiasUsd)} USD"
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -1627,16 +1691,16 @@ fun SeccionProyeccionCobros(proyeccion: com.example.gestor_deudores.data.utils.P
             ) {
                 Column {
                     Text("Próximos 7 Días:", fontSize = 11.sp, color = Color.Gray)
-                    Text("$${String.format(Locale.getDefault(), "%.2f", proyeccion.cobros7DiasUsd)} USD", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
+                    Text(cobros7Text, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
                 }
 
                 Column(horizontalAlignment = Alignment.End) {
                     Text("Próximos 30 Días:", fontSize = 11.sp, color = Color.Gray)
-                    Text("$${String.format(Locale.getDefault(), "%.2f", proyeccion.cobros30DiasUsd)} USD", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
+                    Text(cobros30Text, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
                 }
             }
 
-            Text("Esta semana esperas cobrar unos $${String.format(Locale.getDefault(), "%.2f", proyeccion.cobros7DiasUsd)} USD de cuotas y entregas.", fontSize = 11.sp, color = Color.DarkGray)
+            Text("Esta semana esperas cobrar unos $cobros7Text de cuotas y entregas.", fontSize = 11.sp, color = Color.DarkGray)
         }
     }
 }
@@ -1647,8 +1711,14 @@ fun SeccionProyeccionCobros(proyeccion: com.example.gestor_deudores.data.utils.P
 @Composable
 fun SeccionAntiguedadCartera(
     cartera: com.example.gestor_deudores.data.utils.GrupoAntiguedadCartera,
+    montosOcultos: Boolean = false,
     onEnviarRecordatorios: () -> Unit
 ) {
+    val alDiaText = if (montosOcultos) "••••••" else "$${cartera.alDiaMontoUsd} USD"
+    val a1a7Text = if (montosOcultos) "••••••" else "$${cartera.atraso1a7MontoUsd} USD"
+    val a8a30Text = if (montosOcultos) "••••••" else "$${cartera.atraso8a30MontoUsd} USD"
+    val aMas30Text = if (montosOcultos) "••••••" else "$${cartera.atrasoMas30MontoUsd} USD"
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -1676,10 +1746,10 @@ fun SeccionAntiguedadCartera(
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("• Al día: $${cartera.alDiaMontoUsd} USD (${cartera.alDiaClientesCount} clientes)", fontSize = 11.sp, color = Color(0xFF2E7D32))
-                Text("• 1 a 7 días de atraso: $${cartera.atraso1a7MontoUsd} USD (${cartera.atraso1a7ClientesCount} clientes)", fontSize = 11.sp, color = Color(0xFFF57F17))
-                Text("• 8 a 30 días de atraso: $${cartera.atraso8a30MontoUsd} USD (${cartera.atraso8a30ClientesCount} clientes)", fontSize = 11.sp, color = Color(0xFFE65100))
-                Text("• Más de 30 días de atraso: $${cartera.atrasoMas30MontoUsd} USD (${cartera.atrasoMas30ClientesCount} clientes)", fontSize = 11.sp, color = Color(0xFFD32F2F), fontWeight = FontWeight.Bold)
+                Text("• Al día: $alDiaText (${cartera.alDiaClientesCount} clientes)", fontSize = 11.sp, color = Color(0xFF2E7D32))
+                Text("• 1 a 7 días de atraso: $a1a7Text (${cartera.atraso1a7ClientesCount} clientes)", fontSize = 11.sp, color = Color(0xFFF57F17))
+                Text("• 8 a 30 días de atraso: $a8a30Text (${cartera.atraso8a30ClientesCount} clientes)", fontSize = 11.sp, color = Color(0xFFE65100))
+                Text("• Más de 30 días de atraso: $aMas30Text (${cartera.atrasoMas30ClientesCount} clientes)", fontSize = 11.sp, color = Color(0xFFD32F2F), fontWeight = FontWeight.Bold)
             }
         }
     }
