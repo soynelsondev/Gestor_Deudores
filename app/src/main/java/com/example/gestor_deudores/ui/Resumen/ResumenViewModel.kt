@@ -296,6 +296,24 @@ class ResumenViewModel(
         }
     }
 
+    fun actualizarSaldoCuentaConMovimiento(cuenta: CuentaBancaria, montoDiferencia: Double, nuevoSaldo: Double, motivo: String) {
+        viewModelScope.launch {
+            val cuentaActualizada = cuenta.copy(saldoActual = nuevoSaldo.redondear2())
+            cuentaBancariaDao.actualizarCuenta(cuentaActualizada)
+
+            if (montoDiferencia != 0.0) {
+                val tipoMov = if (montoDiferencia > 0) "ABONO" else "GASTO"
+                val mov = MovimientoCuenta(
+                    cuentaId = cuenta.id,
+                    tipo = tipoMov,
+                    monto = montoDiferencia.redondear2(),
+                    nota = motivo.trim()
+                )
+                movimientoCuentaDao.agregarMovimiento(mov)
+            }
+        }
+    }
+
     fun eliminarCuentaBancaria(cuenta: CuentaBancaria) {
         viewModelScope.launch {
             cuentaBancariaDao.eliminarCuenta(cuenta)

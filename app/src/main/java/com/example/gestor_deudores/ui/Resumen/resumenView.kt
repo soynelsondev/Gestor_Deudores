@@ -238,13 +238,13 @@ fun ResumenPrincipal(
             )
         }
 
-        // Diálogo modal para editar/ajustar saldo de una cuenta existente
+        // Diálogo modal para editar/ajustar saldo o sumar/restar dinero de una cuenta existente
         cuentaParaEditarSaldo?.let { cuenta ->
             DialogoAjustarSaldoCuenta(
                 cuenta = cuenta,
                 onDismiss = { cuentaParaEditarSaldo = null },
-                onGuardarSaldo = { nuevoSaldo ->
-                    viewModel.actualizarSaldoCuenta(cuenta, nuevoSaldo)
+                onGuardarMovimiento = { montoDif, nuevoSaldo, motivo ->
+                    viewModel.actualizarSaldoCuentaConMovimiento(cuenta, montoDif, nuevoSaldo, motivo)
                     cuentaParaEditarSaldo = null
                 }
             )
@@ -1555,41 +1555,173 @@ fun DialogoAgregarCuentaBancaria(
 fun DialogoAjustarSaldoCuenta(
     cuenta: CuentaBancaria,
     onDismiss: () -> Unit,
-    onGuardarSaldo: (nuevoSaldo: Double) -> Unit
+    onGuardarMovimiento: (montoDiferencia: Double, nuevoSaldoTotal: Double, motivo: String) -> Unit
 ) {
-    var saldoStr by remember { mutableStateOf(cuenta.saldoActual.toString()) }
+    var esMovimiento by remember { mutableStateOf(true) }
+    var esIngreso by remember { mutableStateOf(true) }
+    var montoTexto by remember { mutableStateOf("") }
+    var saldoDirectoTexto by remember { mutableStateOf(cuenta.saldoActual.toString()) }
+    var motivoTexto by remember { mutableStateOf("") }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Ajustar Saldo de ${cuenta.nombre}", fontWeight = FontWeight.Bold) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Ingresa el saldo real disponible en este banco o billetera:", fontSize = 12.sp)
-                OutlinedTextField(
-                    value = saldoStr,
-                    onValueChange = { saldoStr = it },
-                    label = { Text("Saldo Real (${cuenta.moneda})") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    val saldo = saldoStr.toDoubleOrNull() ?: cuenta.saldoActual
-                    onGuardarSaldo(saldo)
-                }
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = fondo2)
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("Guardar Saldo")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancelar")
+                Text(
+                    text = "Ajustar Dinero · ${cuenta.nombre}",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (esMovimiento) estados else com.example.gestor_deudores.ui.theme.fondo_claro)
+                            .clickable { esMovimiento = true }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("➕ / ➖ Sumar o Restar", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (esMovimiento) Color.White else Color.DarkGray)
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (!esMovimiento) estados else com.example.gestor_deudores.ui.theme.fondo_claro)
+                            .clickable { esMovimiento = false }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("⚙️ Saldo Directo", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (!esMovimiento) Color.White else Color.DarkGray)
+                    }
+                }
+
+                if (esMovimiento) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (esIngreso) Color(0xFF2E7D32) else com.example.gestor_deudores.ui.theme.fondo_claro)
+                                .clickable { esIngreso = true }
+                                .padding(vertical = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("+ Ingreso (Sumar)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (esIngreso) Color.White else Color.DarkGray)
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (!esIngreso) Color(0xFFD32F2F) else com.example.gestor_deudores.ui.theme.fondo_claro)
+                                .clickable { esIngreso = false }
+                                .padding(vertical = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("- Egreso (Restar)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (!esIngreso) Color.White else Color.DarkGray)
+                        }
+                    }
+
+                    val montoVal = montoTexto.replace(",", ".").toDoubleOrNull() ?: 0.0
+                    val cambioSgn = if (esIngreso) montoVal else -montoVal
+                    val saldoSimulado = (cuenta.saldoActual + cambioSgn).coerceAtLeast(0.0)
+
+                    OutlinedTextField(
+                        value = montoTexto,
+                        onValueChange = { montoTexto = it },
+                        label = { Text("Monto a ${if (esIngreso) "sumar" else "restar"} (${cuenta.moneda})") },
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+
+                    Text(
+                        text = "Nuevo saldo estimado: ${cuenta.moneda} ${String.format(Locale.US, "%.2f", saldoSimulado)}",
+                        fontSize = 11.sp,
+                        color = Color(0xFF4CAF50),
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    OutlinedTextField(
+                        value = motivoTexto,
+                        onValueChange = { motivoTexto = it },
+                        label = { Text("¿De qué es el dinero? (Descripción)") },
+                        placeholder = { Text("Ej. Abono cliente, Pago alquiler, Compra tazas") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                } else {
+                    val nuevoSaldoVal = saldoDirectoTexto.replace(",", ".").toDoubleOrNull() ?: cuenta.saldoActual
+
+                    Text(
+                        text = "Saldo actual registrado: ${cuenta.moneda} ${cuenta.saldoActual}",
+                        fontSize = 12.sp,
+                        color = Color.LightGray
+                    )
+
+                    OutlinedTextField(
+                        value = saldoDirectoTexto,
+                        onValueChange = { saldoDirectoTexto = it },
+                        label = { Text("Nuevo Saldo Real (${cuenta.moneda})") },
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+
+                    OutlinedTextField(
+                        value = motivoTexto,
+                        onValueChange = { motivoTexto = it },
+                        label = { Text("Motivo del ajuste") },
+                        placeholder = { Text("Ej. Arqueo de caja al cierre") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancelar", color = Color.LightGray)
+                    }
+
+                    Button(
+                        onClick = {
+                            if (esMovimiento) {
+                                val montoVal = montoTexto.replace(",", ".").toDoubleOrNull() ?: 0.0
+                                if (montoVal > 0) {
+                                    val difSgn = if (esIngreso) montoVal else -montoVal
+                                    val nuevoSaldo = (cuenta.saldoActual + difSgn).coerceAtLeast(0.0)
+                                    val descrip = motivoTexto.ifBlank { if (esIngreso) "Ingreso manual" else "Egreso manual" }
+                                    onGuardarMovimiento(difSgn, nuevoSaldo, descrip)
+                                }
+                            } else {
+                                val nuevoSaldoVal = saldoDirectoTexto.replace(",", ".").toDoubleOrNull() ?: cuenta.saldoActual
+                                val dif = nuevoSaldoVal - cuenta.saldoActual
+                                val descrip = motivoTexto.ifBlank { "Ajuste directo de saldo" }
+                                onGuardarMovimiento(dif, nuevoSaldoVal, descrip)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = estados)
+                    ) {
+                        Text("Guardar Ajuste", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
-    )
+    }
 }
 
 @Composable
