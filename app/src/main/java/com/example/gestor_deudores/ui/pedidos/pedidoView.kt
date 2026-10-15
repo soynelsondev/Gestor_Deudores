@@ -1,6 +1,7 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 package com.example.gestor_deudores.ui.pedidos
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -939,7 +940,9 @@ fun TarjetaPedido(
                 }
             }
 
-            // 3. PRODUCTOS Y DETALLES A ANCHO COMPLETO
+            // 3. PRODUCTOS Y DETALLES A ANCHO COMPLETO CON DESGLOSE
+            var mostrarDetalleProductos by remember { mutableStateOf(false) }
+
             Text(
                 text = "${item.producto} (x${item.cantidad})",
                 fontSize = 14.sp,
@@ -947,6 +950,59 @@ fun TarjetaPedido(
                 color = Color.DarkGray,
                 modifier = Modifier.fillMaxWidth()
             )
+
+            TextButton(
+                onClick = { mostrarDetalleProductos = !mostrarDetalleProductos },
+                contentPadding = PaddingValues(0.dp)
+            ) {
+                Text(
+                    text = if (mostrarDetalleProductos) "▲ Ocultar desglose de productos" else "▼ 🔍 Ver desglose de productos",
+                    fontSize = 11.sp,
+                    color = estados,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            AnimatedVisibility(visible = mostrarDetalleProductos) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = fondo2.copy(alpha = 0.25f)),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "Desglose de Productos:",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+
+                        val lineasEspecificaciones = item.notas.split("\n---\n").find { it.contains("Prod #") || it.contains("Detalle:") || it.contains("Estampa:") }
+
+                        if (lineasEspecificaciones != null && lineasEspecificaciones.isNotBlank()) {
+                            val itemsEspecificaciones = lineasEspecificaciones.split("\n")
+                            itemsEspecificaciones.forEach { espec ->
+                                Text(
+                                    text = espec,
+                                    fontSize = 11.sp,
+                                    color = Color.DarkGray,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        } else {
+                            Text(
+                                text = "• ${item.producto} — Cantidad: ${item.cantidad} pieza(s)",
+                                fontSize = 11.sp,
+                                color = Color.DarkGray,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+            }
 
             // VISTA DE IMÁGENES ASOCIADAS Y SUS TIPOS (SECCIONES 6.3 Y 6.4)
             if (imagenesPedido.isNotEmpty()) {
