@@ -1,0 +1,28 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+  <!-- Fondo redondeado teal -->
+  <path
+      android:pathData="M48,0 H152 A48,48 0 0,1 200,48 V152 A48,48 0 0,1 152,200 H48 A48,48 0 0,1 0,152 V48 A48,48 0 0,1 48,0 Z"
+      android:fillColor="#00707A"/>
+  <!-- Trazo superior horizontal -->
+  <path
+      android:pathData="M56,62 H144"
+      android:strokeColor="#FCF1EE"
+      android:strokeWidth="20"
+      android:strokeLineCap="round"/>
+  <!-- Trazo inferior horizontal -->
+  <path
+      android:pathData="M56,138 H144"
+      android:strokeColor="#88C5BD"
+      android:strokeWidth="20"
+      android:strokeLineCap="round"/>
+  <!-- Trazo diagonal Z -->
+  <path
+      android:pathData="M144,62 L56,138"
+      android:strokeColor="#EC9F85"
+      android:strokeWidth="20"
+      android:strokeLineCap="round"/>
+</vector>
