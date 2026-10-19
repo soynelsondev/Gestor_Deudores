@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -64,8 +65,10 @@ fun CotizadorPrincipal(
     // Controlamos si mostramos la ventana modal gigante del formulario
     var mostrarFormulario by remember { mutableStateOf(false) }
 
+    val context = LocalContext.current
+
     LaunchedEffect(tasaBcvGlobal) {
-        viewModel.actualizarTasaBcv(tasaBcvGlobal)
+        viewModel.actualizarTasaBcv(tasaBcvGlobal, context)
     }
 
     // El Formulario Gigante (Oculto por defecto, se abre como un Dialog o BottomSheet)
@@ -134,7 +137,9 @@ fun CotizadorPrincipal(
             item {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text("Catálogo de Precios", fontWeight = FontWeight.Bold, color = estados, fontSize = 16.sp)
-                    Text("Tasa BCV: Bs. $tasaBcvGlobal", fontSize = 12.sp, color = Color.Gray)
+                    val tasaMostrar = if (uiState.tasaBcv > 0.0) uiState.tasaBcv else tasaBcvGlobal
+                    val textoTasa = if (tasaMostrar > 0.0) "Tasa BCV: Bs. ${String.format(Locale.US, "%.2f", tasaMostrar)}" else "Cargando Tasa BCV..."
+                    Text(textoTasa, fontSize = 12.sp, color = Color.Gray)
                 }
             }
 
@@ -198,11 +203,10 @@ fun TarjetaPlantillaExpandible(
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(plantilla.nombrePlantilla, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 18.sp)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Precio: ${formatoUSD.format(res.precioUsd)}", color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
-                        if (plantilla.esPlantillaMayor) {
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("🏷️ MAYOR (≥${plantilla.minimoUnidadesMayor} pcs)", color = Color(0xFFFFD54F), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("Detal: ${formatoUSD.format(res.precioUsd)}", color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
+                        if (plantilla.esPlantillaMayor || plantilla.porcentajeGananciaMayor > 0f) {
+                            Text("· Mayor (≥${plantilla.minimoUnidadesMayor} pcs): ${formatoUSD.format(res.precioMayorUsd)}", color = Color(0xFFFFD54F), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -228,14 +232,26 @@ fun TarjetaPlantillaExpandible(
                     
                     Spacer(modifier = Modifier.height(12.dp))
                     
-                    // PRECIO DE VENTA Y GANANCIA
+                    // PRECIO DE VENTA Y GANANCIA (DETAL Y MAYOR)
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("PRECIO DE VENTA (${plantilla.porcentajeGanancia.toInt()}%):", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Text("PRECIO DETAL (${plantilla.porcentajeGanancia.toInt()}%):", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                         Text(formatoUSD.format(res.precioUsd), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     }
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Ganancia libre por pieza:", color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp)
+                        Text("Ganancia libre por pieza (Detal):", color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp)
                         Text("+ " + formatoUSD.format(res.gananciaUsd), color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    if (plantilla.esPlantillaMayor || plantilla.porcentajeGananciaMayor > 0f) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("PRECIO MAYOR (≥${plantilla.minimoUnidadesMayor} pcs) (${plantilla.porcentajeGananciaMayor.toInt()}%):", color = Color(0xFFFFD54F), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Text(formatoUSD.format(res.precioMayorUsd), color = Color(0xFFFFD54F), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Ganancia libre por pieza (Mayor):", color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp)
+                            Text("+ " + formatoUSD.format(res.gananciaMayorUsd), color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -331,6 +347,7 @@ fun FormularioCotizacion(
                         precio = uiState.precioPaquetePieza,
                         moneda = uiState.monedaPaquetePieza,
                         cantidad = uiState.cantidadPaquetePieza,
+                        tasaBcv = uiState.tasaBcv,
                         onPrecioChange = { viewModel.onPrecioPaquetePiezaChange(it) },
                         onMonedaChange = { viewModel.onMonedaPaquetePiezaChange(it) },
                         onCantidadChange = { viewModel.onCantidadPaquetePiezaChange(it) }
@@ -346,6 +363,7 @@ fun FormularioCotizacion(
                         precio = uiState.precioPaqueteEmpaque,
                         moneda = uiState.monedaPaqueteEmpaque,
                         cantidad = uiState.cantidadPaqueteEmpaque,
+                        tasaBcv = uiState.tasaBcv,
                         onPrecioChange = { viewModel.onPrecioPaqueteEmpaqueChange(it) },
                         onMonedaChange = { viewModel.onMonedaPaqueteEmpaqueChange(it) },
                         onCantidadChange = { viewModel.onCantidadPaqueteEmpaqueChange(it) }
@@ -365,6 +383,7 @@ fun FormularioCotizacion(
                             precio = uiState.precioPaquetePapel,
                             moneda = uiState.monedaPaquetePapel,
                             cantidad = uiState.cantidadPaquetePapel,
+                            tasaBcv = uiState.tasaBcv,
                             onPrecioChange = { viewModel.onPrecioPaquetePapelChange(it) },
                             onMonedaChange = { viewModel.onMonedaPaquetePapelChange(it) },
                             onCantidadChange = { viewModel.onCantidadPaquetePapelChange(it) }
@@ -402,6 +421,7 @@ fun FormularioCotizacion(
                         precio = uiState.precioTotalDtf,
                         moneda = uiState.monedaDtf,
                         cantidad = uiState.rendimientoDtf,
+                        tasaBcv = uiState.tasaBcv,
                         onPrecioChange = { viewModel.onPrecioTotalDtfChange(it) },
                         onMonedaChange = { viewModel.onMonedaDtfChange(it) },
                         onCantidadChange = { viewModel.onRendimientoDtfChange(it) }
@@ -503,6 +523,7 @@ fun FormularioCotizacion(
                         precio = uiState.costoTransporte,
                         moneda = uiState.monedaTransporte,
                         cantidad = uiState.rendimientoTransporte,
+                        tasaBcv = uiState.tasaBcv,
                         onPrecioChange = { viewModel.onCostoTransporteChange(it) },
                         onMonedaChange = { viewModel.onMonedaTransporteChange(it) },
                         onCantidadChange = { viewModel.onRendimientoTransporteChange(it) }
@@ -516,6 +537,7 @@ fun FormularioCotizacion(
                         precio = uiState.costoDiseno,
                         moneda = uiState.monedaDiseno,
                         cantidad = uiState.rendimientoDiseno,
+                        tasaBcv = uiState.tasaBcv,
                         onPrecioChange = { viewModel.onCostoDisenoChange(it) },
                         onMonedaChange = { viewModel.onMonedaDisenoChange(it) },
                         onCantidadChange = { viewModel.onRendimientoDisenoChange(it) }
@@ -534,6 +556,7 @@ fun FormularioCotizacion(
                             cantidad = uiState.rendimientoExtra,
                             labelPrecio = "Costo Total",
                             labelCantidad = "Piezas",
+                            tasaBcv = uiState.tasaBcv,
                             onPrecioChange = { viewModel.onCostoExtraChange(it) },
                             onMonedaChange = { viewModel.onMonedaExtraChange(it) },
                             onCantidadChange = { viewModel.onRendimientoExtraChange(it) }
@@ -615,7 +638,7 @@ fun FormularioCotizacion(
                                     }
                                     Text("$iconoCat ${insumo.nombre}", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                                     Text(
-                                        "Lote: $${insumo.precioLote} ${insumo.moneda} ÷ ${insumo.rendimientoCantidad} pcs = $${String.format(Locale.US, "%.2f", insumo.calcularCostoUnitarioUsd(1.0))}/u",
+                                        "Lote: $${insumo.precioLote} ${insumo.moneda} ÷ ${insumo.rendimientoCantidad} pcs = $${String.format(Locale.US, "%.2f", insumo.calcularCostoUnitarioUsd(uiState.tasaBcv))}/u",
                                         fontSize = 11.sp,
                                         color = Color.DarkGray
                                     )
@@ -931,7 +954,6 @@ fun TarjetaPlantillaGuardada(plantilla: PlantillaCotizacion, seleccionada: Boole
     }
 }
 
-// Selector de precio, moneda y cantidad en una sola fila
 @Composable
 fun CampoMonedaCantidad(
     precio: String,
@@ -939,6 +961,7 @@ fun CampoMonedaCantidad(
     cantidad: String,
     labelPrecio: String = "¿Cuánto pagaste?",
     labelCantidad: String = "Piezas",
+    tasaBcv: Double = 0.0,
     onPrecioChange: (String) -> Unit,
     onMonedaChange: (String) -> Unit,
     onCantidadChange: (String) -> Unit
@@ -988,13 +1011,25 @@ fun CampoMonedaCantidad(
             )
         }
 
-        // Vista previa inmediata por línea (= $X.XX por pieza)
+        // Vista previa inmediata por línea
         val pD = precio.replace(",", ".").toDoubleOrNull() ?: 0.0
-        val cI = cantidad.toIntOrNull() ?: 1
+        val cI = (cantidad.toIntOrNull() ?: 1).coerceAtLeast(1)
         if (pD > 0.0) {
-            val unitario = pD / (if (cI > 0) cI else 1)
+            val tasaActiva = if (tasaBcv > 0.0) tasaBcv else 1.0
+            val textoPreview = if (moneda == "VES") {
+                val unitarioBs = pD / cI
+                val unitarioUsd = unitarioBs / tasaActiva
+                val infoTasaStr = if (tasaActiva > 1.0) " · Tasa BCV: ${String.format(Locale.US, "%.2f", tasaActiva)}" else ""
+                "= Bs ${String.format(Locale.US, "%.2f", unitarioBs)} (equivale a $${String.format(Locale.US, "%.2f", unitarioUsd)} / pc$infoTasaStr)"
+            } else {
+                val unitarioUsd = pD / cI
+                val unitarioBs = unitarioUsd * tasaActiva
+                val infoTasaStr = if (tasaActiva > 1.0) " (equivale a Bs ${String.format(Locale.US, "%.2f", unitarioBs)} / pc · Tasa BCV: ${String.format(Locale.US, "%.2f", tasaActiva)})" else ""
+                "= $${String.format(Locale.US, "%.2f", unitarioUsd)} por pieza$infoTasaStr"
+            }
+
             Text(
-                text = "= $${String.format(Locale.US, "%.2f", unitario)} por pieza",
+                text = textoPreview,
                 color = Color(0xFF2E7D32),
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,

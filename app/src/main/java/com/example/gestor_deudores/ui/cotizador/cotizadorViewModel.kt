@@ -18,13 +18,16 @@ import java.math.RoundingMode
 data class ResultadoPlantilla(
     val costoTotalProduccionUsd: Double,
     val precioUsd: Double,
-    val gananciaUsd: Double
+    val gananciaUsd: Double,
+    val precioMayorUsd: Double = 0.0,
+    val gananciaMayorUsd: Double = 0.0
 )
 
 // Estado completo del Formulario de Edición/Creación de Plantilla
 data class CotizadorUiState(
     val idActual: Int = 0,
     val nombrePlantilla: String = "",
+    val tasaBcv: Double = 0.0,
     
     // 1. Materiales (Pieza Base)
     val precioPaquetePieza: String = "",
@@ -163,22 +166,57 @@ class CotizadorViewModel(
     }
 
     fun cargarPreset(preset: com.example.gestor_deudores.data.utils.CotizadorPresetsUtils.PresetProducto) {
+        val tasaUsar = if (tasaBcvActual > 0.0) tasaBcvActual else _uiState.value.tasaBcv
         _uiState.update { actual ->
             actual.copy(
                 nombrePlantilla = preset.titulo,
-                listaInsumos = preset.insumosSugeridos
+                listaInsumos = preset.insumosSugeridos,
+                tasaBcv = tasaUsar
             )
         }
         calcularResultados()
     }
 
-    // Variable reactiva para saber la tasa de cambio actual que haya introducido el usuario
-    private var tasaBcvActual: Double = 1.0
+    // Variable reactiva para saber la tasa de cambio actual
+    private var tasaBcvActual: Double = 0.0
 
-    fun actualizarTasaBcv(tasa: Double) {
-        if (tasa > 0) {
-            tasaBcvActual = tasa
-            calcularResultados() // Recalcula los USD en pantalla si cambia la tasa
+    fun actualizarTasaBcv(tasa: Double, contexto: android.content.Context? = null) {
+        viewModelScope.launch {
+            if (tasa > 0.0) {
+                tasaBcvActual = tasa
+                _uiState.update { it.copy(tasaBcv = tasa) }
+                calcularResultados() // Recalcula los USD en pantalla si cambia la tasa
+            } else {
+                if (contexto != null) {
+                    val prefs = contexto.getSharedPreferences("TasasZubli", android.content.Context.MODE_PRIVATE)
+                    val ultimoDolarStr = prefs.getString("ultimoDolar", "0.0") ?: "0.0"
+                    val tasaSaved = ultimoDolarStr.toDoubleOrNull() ?: 0.0
+                    if (tasaSaved > 0.0) {
+                        tasaBcvActual = tasaSaved
+                        _uiState.update { it.copy(tasaBcv = tasaSaved) }
+                        calcularResultados()
+                    }
+                }
+                try {
+                    val dolar = com.example.gestor_deudores.data.api.RetrofitClient.apiService.obtenerDolarOficial()
+                    val tasaApi = dolar.promedio
+                    if (tasaApi > 0.0) {
+                        tasaBcvActual = tasaApi
+                        _uiState.update { it.copy(tasaBcv = tasaApi) }
+                        calcularResultados()
+                        if (contexto != null) {
+                            val prefs = contexto.getSharedPreferences("TasasZubli", android.content.Context.MODE_PRIVATE)
+                            val formato = java.text.SimpleDateFormat("dd/MM/yyyy hh:mm a", java.util.Locale.getDefault())
+                            prefs.edit()
+                                .putString("ultimoDolar", tasaApi.toString())
+                                .putString("ultimaFecha", formato.format(java.util.Date()))
+                                .apply()
+                        }
+                    }
+                } catch (e: Exception) {
+                    // Sin internet: Mantiene la tasa precargada de SharedPreferences si existía
+                }
+            }
         }
     }
 
@@ -385,13 +423,16 @@ class CotizadorViewModel(
     // ==========================================
 
     fun limpiarFormulario() {
-        _uiState.value = CotizadorUiState()
+        _uiState.value = CotizadorUiState(tasaBcv = tasaBcvActual)
+        calcularResultados()
     }
 
     fun cargarPlantilla(plantilla: PlantillaCotizacion) {
+        val tasaUsar = if (tasaBcvActual > 0.0) tasaBcvActual else _uiState.value.tasaBcv
         _uiState.update {
             it.copy(
                 idActual = plantilla.id,
+                tasaBcv = tasaUsar,
                 nombrePlantilla = plantilla.nombrePlantilla,
                 precioPaquetePieza = plantilla.precioPaquetePieza.toString(),
                 monedaPaquetePieza = plantilla.monedaPaquetePieza,
@@ -485,7 +526,9 @@ class CotizadorViewModel(
             minutosPorPieza = parseD(estado.minutosPorPieza),
             tarifaPorHoraUsd = parseD(estado.tarifaPorHoraUsd),
             comisionPorcentaje = estado.comisionPorcentaje,
-            modoCosteo = estado.modoCosteo
+            modoCosteo = estado.modoCosteo,
+            tipoGanancia = estado.tipoGanancia.name,
+            gananciaFijaUsd = parseD(estado.gananciaFijaUsd)
         )
 
         viewModelScope.launch {
@@ -508,12 +551,38 @@ class CotizadorViewModel(
     // CÁLCULO DE RESULTADOS PARA UNA PLANTILLA GUARDADA
     // ==========================================
     fun calcularResultadosPlantilla(plantilla: PlantillaCotizacion): ResultadoPlantilla {
-        val costos = com.example.gestor_deudores.data.utils.calcularCostosPlantilla(plantilla, tasaBcvActual)
+        val tipoG = try {
+            com.example.gestor_deudores.data.utils.TipoGanancia.valueOf(plantilla.tipoGanancia)
+        } catch (e: Exception) {
+            com.example.gestor_deudores.data.utils.TipoGanancia.SOBRE_COSTO
+        }
+
+        val tasaActiva = if (tasaBcvActual > 0.0) tasaBcvActual else (if (_uiState.value.tasaBcv > 0.0) _uiState.value.tasaBcv else 1.0)
+
+        val costosDetal = com.example.gestor_deudores.data.utils.calcularCostosPlantilla(
+            plantilla = plantilla,
+            tasaBcv = tasaActiva,
+            tipoGanancia = tipoG,
+            gananciaFijaUsd = plantilla.gananciaFijaUsd,
+            cantidadPedido = 1
+        )
+
+        val plantillaMayor = plantilla.copy(porcentajeGanancia = if (plantilla.porcentajeGananciaMayor > 0f) plantilla.porcentajeGananciaMayor else plantilla.porcentajeGanancia)
+        val costosMayor = com.example.gestor_deudores.data.utils.calcularCostosPlantilla(
+            plantilla = plantillaMayor,
+            tasaBcv = tasaActiva,
+            tipoGanancia = tipoG,
+            gananciaFijaUsd = plantilla.gananciaFijaUsd * 0.75,
+            cantidadPedido = if (plantilla.minimoUnidadesMayor > 0) plantilla.minimoUnidadesMayor else 6,
+            calcularEscalas = false
+        )
 
         return ResultadoPlantilla(
-            costoTotalProduccionUsd = costos.costoTotalProduccionUsd,
-            precioUsd = costos.precioSugeridoUsd,
-            gananciaUsd = costos.gananciaUsd
+            costoTotalProduccionUsd = costosDetal.costoTotalProduccionUsd,
+            precioUsd = costosDetal.precioSugeridoUsd,
+            gananciaUsd = costosDetal.gananciaUsd,
+            precioMayorUsd = costosMayor.precioSugeridoUsd,
+            gananciaMayorUsd = costosMayor.gananciaUsd
         )
     }
 
@@ -522,7 +591,7 @@ class CotizadorViewModel(
     // ==========================================
     private fun calcularResultados() {
         val estado = _uiState.value
-        val tasaActiva = if (tasaBcvActual > 0.0) tasaBcvActual else 1.0
+        val tasaActiva = if (tasaBcvActual > 0.0) tasaBcvActual else (if (estado.tasaBcv > 0.0) estado.tasaBcv else 1.0)
 
         fun parseD(texto: String): Double = texto.trim().replace(",", ".").toDoubleOrNull() ?: 0.0
         fun parseCantInt(texto: String): Int = (texto.toIntOrNull() ?: 1).coerceAtLeast(1)
@@ -587,6 +656,7 @@ class CotizadorViewModel(
 
         _uiState.update {
             it.copy(
+                tasaBcv = tasaActiva,
                 costoTotalProduccionUsd = costos.costoTotalProduccionUsd,
                 costoManoObraUsd = costos.costoManoObraUsd,
                 comisionUsd = costos.comisionUsd,

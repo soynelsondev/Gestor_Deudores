@@ -16,7 +16,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         CategoriaGasto::class, Gasto::class, Retiro::class, MovimientoCuenta::class,
         CierreCaja::class
     ],
-    version = 30,
+    version = 31,
     exportSchema = true
 )
 abstract class DeudaDataBase : RoomDatabase() {
@@ -665,6 +665,13 @@ abstract class DeudaDataBase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_30_31 = object : Migration(30, 31) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                addColumnIfNotExists(db, "plantillas_cotizacion", "tipoGanancia", "`tipoGanancia` TEXT NOT NULL DEFAULT 'SOBRE_COSTO'")
+                addColumnIfNotExists(db, "plantillas_cotizacion", "gananciaFijaUsd", "`gananciaFijaUsd` REAL NOT NULL DEFAULT 0.0")
+            }
+        }
+
         fun getDatabase(context: Context): DeudaDataBase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -680,7 +687,7 @@ abstract class DeudaDataBase : RoomDatabase() {
                         MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21,
                         MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25,
                         MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29,
-                        MIGRATION_29_30
+                        MIGRATION_29_30, MIGRATION_30_31
                     )
                     .build()
 

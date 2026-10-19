@@ -86,35 +86,30 @@ fun calcularCostosPlantilla(
         emptyList()
     }
 
-    val costoUnitarioPieza: Double
-    val transportePorPieza: Double
-    val costoInsumosBase: Double
+    fun parseCant(cant: Int): Double = if (cant > 0) cant.toDouble() else 1.0
+    fun aUsd(valor: Double, moneda: String): Double = if (moneda == "VES") valor / tasaActiva else valor
 
-    if (insumosDinamicos.isNotEmpty()) {
-        // --- CÁLCULO VÍA INSUMOS DINÁMICOS ILIMITADOS ---
-        costoUnitarioPieza = insumosDinamicos.filter { it.categoria == "MATERIA_PRIMA" }
-            .sumOf { it.calcularCostoUnitarioUsd(tasaActiva, cantidadPedido) }
-        transportePorPieza = insumosDinamicos.filter { it.categoria == "SERVICIO" }
-            .sumOf { it.calcularCostoUnitarioUsd(tasaActiva, cantidadPedido) }
-        costoInsumosBase = insumosDinamicos.filter { it.categoria == "INSUMO_EXTRA" }
-            .sumOf { it.calcularCostoUnitarioUsd(tasaActiva, cantidadPedido) }
-    } else {
-        // --- CÁLCULO TRADICIONAL (FALLBACK) ---
-        fun parseCant(cant: Int): Double = if (cant > 0) cant.toDouble() else 1.0
-        fun aUsd(valor: Double, moneda: String): Double = if (moneda == "VES") valor / tasaActiva else valor
+    // 1. Costos Tradicionales
+    val cPiezaTrad = aUsd(plantilla.precioPaquetePieza / parseCant(plantilla.cantidadPaquetePieza), plantilla.monedaPaquetePieza)
+    val cEmpaqueTrad = aUsd(plantilla.precioPaqueteEmpaque / parseCant(plantilla.cantidadPaqueteEmpaque), plantilla.monedaPaqueteEmpaque)
+    val cPapelTrad = aUsd(plantilla.precioPaquetePapel / parseCant(plantilla.cantidadPaquetePapel), plantilla.monedaPaquetePapel)
+    val dtfTrad = aUsd(plantilla.precioTotalDtf / parseCant(plantilla.rendimientoDtf), plantilla.monedaDtf)
+    val transpTrad = aUsd(plantilla.costoTransporte / parseCant(plantilla.rendimientoTransporte), plantilla.monedaTransporte)
+    val disenoTrad = aUsd(plantilla.costoDiseno / parseCant(plantilla.rendimientoDiseno), plantilla.monedaDiseno)
+    val extraTrad = aUsd(plantilla.costoExtra / parseCant(plantilla.rendimientoExtra), plantilla.monedaExtra)
 
-        val cPieza = aUsd(plantilla.precioPaquetePieza / parseCant(plantilla.cantidadPaquetePieza), plantilla.monedaPaquetePieza)
-        val cEmpaque = aUsd(plantilla.precioPaqueteEmpaque / parseCant(plantilla.cantidadPaqueteEmpaque), plantilla.monedaPaqueteEmpaque)
-        val cPapel = aUsd(plantilla.precioPaquetePapel / parseCant(plantilla.cantidadPaquetePapel), plantilla.monedaPaquetePapel)
-        val dtf = aUsd(plantilla.precioTotalDtf / parseCant(plantilla.rendimientoDtf), plantilla.monedaDtf)
-        val transp = aUsd(plantilla.costoTransporte / parseCant(plantilla.rendimientoTransporte), plantilla.monedaTransporte)
-        val diseno = aUsd(plantilla.costoDiseno / parseCant(plantilla.rendimientoDiseno), plantilla.monedaDiseno)
-        val extra = aUsd(plantilla.costoExtra / parseCant(plantilla.rendimientoExtra), plantilla.monedaExtra)
+    // 2. Costos Dinámicos
+    val cPiezaDin = insumosDinamicos.filter { it.categoria == "MATERIA_PRIMA" }
+        .sumOf { it.calcularCostoUnitarioUsd(tasaActiva, cantidadPedido) }
+    val transpDin = insumosDinamicos.filter { it.categoria == "SERVICIO" }
+        .sumOf { it.calcularCostoUnitarioUsd(tasaActiva, cantidadPedido) }
+    val cInsumosDin = insumosDinamicos.filter { it.categoria == "INSUMO_EXTRA" }
+        .sumOf { it.calcularCostoUnitarioUsd(tasaActiva, cantidadPedido) }
 
-        costoUnitarioPieza = cPieza
-        transportePorPieza = transp
-        costoInsumosBase = cEmpaque + cPapel + dtf + diseno + extra
-    }
+    // Suma combinada
+    val costoUnitarioPieza = cPiezaTrad + cPiezaDin
+    val transportePorPieza = transpTrad + transpDin
+    val costoInsumosBase = cEmpaqueTrad + cPapelTrad + dtfTrad + disenoTrad + extraTrad + cInsumosDin
 
     // 2. Subtotal Materiales
     val subtotalMateriales = costoUnitarioPieza + transportePorPieza + costoInsumosBase
