@@ -36,6 +36,7 @@ enum class FiltroEstadoPedido {
 
 data class PedidoBorradorState(
     val deudorId: Int? = null,
+    val clienteNombre: String = "",
     val busquedaCliente: String = "",
     val abonoInicialTexto: String = "",
     val frecuenciaSeleccionada: String = "AL_ENTREGAR",
@@ -48,7 +49,8 @@ data class PedidoBorradorState(
     val cargoEnvioTexto: String = "",
     val tipoEntrega: String = "RETIRO",
     val direccionEntrega: String = "",
-    val esUrgente: Boolean = false
+    val esUrgente: Boolean = false,
+    val listaArticulosJson: String = ""
 )
 
 class PedidoViewModel(
@@ -68,12 +70,40 @@ class PedidoViewModel(
     private val _borradorActual = MutableStateFlow<PedidoBorradorState?>(null)
     val borradorActual: StateFlow<PedidoBorradorState?> = _borradorActual.asStateFlow()
 
-    fun guardarBorrador(borrador: PedidoBorradorState) {
+    fun guardarBorrador(contexto: android.content.Context, borrador: PedidoBorradorState) {
         _borradorActual.value = borrador
+        try {
+            val prefs = contexto.getSharedPreferences("BorradoresZubli", android.content.Context.MODE_PRIVATE)
+            val json = com.google.gson.Gson().toJson(borrador)
+            prefs.edit().putString("ultimo_borrador_pedido", json).apply()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
-    fun descartarBorrador() {
+    fun cargarBorradorPersistido(contexto: android.content.Context) {
+        try {
+            val prefs = contexto.getSharedPreferences("BorradoresZubli", android.content.Context.MODE_PRIVATE)
+            val json = prefs.getString("ultimo_borrador_pedido", null)
+            if (!json.isNullOrBlank()) {
+                val borrador = com.google.gson.Gson().fromJson(json, PedidoBorradorState::class.java)
+                _borradorActual.value = borrador
+            }
+        } catch (e: Exception) {
+            _borradorActual.value = null
+        }
+    }
+
+    fun descartarBorrador(contexto: android.content.Context? = null) {
         _borradorActual.value = null
+        if (contexto != null) {
+            try {
+                val prefs = contexto.getSharedPreferences("BorradoresZubli", android.content.Context.MODE_PRIVATE)
+                prefs.edit().remove("ultimo_borrador_pedido").apply()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 
     fun obtenerImagenesPorPedido(pedidoId: Int): Flow<List<com.example.gestor_deudores.data.database.PedidoImagen>> {
@@ -172,18 +202,19 @@ class PedidoViewModel(
 
         pedidos.filter { item ->
             val coincideEstado = when (estadoFiltro) {
-                FiltroEstadoPedido.TODOS -> true
+                FiltroEstadoPedido.TODOS -> item.estado != "CANCELADO" && !item.esBorrador
                 FiltroEstadoPedido.HOY_SEMANA -> {
                     val calHoy = java.util.Calendar.getInstance()
                     val calEnt = java.util.Calendar.getInstance().apply { timeInMillis = item.fechaEntregaMillis }
+                    item.estado != "CANCELADO" && !item.esBorrador &&
                     calHoy.get(java.util.Calendar.YEAR) == calEnt.get(java.util.Calendar.YEAR) &&
                     calHoy.get(java.util.Calendar.WEEK_OF_YEAR) == calEnt.get(java.util.Calendar.WEEK_OF_YEAR)
                 }
-                FiltroEstadoPedido.PENDIENTE_SALDO -> item.estado != "ENTREGADO" && item.estado != "CANCELADO"
-                FiltroEstadoPedido.RECIBIDO -> item.estado == "RECIBIDO"
-                FiltroEstadoPedido.EN_PRODUCCION -> item.estado == "EN_PRODUCCION"
-                FiltroEstadoPedido.LISTO -> item.estado == "LISTO"
-                FiltroEstadoPedido.ENTREGADO -> item.estado == "ENTREGADO"
+                FiltroEstadoPedido.PENDIENTE_SALDO -> item.estado != "ENTREGADO" && item.estado != "CANCELADO" && !item.esBorrador
+                FiltroEstadoPedido.RECIBIDO -> item.estado == "RECIBIDO" && !item.esBorrador
+                FiltroEstadoPedido.EN_PRODUCCION -> item.estado == "EN_PRODUCCION" && !item.esBorrador
+                FiltroEstadoPedido.LISTO -> item.estado == "LISTO" && !item.esBorrador
+                FiltroEstadoPedido.ENTREGADO -> item.estado == "ENTREGADO" && !item.esBorrador
                 FiltroEstadoPedido.CANCELADO -> item.estado == "CANCELADO"
             }
 
@@ -207,6 +238,16 @@ class PedidoViewModel(
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
     )
+
+    fun eliminarPedidoDefinitivamente(pedidoConCliente: PedidoConCliente, onExito: () -> Unit = {}) {
+        viewModelScope.launch {
+            val pedidoObj = pedidoDao.obtenerPedidoPorId(pedidoConCliente.id)
+            if (pedidoObj != null) {
+                pedidoDao.eliminarPedido(pedidoObj)
+            }
+            onExito()
+        }
+    }
 
     fun cambiarEstadoDiseno(pedidoId: Int, nuevoEstadoDiseno: String) {
         viewModelScope.launch {

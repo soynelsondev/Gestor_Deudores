@@ -63,6 +63,7 @@ import java.io.File
 import android.net.Uri
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -180,6 +181,50 @@ fun PedidosPrincipal(viewModel: PedidoViewModel, navController: NavController, t
                 estadoActual = filtroEstado,
                 onEstadoSeleccionado = { viewModel.onFiltroEstadoChange(it) }
             )
+
+            // Banner de Borrador Guardado
+            val borradorActual by viewModel.borradorActual.collectAsState()
+            val context = LocalContext.current
+
+            LaunchedEffect(Unit) {
+                viewModel.cargarBorradorPersistido(context)
+            }
+
+            if (borradorActual != null) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF8E1)),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFFB300))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("📝 Borrador de Pedido Guardado", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFFB71C1C))
+                            val clienteDesc = if (!borradorActual?.clienteNombre.isNullOrBlank()) "Cliente: ${borradorActual?.clienteNombre}" else "Sin cliente asignado"
+                            Text(clienteDesc, fontSize = 11.sp, color = Color.DarkGray)
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            IconButton(onClick = { viewModel.descartarBorrador(context) }) {
+                                Icon(Icons.Default.Delete, contentDescription = "Descartar", tint = Color.Red, modifier = Modifier.size(20.dp))
+                            }
+                            Button(
+                                onClick = { mostrarDialogoCrear = true },
+                                colors = ButtonDefaults.buttonColors(containerColor = estados)
+                            ) {
+                                Text("Continuar", fontSize = 11.sp, color = Color.White)
+                            }
+                        }
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -530,6 +575,7 @@ fun DialogoConfirmarProduccionSinDiseno(
 fun DialogoCancelarPedidoConAbono(
     pedido: PedidoConCliente,
     onConfirmarCancelacion: (devolverAbono: Boolean, nota: String) -> Unit,
+    onEliminarDefinitivamente: () -> Unit,
     onDismiss: () -> Unit
 ) {
     var notaCancelacion by remember { mutableStateOf("") }
@@ -588,17 +634,27 @@ fun DialogoCancelarPedidoConAbono(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(onClick = onDismiss) {
                         Text("Volver", color = Color.Gray)
                     }
 
-                    Button(
-                        onClick = { onConfirmarCancelacion(devolverAbono, notaCancelacion) },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
-                    ) {
-                        Text("Confirmar Cancelación", color = Color.White, fontWeight = FontWeight.Bold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        OutlinedButton(
+                            onClick = onEliminarDefinitivamente,
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)
+                        ) {
+                            Text("🗑️ Eliminar", color = Color.Red, fontSize = 11.sp)
+                        }
+
+                        Button(
+                            onClick = { onConfirmarCancelacion(devolverAbono, notaCancelacion) },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                        ) {
+                            Text("Confirmar", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        }
                     }
                 }
             }
@@ -813,6 +869,10 @@ fun TarjetaPedido(
             onConfirmarCancelacion = { devolver, nota ->
                 mostrarCancelarPedido = false
                 viewModel.cancelarPedidoConDecisionAbono(item, devolver, nota) {}
+            },
+            onEliminarDefinitivamente = {
+                mostrarCancelarPedido = false
+                viewModel.eliminarPedidoDefinitivamente(item)
             },
             onDismiss = { mostrarCancelarPedido = false }
         )
@@ -1113,8 +1173,18 @@ fun TarjetaPedido(
                 }
             }
 
-            if (item.notas.isNotBlank()) {
-                Text(text = "Notas: ${item.notas}", fontSize = 11.sp, color = Color.Gray)
+            if (item.estado == "CANCELADO") {
+                Spacer(modifier = Modifier.height(4.dp))
+                OutlinedButton(
+                    onClick = { viewModel.eliminarPedidoDefinitivamente(item) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.Red.copy(alpha = 0.5f))
+                ) {
+                    Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Eliminar pedido definitivamente", fontSize = 11.sp, color = Color.Red, fontWeight = FontWeight.Bold)
+                }
             }
 
             // CAMBIAR ESTADO DE PEDIDO (8.1)
@@ -1793,6 +1863,44 @@ fun DialogoCrearPedido(
     val tresDiasFuturo = System.currentTimeMillis() + (3 * 24 * 60 * 60 * 1000L)
     var fechaEntregaMillis by remember { mutableStateOf<Long?>(tresDiasFuturo) }
     val datePickerState = rememberDatePickerState(initialSelectedDateMillis = tresDiasFuturo)
+
+    // Restablecer Borrador guardado si existe
+    val borradorActual by viewModel.borradorActual.collectAsState()
+
+    LaunchedEffect(Unit) {
+        if (borradorActual != null) {
+            val b = borradorActual!!
+            if (b.deudorId != null) {
+                deudorSeleccionado = clientes.find { it.id == b.deudorId }
+            }
+            if (b.busquedaCliente.isNotBlank()) busquedaCliente = b.busquedaCliente
+            if (b.abonoInicialTexto.isNotBlank()) abonoInicialTexto = b.abonoInicialTexto
+            if (b.frecuenciaSeleccionada.isNotBlank()) frecuenciaSeleccionada = b.frecuenciaSeleccionada
+            if (b.numCuotasTexto.isNotBlank()) numCuotasTexto = b.numCuotasTexto
+            if (b.fechaEntregaMillis != null) fechaEntregaMillis = b.fechaEntregaMillis
+            if (b.notas.isNotBlank()) notas = b.notas
+            if (b.descuentoTexto.isNotBlank()) descuentoTexto = b.descuentoTexto
+            esDescuentoPorcentaje = b.esDescuentoPorcentaje
+            if (b.cargoDisenoTexto.isNotBlank()) cargoDisenoTexto = b.cargoDisenoTexto
+            if (b.cargoEnvioTexto.isNotBlank()) cargoEnvioTexto = b.cargoEnvioTexto
+            if (b.tipoEntrega.isNotBlank()) tipoEntrega = b.tipoEntrega
+            if (b.direccionEntrega.isNotBlank()) direccionEntrega = b.direccionEntrega
+            esUrgente = b.esUrgente
+
+            if (b.listaArticulosJson.isNotBlank()) {
+                try {
+                    val type = object : com.google.gson.reflect.TypeToken<List<ArticuloPedido>>() {}.type
+                    val arts: List<ArticuloPedido> = com.google.gson.Gson().fromJson(b.listaArticulosJson, type) ?: emptyList()
+                    if (arts.isNotEmpty()) {
+                        listaArticulos.clear()
+                        listaArticulos.addAll(arts)
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+    }
 
     // Cálculos de la Sección 4.3
     fun calcularSubtotalArticulos(): Double = listaArticulos.sumOf { it.obtenerSubtotal() }
@@ -3356,7 +3464,7 @@ fun DialogoCrearPedido(
                                         totalCalculadoUsd = totalUsd,
                                         listaArticulos = listaArticulos,
                                         onExito = {
-                                            viewModel.descartarBorrador()
+                                            viewModel.descartarBorrador(context)
                                             clienteNombreWhatsApp = "${deudorSeleccionado!!.nombre} ${deudorSeleccionado!!.apellido}"
                                             clienteTelfWhatsApp = deudorSeleccionado!!.telf
                                             mensajeWhatsAppGenerado = msgWhatsApp
@@ -3394,6 +3502,7 @@ fun DialogoCrearPedido(
             onGuardarBorrador = {
                 val borrador = PedidoBorradorState(
                     deudorId = deudorSeleccionado?.id,
+                    clienteNombre = deudorSeleccionado?.let { "${it.nombre} ${it.apellido}" } ?: "",
                     busquedaCliente = busquedaCliente,
                     abonoInicialTexto = abonoInicialTexto,
                     frecuenciaSeleccionada = frecuenciaSeleccionada,
@@ -3406,14 +3515,15 @@ fun DialogoCrearPedido(
                     cargoEnvioTexto = cargoEnvioTexto,
                     tipoEntrega = tipoEntrega,
                     direccionEntrega = direccionEntrega,
-                    esUrgente = esUrgente
+                    esUrgente = esUrgente,
+                    listaArticulosJson = com.google.gson.Gson().toJson(listaArticulos)
                 )
-                viewModel.guardarBorrador(borrador)
+                viewModel.guardarBorrador(context, borrador)
                 mostrarDialogoBorradorConfirm = false
                 onDismiss()
             },
             onDescartar = {
-                viewModel.descartarBorrador()
+                viewModel.descartarBorrador(context)
                 mostrarDialogoBorradorConfirm = false
                 onDismiss()
             },
@@ -3423,5 +3533,4 @@ fun DialogoCrearPedido(
         )
     }
 }
-
 }
