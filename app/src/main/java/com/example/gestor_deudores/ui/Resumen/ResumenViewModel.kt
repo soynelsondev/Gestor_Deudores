@@ -603,7 +603,11 @@ class ResumenViewModel(
                 val plantillaOrigen = plantillas.find { it.nombrePlantilla == pedidoFotografia.nombrePiezaBase }
                 
                 if (plantillaOrigen != null) {
-                    val mCosto = com.example.gestor_deudores.data.utils.calcularCostosPlantilla(plantillaOrigen)
+                    val mCosto = com.example.gestor_deudores.data.utils.calcularCostosPlantilla(
+                        plantilla = plantillaOrigen,
+                        tasaBcv = _tasaBcv.value,
+                        cantidadPedido = if (pedidoFotografia.cantidad > 0) pedidoFotografia.cantidad else 1
+                    )
                     val escala = (if(pedidoFotografia.cantidad>0) pedidoFotografia.cantidad else 1) * proporcion
                     
                     val pasajeV = (mCosto.costoPasajeUsd * escala).redondear2()

@@ -127,7 +127,13 @@ fun calcularCostosPlantilla(
     var ganancia = 0.0
 
     if (costoTotalProduccion > 0.0) {
-        val pctDecimal = (plantilla.porcentajeGanancia / 100.0).coerceAtLeast(0.0)
+        val minMayor = if (plantilla.minimoUnidadesMayor > 0) plantilla.minimoUnidadesMayor else 6
+        val esMayor = plantilla.esPlantillaMayor || (plantilla.porcentajeGananciaMayor > 0f && cantidadPedido >= minMayor)
+        val porcentajeUsar = if (esMayor && plantilla.porcentajeGananciaMayor > 0f) plantilla.porcentajeGananciaMayor else plantilla.porcentajeGanancia
+
+        val pctDecimal = (porcentajeUsar / 100.0).coerceAtLeast(0.0)
+        val gananciaFijaUsar = if (esMayor) gananciaFijaUsd * 0.75 else gananciaFijaUsd
+
         when (tipoGanancia) {
             TipoGanancia.SOBRE_COSTO -> {
                 precioSinComision = costoTotalProduccion * (1.0 + pctDecimal)
@@ -138,7 +144,7 @@ fun calcularCostosPlantilla(
                 ganancia = precioSinComision - costoTotalProduccion
             }
             TipoGanancia.GANANCIA_FIJA -> {
-                ganancia = gananciaFijaUsd.coerceAtLeast(0.0)
+                ganancia = gananciaFijaUsar.coerceAtLeast(0.0)
                 precioSinComision = costoTotalProduccion + ganancia
             }
         }

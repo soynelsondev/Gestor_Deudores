@@ -1347,18 +1347,33 @@ fun SeccionPlegablePedido(
 fun IndicadorPrecioYGananciaArticulo(
     articulo: ArticuloPedido,
     plantillasCotizador: List<PlantillaCotizacion>,
+    listaArticulos: List<ArticuloPedido> = emptyList(),
+    tasaBcvGlobal: Double = 1.0,
     onRestablecerPrecioSugerido: (Double) -> Unit
 ) {
-    val totalPiezas = articulo.obtenerCantidadTotal()
     val prodNombre = articulo.producto.trim()
 
     val plantillaAplica = plantillasCotizador.find { p ->
-        (p.nombrePlantilla.contains(prodNombre, ignoreCase = true) || prodNombre.contains(p.nombrePlantilla, ignoreCase = true)) &&
-        if (p.esPlantillaMayor) totalPiezas >= p.minimoUnidadesMayor else true
+        p.id == articulo.plantillaId ||
+        (prodNombre.isNotBlank() && (p.nombrePlantilla.contains(prodNombre, ignoreCase = true) || prodNombre.contains(p.nombrePlantilla, ignoreCase = true)))
+    }
+
+    val totalPiezasPlantilla = if (listaArticulos.isNotEmpty()) {
+        listaArticulos.filter { art ->
+            art.plantillaId == articulo.plantillaId ||
+            (art.producto.isNotBlank() && prodNombre.isNotBlank() &&
+                (art.producto.contains(prodNombre, ignoreCase = true) || prodNombre.contains(art.producto, ignoreCase = true)))
+        }.sumOf { it.obtenerCantidadTotal() }.coerceAtLeast(articulo.obtenerCantidadTotal())
+    } else {
+        articulo.obtenerCantidadTotal()
     }
 
     val sugeridoVal = if (plantillaAplica != null && prodNombre.isNotBlank()) {
-        com.example.gestor_deudores.data.utils.calcularCostosPlantilla(plantillaAplica, cantidadPedido = totalPiezas).precioSugeridoUsd
+        com.example.gestor_deudores.data.utils.calcularCostosPlantilla(
+            plantilla = plantillaAplica,
+            tasaBcv = tasaBcvGlobal,
+            cantidadPedido = totalPiezasPlantilla
+        ).precioSugeridoUsd
     } else null
 
     val precioIngresado = articulo.precioUnitarioTexto.replace(",", ".").toDoubleOrNull() ?: 0.0
@@ -1369,13 +1384,16 @@ fun IndicadorPrecioYGananciaArticulo(
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         // 1. Badge de Escala y Precio Sugerido
         if (sugeridoVal != null && plantillaAplica != null) {
+            val minMayor = if (plantillaAplica.minimoUnidadesMayor > 0) plantillaAplica.minimoUnidadesMayor else 6
+            val esMayorAplica = plantillaAplica.esPlantillaMayor || (plantillaAplica.porcentajeGananciaMayor > 0f && totalPiezasPlantilla >= minMayor)
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Precio sugerido ${String.format(java.util.Locale.US, "%.2f", sugeridoVal)} · ${if (plantillaAplica.esPlantillaMayor) "Tarifa al mayor (≥${plantillaAplica.minimoUnidadesMayor} pcs)" else "Tarifa al detal"}",
+                    text = "Precio sugerido $${String.format(java.util.Locale.US, "%.2f", sugeridoVal)} · ${if (esMayorAplica) "Tarifa al mayor (≥$minMayor pcs)" else "Tarifa al detal"}",
                     color = Color(0xFF1976D2),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold
@@ -2130,13 +2148,23 @@ fun DialogoCrearPedido(
                                                             text = {
                                                                 Column {
                                                                     Text(plantilla.nombrePlantilla, fontWeight = FontWeight.Bold)
-                                                                    val sugerido = com.example.gestor_deudores.data.utils.calcularCostosPlantilla(plantilla).precioSugeridoUsd
+                                                                    val cantTotalActual = articulo.obtenerCantidadTotal().coerceAtLeast(1)
+                                                                    val sugerido = com.example.gestor_deudores.data.utils.calcularCostosPlantilla(
+                                                                        plantilla = plantilla,
+                                                                        tasaBcv = tasaBcvGlobal,
+                                                                        cantidadPedido = cantTotalActual
+                                                                    ).precioSugeridoUsd
                                                                     Text("Sugerido: $${String.format(java.util.Locale.US, "%.2f", sugerido)}", fontSize = 10.sp, color = Color.Gray)
                                                                 }
                                                             },
                                                             onClick = {
                                                                 coroutineScope.launch {
-                                                                    val costosDesglosados = com.example.gestor_deudores.data.utils.calcularCostosPlantilla(plantilla)
+                                                                    val cantTotalActual = articulo.obtenerCantidadTotal().coerceAtLeast(1)
+                                                                    val costosDesglosados = com.example.gestor_deudores.data.utils.calcularCostosPlantilla(
+                                                                        plantilla = plantilla,
+                                                                        tasaBcv = tasaBcvGlobal,
+                                                                        cantidadPedido = cantTotalActual
+                                                                    )
                                                                     val atributosConOpciones = viewModel.obtenerAtributosConOpciones(plantilla.id)
 
                                                                     val atrReparte = atributosConOpciones.find { it.atributo.tipo == "REPARTE_CANTIDAD" }
@@ -2188,22 +2216,46 @@ fun DialogoCrearPedido(
                                                             val prodNombre = articulo.producto.trim()
 
                                                             val plantillaAplica = plantillasCotizador.find { p ->
-                                                                (p.nombrePlantilla.contains(prodNombre, ignoreCase = true) || prodNombre.contains(p.nombrePlantilla, ignoreCase = true)) &&
-                                                                if (p.esPlantillaMayor) cantInt >= p.minimoUnidadesMayor else true
+                                                                p.id == articulo.plantillaId ||
+                                                                (prodNombre.isNotBlank() && (p.nombrePlantilla.contains(prodNombre, ignoreCase = true) || prodNombre.contains(p.nombrePlantilla, ignoreCase = true)))
                                                             }
 
-                                                            if (plantillaAplica != null && prodNombre.isNotBlank() && !articulo.precioManualEditado) {
-                                                                val costos = com.example.gestor_deudores.data.utils.calcularCostosPlantilla(plantillaAplica)
-                                                                listaArticulos[index] = articulo.copy(
-                                                                    cantidadTexto = inputCant,
-                                                                    precioUnitarioTexto = String.format(java.util.Locale.US, "%.2f", costos.precioSugeridoUsd),
+                                                            val artAux = articulo.copy(cantidadTexto = inputCant)
+                                                            val listAux = listaArticulos.toMutableList()
+                                                            listAux[index] = artAux
+
+                                                            if (plantillaAplica != null && prodNombre.isNotBlank()) {
+                                                                val totalPiezasPlantilla = listAux.filter { art ->
+                                                                    art.plantillaId == plantillaAplica.id ||
+                                                                    (art.producto.isNotBlank() && (art.producto.contains(prodNombre, ignoreCase = true) || prodNombre.contains(art.producto, ignoreCase = true)))
+                                                                }.sumOf { it.obtenerCantidadTotal() }.coerceAtLeast(cantInt)
+
+                                                                val costos = com.example.gestor_deudores.data.utils.calcularCostosPlantilla(
+                                                                    plantilla = plantillaAplica,
+                                                                    tasaBcv = tasaBcvGlobal,
+                                                                    cantidadPedido = totalPiezasPlantilla
+                                                                )
+
+                                                                listaArticulos[index] = artAux.copy(
+                                                                    precioUnitarioTexto = if (!articulo.precioManualEditado) String.format(java.util.Locale.US, "%.2f", costos.precioSugeridoUsd) else articulo.precioUnitarioTexto,
                                                                     costoPiezaBaseUnitario = costos.costoPiezaBaseUsd,
                                                                     nombrePiezaBase = plantillaAplica.nombrePlantilla,
                                                                     costoPasajeUnitario = costos.costoPasajeUsd,
                                                                     costoInsumosUnitario = costos.costoInsumosUsd
                                                                 )
+
+                                                                listAux.forEachIndexed { i, a ->
+                                                                    if (i != index && (a.plantillaId == plantillaAplica.id || (a.producto.isNotBlank() && (a.producto.contains(prodNombre, ignoreCase = true) || prodNombre.contains(a.producto, ignoreCase = true)))) && !a.precioManualEditado) {
+                                                                        listaArticulos[i] = a.copy(
+                                                                            precioUnitarioTexto = String.format(java.util.Locale.US, "%.2f", costos.precioSugeridoUsd),
+                                                                            costoPiezaBaseUnitario = costos.costoPiezaBaseUsd,
+                                                                            costoPasajeUnitario = costos.costoPasajeUsd,
+                                                                            costoInsumosUnitario = costos.costoInsumosUsd
+                                                                        )
+                                                                    }
+                                                                }
                                                             } else {
-                                                                listaArticulos[index] = articulo.copy(cantidadTexto = inputCant)
+                                                                listaArticulos[index] = artAux
                                                             }
                                                         }
                                                     },
@@ -2265,6 +2317,8 @@ fun DialogoCrearPedido(
                                         IndicadorPrecioYGananciaArticulo(
                                             articulo = articulo,
                                             plantillasCotizador = plantillasCotizador,
+                                            listaArticulos = listaArticulos,
+                                            tasaBcvGlobal = tasaBcvGlobal,
                                             onRestablecerPrecioSugerido = { precioSug ->
                                                 listaArticulos[index] = articulo.copy(
                                                     precioUnitarioTexto = String.format(java.util.Locale.US, "%.2f", precioSug),
@@ -2363,9 +2417,52 @@ fun DialogoCrearPedido(
                                                                         value = variante.cantidadTexto,
                                                                         onValueChange = { nuevaCant ->
                                                                             if (nuevaCant.all { c -> c.isDigit() }) {
-                                                                                val listAux = articulo.variantes.toMutableList()
-                                                                                listAux[vIndex] = variante.copy(cantidadTexto = nuevaCant)
-                                                                                listaArticulos[index] = articulo.copy(variantes = listAux)
+                                                                                val listAuxVars = articulo.variantes.toMutableList()
+                                                                                listAuxVars[vIndex] = variante.copy(cantidadTexto = nuevaCant)
+                                                                                val artAux = articulo.copy(variantes = listAuxVars)
+
+                                                                                val prodNombre = artAux.producto.trim()
+                                                                                val plantillaAplica = plantillasCotizador.find { p ->
+                                                                                    p.id == artAux.plantillaId ||
+                                                                                    (prodNombre.isNotBlank() && (p.nombrePlantilla.contains(prodNombre, ignoreCase = true) || prodNombre.contains(p.nombrePlantilla, ignoreCase = true)))
+                                                                                }
+
+                                                                                if (plantillaAplica != null && prodNombre.isNotBlank()) {
+                                                                                    val listAuxArts = listaArticulos.toMutableList()
+                                                                                    listAuxArts[index] = artAux
+
+                                                                                    val totalPiezasPlantilla = listAuxArts.filter { art ->
+                                                                                        art.plantillaId == plantillaAplica.id ||
+                                                                                        (art.producto.isNotBlank() && (art.producto.contains(prodNombre, ignoreCase = true) || prodNombre.contains(art.producto, ignoreCase = true)))
+                                                                                    }.sumOf { it.obtenerCantidadTotal() }.coerceAtLeast(1)
+
+                                                                                    val costos = com.example.gestor_deudores.data.utils.calcularCostosPlantilla(
+                                                                                        plantilla = plantillaAplica,
+                                                                                        tasaBcv = tasaBcvGlobal,
+                                                                                        cantidadPedido = totalPiezasPlantilla
+                                                                                    )
+
+                                                                                    listaArticulos[index] = artAux.copy(
+                                                                                        precioUnitarioTexto = if (!artAux.precioManualEditado) String.format(java.util.Locale.US, "%.2f", costos.precioSugeridoUsd) else artAux.precioUnitarioTexto,
+                                                                                        costoPiezaBaseUnitario = costos.costoPiezaBaseUsd,
+                                                                                        nombrePiezaBase = plantillaAplica.nombrePlantilla,
+                                                                                        costoPasajeUnitario = costos.costoPasajeUsd,
+                                                                                        costoInsumosUnitario = costos.costoInsumosUsd
+                                                                                    )
+
+                                                                                    listAuxArts.forEachIndexed { i, a ->
+                                                                                        if (i != index && (a.plantillaId == plantillaAplica.id || (a.producto.isNotBlank() && (a.producto.contains(prodNombre, ignoreCase = true) || prodNombre.contains(a.producto, ignoreCase = true)))) && !a.precioManualEditado) {
+                                                                                            listaArticulos[i] = a.copy(
+                                                                                                precioUnitarioTexto = String.format(java.util.Locale.US, "%.2f", costos.precioSugeridoUsd),
+                                                                                                costoPiezaBaseUnitario = costos.costoPiezaBaseUsd,
+                                                                                                costoPasajeUnitario = costos.costoPasajeUsd,
+                                                                                                costoInsumosUnitario = costos.costoInsumosUsd
+                                                                                            )
+                                                                                        }
+                                                                                    }
+                                                                                } else {
+                                                                                    listaArticulos[index] = artAux
+                                                                                }
                                                                             }
                                                                         },
                                                                         label = { Text("Cant.", fontSize = 11.sp) },
