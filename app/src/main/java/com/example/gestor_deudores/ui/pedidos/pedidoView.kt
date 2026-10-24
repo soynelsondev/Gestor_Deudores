@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -793,6 +794,377 @@ fun DialogoRegistrarCobroPedido(
     }
 }
 
+fun obtenerNotasGeneralesLimpias(notasCompleta: String): String {
+    if (notasCompleta.isBlank()) return ""
+    var texto = notasCompleta
+    if (texto.contains("[ARTICULOS_JSON]")) {
+        texto = texto.substringBefore("[ARTICULOS_JSON]").trim()
+    }
+    val lineasSinInsumos = texto.split("\n---\n")
+        .filterNot { line ->
+            line.contains("Prod #") || line.contains("Detalle:") || line.contains("Estampa:") ||
+            (line.contains("x") && line.contains("Precio:"))
+        }
+        .joinToString("\n").trim()
+    return lineasSinInsumos
+}
+
+fun obtenerArticulosDePedido(notasCompleta: String): List<ArticuloPedido> {
+    if (notasCompleta.contains("[ARTICULOS_JSON]") && notasCompleta.contains("[/ARTICULOS_JSON]")) {
+        try {
+            val json = notasCompleta.substringAfter("[ARTICULOS_JSON]").substringBefore("[/ARTICULOS_JSON]")
+            val type = object : com.google.gson.reflect.TypeToken<List<ArticuloPedido>>() {}.type
+            val lista: List<ArticuloPedido>? = com.google.gson.Gson().fromJson(json, type)
+            if (!lista.isNullOrEmpty()) return lista
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+    return emptyList()
+}
+
+@Composable
+fun DialogoDesgloseCompletoPedido(
+    item: PedidoConCliente,
+    viewModel: PedidoViewModel,
+    tasaBcvGlobal: Double = 40.0,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val formatoUSD = NumberFormat.getCurrencyInstance(Locale("en", "US"))
+    val formatoFecha = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+    val fechaCreacionStr = formatoFecha.format(Date(item.fechaCreacionMillis))
+    val fechaEntregaStr = if (item.fechaEntregaMillis > 0) formatoFecha.format(Date(item.fechaEntregaMillis)) else "Sin fecha"
+
+    val imagenesPedido by viewModel.obtenerImagenesPorPedido(item.id).collectAsState(initial = emptyList())
+    var imagenSeleccionadaVisor by remember { mutableStateOf<com.example.gestor_deudores.data.database.PedidoImagen?>(null) }
+
+    val deudasCliente by remember(item.deudorId) {
+        viewModel.obtenerDeudasPorDeudor(item.deudorId)
+    }.collectAsState(initial = emptyList())
+
+    val saldoRestante = remember(deudasCliente, item) {
+        viewModel.obtenerSaldoRestantePedido(item.id, item.totalUsd, deudasCliente)
+    }
+
+    val articulosParsed = remember(item.notas) { obtenerArticulosDePedido(item.notas) }
+    val notasLimpias = remember(item.notas) { obtenerNotasGeneralesLimpias(item.notas) }
+
+    val tasaActiva = if (tasaBcvGlobal > 0) tasaBcvGlobal else 40.0
+    val totalBs = item.totalUsd * tasaActiva
+
+    if (imagenSeleccionadaVisor != null) {
+        DialogoVisorImagen(
+            imagen = imagenSeleccionadaVisor!!,
+            onCambiarTipo = { nuevoTipo ->
+                viewModel.cambiarTipoImagen(imagenSeleccionadaVisor!!.id, nuevoTipo)
+                imagenSeleccionadaVisor = null
+            },
+            onEliminar = {
+                viewModel.eliminarImagen(imagenSeleccionadaVisor!!)
+                imagenSeleccionadaVisor = null
+            },
+            onDismiss = { imagenSeleccionadaVisor = null }
+        )
+    }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.92f)
+                .padding(vertical = 8.dp),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = fondo)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp)
+            ) {
+                // CABECERA MODAL
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "FICHA COMPLETA PEDIDO #${item.id}",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            color = estados
+                        )
+                        Text(
+                            text = "Cliente: ${item.clienteNombre} ${item.clienteApellido} (${item.clienteTelefono})",
+                            fontSize = 12.sp,
+                            color = Color.White
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = Color.White)
+                    }
+                }
+
+                HorizontalDivider(color = Color.White.copy(alpha = 0.2f), modifier = Modifier.padding(vertical = 8.dp))
+
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // SECCIÓN 1: DATOS DE FECHAS, ESTADO Y ENTREGA
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = fondo2),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("📅 Encargo: $fechaCreacionStr", fontSize = 11.sp, color = Color.White)
+                                    Text("🚚 Entrega: $fechaEntregaStr", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                }
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Estado: ${item.estado.replace("_", " ")}", fontSize = 11.sp, color = estados, fontWeight = FontWeight.Bold)
+                                    Text("Diseño: ${item.estadoDiseno}", fontSize = 11.sp, color = Color(0xFFFFD54F), fontWeight = FontWeight.Bold)
+                                }
+                                if (item.tipoEntrega == "DELIVERY" && !item.direccionEntrega.isNullOrBlank()) {
+                                    Text("📍 Dirección Delivery: ${item.direccionEntrega}", fontSize = 11.sp, color = Color.White)
+                                }
+                                if (item.urgente) {
+                                    Text("⚡ PEDIDO URGENTE", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFF7043))
+                                }
+                            }
+                        }
+                    }
+
+                    // SECCIÓN 2: DESGLOSE PRODUCTO POR PRODUCTO
+                    item {
+                        Text("👕 DESGLOSE DE PRODUCTOS (${if (articulosParsed.isNotEmpty()) articulosParsed.size else 1} ítem/s)", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = estados)
+                    }
+
+                    if (articulosParsed.isNotEmpty()) {
+                        items(articulosParsed.size) { index ->
+                            val art = articulosParsed[index]
+                            val cantTotal = art.obtenerCantidadTotal()
+                            val precioUn = art.precioUnitarioTexto.replace(",", ".").toDoubleOrNull() ?: item.precioUnitarioUsd
+                            val subtotalProd = cantTotal * precioUn
+
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = fondo2),
+                                shape = RoundedCornerShape(14.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Text(
+                                            text = "Prod #${index + 1}: ${art.producto}",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp,
+                                            color = Color.White,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        Text(
+                                            text = formatoUSD.format(subtotalProd),
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp,
+                                            color = Color(0xFF81C784)
+                                        )
+                                    }
+
+                                    Text(
+                                        text = "Cantidad: $cantTotal pcs · Precio unitario: ${formatoUSD.format(precioUn)}",
+                                        fontSize = 11.sp,
+                                        color = Color.White.copy(alpha = 0.8f)
+                                    )
+
+                                    if (art.usarVariantes && art.variantes.isNotEmpty()) {
+                                        val varsFiltradas = art.variantes.filter { (it.cantidadTexto.toIntOrNull() ?: 0) > 0 }
+                                        if (varsFiltradas.isNotEmpty()) {
+                                            Text(
+                                                text = "Variantes: " + varsFiltradas.joinToString(", ") { v ->
+                                                    val txtEst = if (v.textoEstampar.isNotBlank()) " [\"${v.textoEstampar}\"]" else ""
+                                                    "${v.etiqueta} ×${v.cantidadTexto}$txtEst"
+                                                },
+                                                fontSize = 11.sp,
+                                                color = Color(0xFFFFD54F)
+                                            )
+                                        }
+                                    }
+
+                                    if (art.textoEstampar.isNotBlank()) {
+                                        Text("🖨️ Estampado: \"${art.textoEstampar}\"", fontSize = 11.sp, color = Color.White)
+                                    }
+
+                                    if (art.detalle.isNotBlank()) {
+                                        Text("📌 Detalle: ${art.detalle}", fontSize = 11.sp, color = Color.White.copy(alpha = 0.9f))
+                                    }
+
+                                    if (art.notaItem.isNotBlank()) {
+                                        Text("📝 Nota de este producto: ${art.notaItem}", fontSize = 11.sp, color = Color(0xFFFFCC80))
+                                    }
+
+                                    val costoTotalUnit = art.costoPiezaBaseUnitario + art.costoPasajeUnitario + art.costoInsumosUnitario
+                                    if (costoTotalUnit > 0) {
+                                        HorizontalDivider(color = Color.White.copy(alpha = 0.15f), modifier = Modifier.padding(vertical = 4.dp))
+                                        Text(
+                                            text = "Costos: Prenda/Base: $${String.format(Locale.US, "%.2f", art.costoPiezaBaseUnitario)} · Transp: $${String.format(Locale.US, "%.2f", art.costoPasajeUnitario)} · Insumos: $${String.format(Locale.US, "%.2f", art.costoInsumosUnitario)}",
+                                            fontSize = 10.sp,
+                                            color = Color.LightGray
+                                        )
+                                    }
+
+                                    val fotosEsteProd = imagenesPedido.filter { img ->
+                                        img.itemId == art.id || art.fotosUris.contains(img.ruta) || art.fotosUris.contains(img.rutaMiniatura)
+                                    }
+
+                                    if (fotosEsteProd.isNotEmpty()) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text("🖼️ Fotos de este producto (${fotosEsteProd.size}):", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            items(fotosEsteProd) { imgRecord ->
+                                                val bitmap = rememberBitmapFromUri(imgRecord.rutaMiniatura.ifBlank { imgRecord.ruta })
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(60.dp)
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .background(Color.Black.copy(alpha = 0.3f))
+                                                        .clickable { imagenSeleccionadaVisor = imgRecord }
+                                                ) {
+                                                    if (bitmap != null) {
+                                                        Image(
+                                                            bitmap = bitmap,
+                                                            contentDescription = "Foto Producto",
+                                                            contentScale = ContentScale.Crop,
+                                                            modifier = Modifier.fillMaxSize()
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        item {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = fondo2),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text("• ${item.producto} — Cantidad: ${item.cantidad} pcs", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    Text("Precio Unitario: ${formatoUSD.format(item.precioUnitarioUsd)}", fontSize = 11.sp, color = Color.White.copy(alpha = 0.8f))
+                                }
+                            }
+                        }
+                    }
+
+                    // FOTOS GENERALES
+                    val fotosGenerales = imagenesPedido.filter { img ->
+                        articulosParsed.none { art -> img.itemId == art.id || art.fotosUris.contains(img.ruta) || art.fotosUris.contains(img.rutaMiniatura) }
+                    }
+
+                    if (fotosGenerales.isNotEmpty()) {
+                        item {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text("🖼️ Comprobantes y Fotos Generales (${fotosGenerales.size}):", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.White)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                items(fotosGenerales) { imgRecord ->
+                                    val bitmap = rememberBitmapFromUri(imgRecord.rutaMiniatura.ifBlank { imgRecord.ruta })
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.clickable { imagenSeleccionadaVisor = imgRecord }
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(54.dp)
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(Color.Black.copy(alpha = 0.3f))
+                                        ) {
+                                            if (bitmap != null) {
+                                                Image(
+                                                    bitmap = bitmap,
+                                                    contentDescription = imgRecord.tipo,
+                                                    contentScale = ContentScale.Crop,
+                                                    modifier = Modifier.fillMaxSize()
+                                                )
+                                            }
+                                        }
+                                        Text(imgRecord.tipo, fontSize = 9.sp, color = Color.LightGray)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // SECCIÓN 3: RESUMEN FINANCIERO DE LA VENTA
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = fondo2),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text("💰 RESUMEN FINANCIERO", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = estados)
+                                Spacer(modifier = Modifier.height(4.dp))
+
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("TOTAL PEDIDO:", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    Text("${formatoUSD.format(item.totalUsd)} (Bs ${String.format(Locale.US, "%.2f", totalBs)})", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                }
+
+                                val abonado = (item.totalUsd - saldoRestante).coerceAtLeast(0.0)
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Abonado / Pagado:", color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp)
+                                    Text(formatoUSD.format(abonado), color = Color(0xFF81C784), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Saldo Pendiente:", color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp)
+                                    Text(formatoUSD.format(saldoRestante), color = if (saldoRestante > 0.01) Color(0xFFFF7043) else Color(0xFF81C784), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+
+                    // SECCIÓN 4: NOTAS GENERALES LIMPIAS DEL PEDIDO
+                    if (notasLimpias.isNotBlank()) {
+                        item {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = fondo2),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text("📝 NOTAS GENERALES:", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = estados)
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(notasLimpias, fontSize = 12.sp, color = Color.White)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // BOTÓN DE CERRAR
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = estados)
+                ) {
+                    Text("Cerrar Desglose", fontWeight = FontWeight.Bold, color = Color.White)
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun TarjetaPedido(
     item: PedidoConCliente,
@@ -1000,8 +1372,17 @@ fun TarjetaPedido(
                 }
             }
 
-            // 3. PRODUCTOS Y DETALLES A ANCHO COMPLETO CON DESGLOSE
-            var mostrarDetalleProductos by remember { mutableStateOf(false) }
+            // 3. PRODUCTOS Y BÚSQUEDA DE DESGLOSE COMPLETO MODAL
+            var mostrarDesgloseModal by remember { mutableStateOf(false) }
+
+            if (mostrarDesgloseModal) {
+                DialogoDesgloseCompletoPedido(
+                    item = item,
+                    viewModel = viewModel,
+                    tasaBcvGlobal = 40.0,
+                    onDismiss = { mostrarDesgloseModal = false }
+                )
+            }
 
             Text(
                 text = "${item.producto} (x${item.cantidad})",
@@ -1011,57 +1392,13 @@ fun TarjetaPedido(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            TextButton(
-                onClick = { mostrarDetalleProductos = !mostrarDetalleProductos },
-                contentPadding = PaddingValues(0.dp)
+            OutlinedButton(
+                onClick = { mostrarDesgloseModal = true },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = estados),
+                border = androidx.compose.foundation.BorderStroke(1.dp, estados.copy(alpha = 0.8f))
             ) {
-                Text(
-                    text = if (mostrarDetalleProductos) "▲ Ocultar desglose de productos" else "▼ 🔍 Ver desglose de productos",
-                    fontSize = 11.sp,
-                    color = estados,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            AnimatedVisibility(visible = mostrarDetalleProductos) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = fondo2.copy(alpha = 0.25f)),
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text(
-                            text = "Desglose de Productos:",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-
-                        val lineasEspecificaciones = item.notas.split("\n---\n").find { it.contains("Prod #") || it.contains("Detalle:") || it.contains("Estampa:") }
-
-                        if (lineasEspecificaciones != null && lineasEspecificaciones.isNotBlank()) {
-                            val itemsEspecificaciones = lineasEspecificaciones.split("\n")
-                            itemsEspecificaciones.forEach { espec ->
-                                Text(
-                                    text = espec,
-                                    fontSize = 11.sp,
-                                    color = Color.DarkGray,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                        } else {
-                            Text(
-                                text = "• ${item.producto} — Cantidad: ${item.cantidad} pieza(s)",
-                                fontSize = 11.sp,
-                                color = Color.DarkGray,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
-                }
+                Text("🔍 Ver Desglose Completo del Pedido", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = estados)
             }
 
             // VISTA DE IMÁGENES ASOCIADAS Y SUS TIPOS (SECCIONES 6.3 Y 6.4)
@@ -3383,19 +3720,18 @@ fun DialogoCrearPedido(
                                         "${art.producto} (x$cant)$descVars"
                                     }
 
-                                    val detallesArticulosText = listaArticulos.mapIndexedNotNull { idx, art ->
-                                        val partes = mutableListOf<String>()
-                                        if (art.detalle.isNotBlank()) partes.add("Detalle: ${art.detalle}")
-                                        if (art.textoEstampar.isNotBlank()) partes.add("Estampa: ${art.textoEstampar}")
-                                        if (art.notaItem.isNotBlank()) partes.add("Nota: ${art.notaItem}")
-                                        if (partes.isNotEmpty()) "Prod #${idx + 1} (${art.producto}): " + partes.joinToString(" | ") else null
-                                    }.joinToString("\n")
-
+                                    val jsonArticulos = com.google.gson.Gson().toJson(listaArticulos)
                                     val infoEntregaText = if (tipoEntrega == "DELIVERY" && direccionEntrega.isNotBlank()) "Dirección Delivery: $direccionEntrega" else null
                                     val infoUrgenteText = if (esUrgente) "⚡ PEDIDO URGENTE" else null
                                     val infoMetodoText = if (abonoCalculadoUsd > 0) "Método Abono: $metodoPagoAbono" + (if (referenciaAbono.isNotBlank()) " (Ref. $referenciaAbono)" else "") else null
 
-                                    val notasConsolidadas = listOfNotNull(notas.ifBlank { null }, detallesArticulosText.ifBlank { null }, infoEntregaText, infoUrgenteText, infoMetodoText).joinToString("\n---\n")
+                                    val notasExtrasText = listOfNotNull(notas.ifBlank { null }, infoEntregaText, infoUrgenteText, infoMetodoText).joinToString(" | ")
+
+                                    val notasConsolidadas = if (notasExtrasText.isNotBlank()) {
+                                        "$notasExtrasText\n[ARTICULOS_JSON]$jsonArticulos[/ARTICULOS_JSON]"
+                                    } else {
+                                        "[ARTICULOS_JSON]$jsonArticulos[/ARTICULOS_JSON]"
+                                    }
 
                                     val cantidadTotalGral = listaArticulos.sumOf { it.obtenerCantidadTotal() }
 
