@@ -18,6 +18,12 @@ interface CuentaBancariaDao {
     @Delete
     suspend fun eliminarCuenta(cuenta: CuentaBancaria)
 
-    @Query("SELECT * FROM cuentas_bancarias ORDER BY nombre ASC")
+    @Query("SELECT * FROM cuentas_bancarias WHERE id = :id")
+    suspend fun obtenerCuentaPorIdSync(id: Int): CuentaBancaria?
+
+    @Query("SELECT * FROM cuentas_bancarias ORDER BY orden ASC, id ASC")
     fun obtenerTodasLasCuentas(): Flow<List<CuentaBancaria>>
+
+    @Query("SELECT * FROM cuentas_bancarias ORDER BY orden ASC, id ASC")
+    suspend fun obtenerTodasLasCuentasSync(): List<CuentaBancaria>
 }

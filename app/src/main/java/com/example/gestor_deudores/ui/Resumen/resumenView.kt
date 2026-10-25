@@ -9,7 +9,10 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import java.text.SimpleDateFormat
+import java.util.Date
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -64,6 +67,27 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import com.example.gestor_deudores.data.database.MovimientoCuenta
+import com.example.gestor_deudores.data.utils.ExportarCsvUtils
+import com.example.gestor_deudores.data.utils.redondear2
 import com.example.gestor_deudores.data.database.CuentaBancaria
 import com.example.gestor_deudores.ui.home.BarraNavegacionInferior
 import com.example.gestor_deudores.ui.rutas
@@ -79,7 +103,11 @@ fun ResumenPrincipal(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var mostrarDialogoAgregarCuenta by remember { mutableStateOf(false) }
-    var cuentaParaEditarSaldo by remember { mutableStateOf<CuentaBancaria?>(null) }
+    var cuentaParaEditar by remember { mutableStateOf<CuentaBancaria?>(null) }
+    var cuentaParaDetalle by remember { mutableStateOf<CuentaBancaria?>(null) }
+    var cuentaParaAjustarSaldo by remember { mutableStateOf<CuentaBancaria?>(null) }
+    var cuentaParaTransferir by remember { mutableStateOf<CuentaBancaria?>(null) }
+    var cuentaParaIngresoGasto by remember { mutableStateOf<Pair<CuentaBancaria, Boolean>?>(null) }
     var mostrarDialogoAjustarCostos by remember { mutableStateOf(false) }
     var mostrarDialogoRegistrarGasto by remember { mutableStateOf(false) }
     var mostrarDialogoRegistrarRetiro by remember { mutableStateOf(false) }
@@ -187,14 +215,25 @@ fun ResumenPrincipal(
                     onAbrirAjusteCostos = { mostrarDialogoAjustarCostos = true }
                 )
 
-                // 8. Sección Bancos y Billeteras con Edición/Ajuste de Saldo
+                // 8. Sección Bancos y Billeteras con Rediseño Zubli
                 SeccionCuentasBancarias(
                     cuentas = uiState.cuentasBancarias,
-                    monedaVista = uiState.monedaVista,
+                    movimientos = uiState.movimientosCuenta,
+                    periodoSeleccionado = uiState.periodoSeleccionado,
                     tasaBcv = uiState.tasaBcv,
                     onAgregarCuentaClick = { mostrarDialogoAgregarCuenta = true },
-                    onEditarSaldoClick = { cuenta -> cuentaParaEditarSaldo = cuenta },
-                    onEliminarCuentaClick = { viewModel.eliminarCuentaBancaria(it) }
+                    onCuentaClick = { cuenta -> cuentaParaDetalle = cuenta },
+                    onIngresoClick = { cuenta -> cuentaParaIngresoGasto = Pair(cuenta, true) },
+                    onGastoClick = { cuenta -> cuentaParaIngresoGasto = Pair(cuenta, false) },
+                    onTransferirClick = { cuenta -> cuentaParaTransferir = cuenta },
+                    onEditarClick = { cuenta -> cuentaParaEditar = cuenta },
+                    onArchivarClick = { cuenta -> viewModel.archivarCuentaBancaria(cuenta) },
+                    onCopiarDatosPago = { cuenta ->
+                        if (!cuenta.datosDePago.isNullOrBlank()) {
+                            val msg = "Hola! Aquí tienes los datos para realizar el pago a nuestra cuenta:\n\n📌 *${cuenta.nombre}*\n${cuenta.datosDePago}\n\n¡Muchas gracias!"
+                            com.example.gestor_deudores.data.utils.abrirWhatsApp(navController.context, "", msg)
+                        }
+                    }
                 )
 
                 // 9. Resumen de Estado de Pedidos
@@ -227,25 +266,105 @@ fun ResumenPrincipal(
             )
         }
 
-        // Diálogo modal para agregar nueva cuenta bancaria
+        // Diálogos de Gestión de Cuentas (Zubli)
         if (mostrarDialogoAgregarCuenta) {
-            DialogoAgregarCuentaBancaria(
+            DialogoCrearEditarCuenta(
+                cuentaExistente = null,
                 onDismiss = { mostrarDialogoAgregarCuenta = false },
-                onGuardarCuenta = { nombre, tipo, moneda, saldo ->
-                    viewModel.agregarCuentaBancaria(nombre, tipo, moneda, saldo)
+                onGuardar = { nombre, tipo, moneda, saldoInicial, inst, alias, uso, meta, datosPago, color, icono ->
+                    viewModel.agregarCuentaBancaria(nombre, tipo, moneda, saldoInicial, inst, alias, uso, meta, datosPago, color, icono)
                     mostrarDialogoAgregarCuenta = false
                 }
             )
         }
 
-        // Diálogo modal para editar/ajustar saldo o sumar/restar dinero de una cuenta existente
-        cuentaParaEditarSaldo?.let { cuenta ->
+        cuentaParaEditar?.let { cuenta ->
+            DialogoCrearEditarCuenta(
+                cuentaExistente = cuenta,
+                onDismiss = { cuentaParaEditar = null },
+                onGuardar = { nombre, tipo, moneda, _, inst, alias, uso, meta, datosPago, color, icono ->
+                    val cuentaAct = cuenta.copy(
+                        nombre = nombre,
+                        tipo = tipo,
+                        moneda = moneda,
+                        institucion = inst,
+                        alias = alias,
+                        uso = uso,
+                        metaUsd = meta,
+                        datosDePago = datosPago,
+                        color = color,
+                        icono = icono
+                    )
+                    viewModel.editarCuentaBancaria(cuentaAct)
+                    cuentaParaEditar = null
+                }
+            )
+        }
+
+        cuentaParaDetalle?.let { cuenta ->
+            DialogoDetalleCuenta(
+                cuenta = cuenta,
+                uiState = uiState,
+                viewModel = viewModel,
+                onIngresoClick = {
+                    cuentaParaIngresoGasto = Pair(cuenta, true)
+                },
+                onGastoClick = {
+                    cuentaParaIngresoGasto = Pair(cuenta, false)
+                },
+                onTransferirClick = {
+                    cuentaParaTransferir = cuenta
+                },
+                onAjustarSaldoClick = {
+                    cuentaParaAjustarSaldo = cuenta
+                },
+                onEditarClick = {
+                    cuentaParaEditar = cuenta
+                },
+                onArchivarClick = {
+                    viewModel.archivarCuentaBancaria(cuenta)
+                    cuentaParaDetalle = null
+                },
+                onDismiss = { cuentaParaDetalle = null }
+            )
+        }
+
+        cuentaParaIngresoGasto?.let { (cuenta, esIngreso) ->
+            DialogoRegistrarMovimientoRapido(
+                cuenta = cuenta,
+                esIngreso = esIngreso,
+                onDismiss = { cuentaParaIngresoGasto = null },
+                onGuardar = { monto, concepto, ref, foto ->
+                    if (esIngreso) {
+                        viewModel.registrarIngresoCuenta(cuenta, monto, concepto, ref, foto)
+                    } else {
+                        viewModel.registrarGastoCuenta(cuenta, monto, concepto, ref, foto)
+                    }
+                    cuentaParaIngresoGasto = null
+                }
+            )
+        }
+
+        cuentaParaTransferir?.let { cuenta ->
+            DialogoTransferirEntreCuentas(
+                cuentaOrigenInicial = cuenta,
+                cuentasDisponibles = uiState.cuentasBancarias.filter { it.activa },
+                tasaBcv = uiState.tasaBcv,
+                onDismiss = { cuentaParaTransferir = null },
+                onTransferir = { cOrigen, cDest, mOrig, mDest, tasa, concepto, ref ->
+                    viewModel.transferirEntreCuentas(cOrigen, cDest, mOrig, mDest, tasa, concepto, ref)
+                    cuentaParaTransferir = null
+                }
+            )
+        }
+
+        cuentaParaAjustarSaldo?.let { cuenta ->
             DialogoAjustarSaldoCuenta(
                 cuenta = cuenta,
-                onDismiss = { cuentaParaEditarSaldo = null },
-                onGuardarMovimiento = { montoDif, nuevoSaldo, motivo ->
-                    viewModel.actualizarSaldoCuentaConMovimiento(cuenta, montoDif, nuevoSaldo, motivo)
-                    cuentaParaEditarSaldo = null
+                onDismiss = { cuentaParaAjustarSaldo = null },
+                onGuardarAjuste = { nuevoSaldo, motivo ->
+                    viewModel.ajustarSaldoCuenta(cuenta, nuevoSaldo, motivo)
+                    cuentaParaAjustarSaldo = null
                 }
             )
         }
@@ -1327,113 +1446,1186 @@ fun ItemDesgloseAcordeon(
 }
 
 // ==========================================
-// COMPONENTE 8: SECCIÓN BANCARIA Y BILLETERAS
 // ==========================================
+// COMPONENTE 8: SECCIÓN BANCOS Y BILLETERAS (ZUBLI)
+// ==========================================
+
+fun obtenerColorYIconoCuenta(tipo: String): Triple<Color, Color, androidx.compose.ui.graphics.vector.ImageVector> {
+    return when (tipo.uppercase()) {
+        "BANCO" -> Triple(Color(0xFF1E5BC6), Color(0xFFE3EDFB), Icons.Default.Info)
+        "PAGO_MOVIL" -> Triple(Color(0xFF00707A), Color(0xFFDDF0EE), Icons.Default.Phone)
+        "EFECTIVO" -> Triple(Color(0xFF2E7D32), Color(0xFFE4F2E5), Icons.Default.ShoppingCart)
+        "BILLETERA" -> Triple(Color(0xFF6B4FA3), Color(0xFFECE6F5), Icons.Default.Person)
+        "BANCO_USD" -> Triple(Color(0xFF0B5C73), Color(0xFFDDEEF3), Icons.Default.Info)
+        else -> Triple(Color(0xFF5F6B6D), Color(0xFFECEFEF), Icons.Default.Info)
+    }
+}
+
+fun obtenerColorChipUso(uso: String): Pair<Color, Color> {
+    return when (uso.lowercase()) {
+        "cobros" -> Pair(Color(0xFF00707A), Color(0xFFDDF0EE))
+        "reposición", "reposicion" -> Pair(Color(0xFF1E5BC6), Color(0xFFE3EDFB))
+        "ahorro" -> Pair(Color(0xFF2E7D32), Color(0xFFE4F2E5))
+        "gastos del taller", "gastos taller" -> Pair(Color(0xFFB23C00), Color(0xFFFDEBDD))
+        "personal" -> Pair(Color(0xFF6B4FA3), Color(0xFFECE6F5))
+        else -> Pair(Color(0xFF5F6B6D), Color(0xFFECEFEF))
+    }
+}
+
 @Composable
 fun SeccionCuentasBancarias(
     cuentas: List<CuentaBancaria>,
-    monedaVista: String,
+    movimientos: List<MovimientoCuenta>,
+    periodoSeleccionado: PeriodoFiltro,
     tasaBcv: Double,
     onAgregarCuentaClick: () -> Unit,
-    onEditarSaldoClick: (CuentaBancaria) -> Unit,
-    onEliminarCuentaClick: (CuentaBancaria) -> Unit
+    onCuentaClick: (CuentaBancaria) -> Unit,
+    onIngresoClick: (CuentaBancaria) -> Unit,
+    onGastoClick: (CuentaBancaria) -> Unit,
+    onTransferirClick: (CuentaBancaria) -> Unit,
+    onEditarClick: (CuentaBancaria) -> Unit,
+    onArchivarClick: (CuentaBancaria) -> Unit,
+    onCopiarDatosPago: (CuentaBancaria) -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+    val cuentasActivas = cuentas.filter { it.activa }
+    var expandirResumenHeader by remember { mutableStateOf(false) }
+
+    val rangoMillis = remember(periodoSeleccionado) {
+        val cal = java.util.Calendar.getInstance()
+        val finM = System.currentTimeMillis()
+        val iniM = when (periodoSeleccionado) {
+            PeriodoFiltro.ESTA_SEMANA -> {
+                cal.set(java.util.Calendar.DAY_OF_WEEK, cal.firstDayOfWeek)
+                cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
+                cal.timeInMillis
+            }
+            PeriodoFiltro.ESTE_MES -> {
+                cal.set(java.util.Calendar.DAY_OF_MONTH, 1)
+                cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
+                cal.timeInMillis
+            }
+            PeriodoFiltro.ULTIMOS_3_MESES -> {
+                cal.add(java.util.Calendar.MONTH, -3)
+                cal.timeInMillis
+            }
+            else -> 0L
+        }
+        Pair(iniM, finM)
+    }
+    val inicioPeriodo = rangoMillis.first
+    val finPeriodo = rangoMillis.second
+
+    val totalCuentasUsd = remember(cuentasActivas, movimientos, tasaBcv) {
+        cuentasActivas.sumOf { cuenta ->
+            val saldo = cuenta.saldoInicial + movimientos.filter { it.cuentaId == cuenta.id }.sumOf { it.monto }
+            if (cuenta.moneda == "VES" && tasaBcv > 0) saldo / tasaBcv else saldo
+        }.redondear2()
+    }
+
+    val totalUsdSolo = remember(cuentasActivas, movimientos) {
+        cuentasActivas.filter { it.moneda == "USD" }.sumOf { cuenta ->
+            cuenta.saldoInicial + movimientos.filter { it.cuentaId == cuenta.id }.sumOf { it.monto }
+        }.redondear2()
+    }
+
+    val totalVesSolo = remember(cuentasActivas, movimientos) {
+        cuentasActivas.filter { it.moneda == "VES" }.sumOf { cuenta ->
+            cuenta.saldoInicial + movimientos.filter { it.cuentaId == cuenta.id }.sumOf { it.monto }
+        }.redondear2()
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        // CABECERA RESUMEN DE CUENTAS
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expandirResumenHeader = !expandirResumenHeader },
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = fondo2)
         ) {
-            Text(
-                text = "🏦 Bancos y Billeteras",
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.titleMedium
-            )
-            Button(
-                onClick = onAgregarCuentaClick,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-            ) {
-                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Nueva", fontSize = 12.sp)
+            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("🏦 Bancos y Billeteras", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 16.sp)
+                        Text("Total en cuentas: $${String.format(Locale.US, "%.2f", totalCuentasUsd)} USD", fontWeight = FontWeight.Bold, color = Color(0xFF81C784), fontSize = 18.sp)
+                        if (tasaBcv > 0) {
+                            Text("Tasa BCV: Bs. ${String.format(Locale.US, "%.2f", tasaBcv)}", fontSize = 11.sp, color = Color.LightGray)
+                        }
+                    }
+
+                    Button(
+                        onClick = onAgregarCuentaClick,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6B4FA3)),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("+ Nueva cuenta", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                if (expandirResumenHeader) {
+                    HorizontalDivider(color = Color.White.copy(alpha = 0.2f))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("Cuentas en USD:", fontSize = 11.sp, color = Color.LightGray)
+                        Text("$${String.format(Locale.US, "%.2f", totalUsdSolo)} USD", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("Cuentas en Bolívares:", fontSize = 11.sp, color = Color.LightGray)
+                        val equivBsAUsd = if (tasaBcv > 0) totalVesSolo / tasaBcv else 0.0
+                        Text("Bs ${String.format(Locale.US, "%.2f", totalVesSolo)} (≈ $${String.format(Locale.US, "%.2f", equivBsAUsd)})", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
 
-        if (cuentas.isEmpty()) {
-            Text(
-                text = "No tienes cuentas o bancos registrados. Pulsa '+ Nueva' para agregar uno.",
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        } else {
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+        if (cuentasActivas.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color.White)
+                    .padding(20.dp),
+                contentAlignment = Alignment.Center
             ) {
-                items(cuentas) { cuenta ->
-                    val montoMostrar = if (monedaVista == "VES" && cuenta.moneda == "USD" && tasaBcv > 0) {
-                        cuenta.saldoActual * tasaBcv
-                    } else cuenta.saldoActual
+                Text(
+                    text = "Agrega tu primera cuenta para saber dónde está tu dinero",
+                    fontSize = 13.sp,
+                    color = Color.Gray,
+                    textAlign = TextAlign.Center
+                )
+            }
+        } else {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                items(cuentasActivas) { cuenta ->
+                    val movsCuenta = movimientos.filter { it.cuentaId == cuenta.id }
+                    
+                    val saldoCalculado = (cuenta.saldoInicial + movsCuenta.sumOf { it.monto }).redondear2()
 
-                    val simbolo = if (monedaVista == "VES" || cuenta.moneda == "VES") "Bs" else "$"
+                    val movsPeriodo = movsCuenta.filter { it.fechaMillis in inicioPeriodo..finPeriodo }
+                    val entroPeriodo = movsPeriodo.filter { it.monto > 0 }.sumOf { it.monto }.redondear2()
+                    val salioPeriodo = movsPeriodo.filter { it.monto < 0 }.sumOf { Math.abs(it.monto) }.redondear2()
 
-                    Card(
-                        modifier = Modifier.width(190.dp),
-                        shape = RoundedCornerShape(16.dp)
+                    val ultimoMov = movsCuenta.maxByOrNull { it.fechaMillis }
+
+                    TarjetaCuentaZubli(
+                        cuenta = cuenta,
+                        saldoCalculado = saldoCalculado,
+                        entroPeriodo = entroPeriodo,
+                        salioPeriodo = salioPeriodo,
+                        ultimoMovimiento = ultimoMov,
+                        tasaBcv = tasaBcv,
+                        onClickTarjeta = { onCuentaClick(cuenta) },
+                        onIngresoClick = { onIngresoClick(cuenta) },
+                        onGastoClick = { onGastoClick(cuenta) },
+                        onTransferirClick = { onTransferirClick(cuenta) },
+                        onEditarClick = { onEditarClick(cuenta) },
+                        onArchivarClick = { onArchivarClick(cuenta) },
+                        onCopiarDatosPago = { onCopiarDatosPago(cuenta) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun TarjetaCuentaZubli(
+    cuenta: CuentaBancaria,
+    saldoCalculado: Double,
+    entroPeriodo: Double,
+    salioPeriodo: Double,
+    ultimoMovimiento: MovimientoCuenta?,
+    tasaBcv: Double,
+    onClickTarjeta: () -> Unit,
+    onIngresoClick: () -> Unit,
+    onGastoClick: () -> Unit,
+    onTransferirClick: () -> Unit,
+    onEditarClick: () -> Unit,
+    onArchivarClick: () -> Unit,
+    onCopiarDatosPago: () -> Unit
+) {
+    val (colorTexto, colorBg, icono) = obtenerColorYIconoCuenta(cuenta.tipo)
+    val simboloMoneda = if (cuenta.moneda == "VES") "Bs" else "$"
+    var menuExpandido by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier
+            .width(280.dp)
+            .clickable { onClickTarjeta() },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(3.dp)
+    ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(colorBg),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Column(
-                            modifier = Modifier.padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        Icon(icono, contentDescription = cuenta.tipo, tint = colorTexto, modifier = Modifier.size(20.dp))
+                    }
+
+                    Column {
+                        Text(
+                            text = cuenta.nombre,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            color = Color(0xFF1C1B1F)
+                        )
+                        Text(
+                            text = "${cuenta.tipo.replace("_", " ")} · ${cuenta.moneda}",
+                            fontSize = 11.sp,
+                            color = Color(0xFF5F6B6D)
+                        )
+                    }
+                }
+
+                if (!cuenta.uso.isNullOrBlank()) {
+                    val (usoTxtColor, usoBgColor) = obtenerColorChipUso(cuenta.uso)
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(usoBgColor)
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(cuenta.uso, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = usoTxtColor)
+                    }
+                }
+            }
+
+            Column {
+                Text(
+                    text = "$simboloMoneda ${String.format(Locale.US, "%.2f", saldoCalculado)}",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 22.sp,
+                    color = Color(0xFF1C1B1F)
+                )
+
+                if (cuenta.moneda == "VES" && tasaBcv > 0) {
+                    val equivUsd = (saldoCalculado / tasaBcv).redondear2()
+                    Text(
+                        text = "≈ $${String.format(Locale.US, "%.2f", equivUsd)} (tasa ${String.format(Locale.US, "%.2f", tasaBcv)})",
+                        fontSize = 11.sp,
+                        color = Color(0xFF5F6B6D)
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFFE4F2E5))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "↓ Entró +$simboloMoneda${String.format(Locale.US, "%.2f", entroPeriodo)}",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF2E7D32)
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFFFBE4E4))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "↑ Salió −$simboloMoneda${String.format(Locale.US, "%.2f", salioPeriodo)}",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFC62828)
+                    )
+                }
+            }
+
+            if (cuenta.metaUsd != null && cuenta.metaUsd > 0) {
+                val metaVal = cuenta.metaUsd
+                val saldoUsd = if (cuenta.moneda == "VES" && tasaBcv > 0) saldoCalculado / tasaBcv else saldoCalculado
+                val pct = ((saldoUsd / metaVal) * 100.0).coerceIn(0.0, 100.0).toFloat()
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    LinearProgressIndicator(
+                        progress = { pct / 100f },
+                        modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(4.dp)),
+                        color = com.example.gestor_deudores.ui.theme.estados,
+                        trackColor = com.example.gestor_deudores.ui.theme.fondo_claro
+                    )
+                    Text("${pct.toInt()}% de tu meta de $${String.format(Locale.US, "%.2f", metaVal)}", fontSize = 10.sp, color = Color.Gray)
+                }
+            }
+
+            val textoUltimoMov = if (ultimoMovimiento != null) {
+                val formatoF = SimpleDateFormat("dd/MM", Locale.getDefault())
+                val fechaM = formatoF.format(Date(ultimoMovimiento.fechaMillis))
+                val sgn = if (ultimoMovimiento.monto >= 0) "+$simboloMoneda" else "−$simboloMoneda"
+                "$fechaM · ${ultimoMovimiento.concepto.ifBlank { ultimoMovimiento.tipo }} · $sgn${String.format(Locale.US, "%.2f", Math.abs(ultimoMovimiento.monto))}"
+            } else {
+                "Sin movimientos"
+            }
+            Text("Último: $textoUltimoMov", fontSize = 10.sp, color = Color(0xFF5F6B6D), maxLines = 1, overflow = TextOverflow.Ellipsis)
+
+            HorizontalDivider(color = Color.LightGray.copy(alpha = 0.3f))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(
+                    onClick = onIngresoClick,
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(2.dp)
+                ) {
+                    Text("+ Ingreso", fontSize = 10.sp, color = Color(0xFF2E7D32), fontWeight = FontWeight.Bold)
+                }
+
+                OutlinedButton(
+                    onClick = onGastoClick,
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(2.dp)
+                ) {
+                    Text("− Gasto", fontSize = 10.sp, color = Color(0xFFC62828), fontWeight = FontWeight.Bold)
+                }
+
+                OutlinedButton(
+                    onClick = onTransferirClick,
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(2.dp)
+                ) {
+                    Text("⇄ Mover", fontSize = 10.sp, color = Color(0xFF00707A), fontWeight = FontWeight.Bold)
+                }
+
+                Box {
+                    IconButton(onClick = { menuExpandido = true }, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "Opciones", modifier = Modifier.size(16.dp))
+                    }
+                    DropdownMenu(expanded = menuExpandido, onDismissRequest = { menuExpandido = false }) {
+                        DropdownMenuItem(
+                            text = { Text("✏️ Editar datos") },
+                            onClick = {
+                                menuExpandido = false
+                                onEditarClick()
+                            }
+                        )
+                        if (!cuenta.datosDePago.isNullOrBlank()) {
+                            DropdownMenuItem(
+                                text = { Text("📋 Copiar datos de pago") },
+                                onClick = {
+                                    menuExpandido = false
+                                    onCopiarDatosPago()
+                                }
+                            )
+                        }
+                        DropdownMenuItem(
+                            text = { Text("📦 Archivar cuenta", color = Color.Red) },
+                            onClick = {
+                                menuExpandido = false
+                                onArchivarClick()
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DialogoDetalleCuenta(
+    cuenta: CuentaBancaria,
+    uiState: ResumenUiState,
+    viewModel: ResumenViewModel,
+    onIngresoClick: () -> Unit,
+    onGastoClick: () -> Unit,
+    onTransferirClick: () -> Unit,
+    onAjustarSaldoClick: () -> Unit,
+    onEditarClick: () -> Unit,
+    onArchivarClick: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+
+    val movsCuenta = uiState.movimientosCuenta.filter { it.cuentaId == cuenta.id }
+    val (colorTexto, colorBg, icono) = obtenerColorYIconoCuenta(cuenta.tipo)
+    val simboloMoneda = if (cuenta.moneda == "VES") "Bs" else "$"
+
+    val rangoMillis = remember(uiState.periodoSeleccionado) {
+        val cal = java.util.Calendar.getInstance()
+        val finM = System.currentTimeMillis()
+        val iniM = when (uiState.periodoSeleccionado) {
+            PeriodoFiltro.ESTA_SEMANA -> {
+                cal.set(java.util.Calendar.DAY_OF_WEEK, cal.firstDayOfWeek)
+                cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
+                cal.timeInMillis
+            }
+            PeriodoFiltro.ESTE_MES -> {
+                cal.set(java.util.Calendar.DAY_OF_MONTH, 1)
+                cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
+                cal.timeInMillis
+            }
+            PeriodoFiltro.ULTIMOS_3_MESES -> {
+                cal.add(java.util.Calendar.MONTH, -3)
+                cal.timeInMillis
+            }
+            else -> 0L
+        }
+        Pair(iniM, finM)
+    }
+    val inicioPeriodo = rangoMillis.first
+    val finPeriodo = rangoMillis.second
+
+    val movsAnteriores = movsCuenta.filter { it.fechaMillis < inicioPeriodo }
+    val saldoInicialPeriodo = (cuenta.saldoInicial + movsAnteriores.sumOf { it.monto }).redondear2()
+
+    val movsPeriodo = movsCuenta.filter { it.fechaMillis in inicioPeriodo..finPeriodo }
+    val entradasPeriodo = movsPeriodo.filter { it.monto > 0 }.sumOf { it.monto }.redondear2()
+    val salidasPeriodo = movsPeriodo.filter { it.monto < 0 }.sumOf { Math.abs(it.monto) }.redondear2()
+    val saldoFinalPeriodo = (saldoInicialPeriodo + entradasPeriodo - salidasPeriodo).redondear2()
+
+    var acumulado = cuenta.saldoInicial
+    val movsConSaldoCorridoAsc = movsCuenta.sortedWith(compareBy<MovimientoCuenta> { it.fechaMillis }.thenBy { it.id }).map { mov ->
+        acumulado = (acumulado + mov.monto).redondear2()
+        mov to acumulado
+    }
+    val movsConSaldoCorridoDesc = movsConSaldoCorridoAsc.reversed()
+
+    var filtroTipo by remember { mutableStateOf("TODOS") }
+    var busquedaTexto by remember { mutableStateOf("") }
+
+    val movsFiltrados = movsConSaldoCorridoDesc.filter { (mov, _) ->
+        val coincideTipo = when (filtroTipo) {
+            "ENTRADAS" -> mov.monto > 0
+            "SALIDAS" -> mov.monto < 0
+            "TRANSFERENCIAS" -> mov.tipo.contains("TRANSFERENCIA")
+            "AJUSTES" -> mov.tipo == "AJUSTE"
+            else -> true
+        }
+        val coincideTexto = busquedaTexto.isBlank() ||
+                mov.concepto.contains(busquedaTexto, ignoreCase = true) ||
+                mov.nota.contains(busquedaTexto, ignoreCase = true) ||
+                (mov.referenciaPago ?: "").contains(busquedaTexto, ignoreCase = true)
+        coincideTipo && coincideTexto
+    }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.92f)
+                .padding(vertical = 8.dp),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = fondo2)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .background(colorBg),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Row(
+                            Icon(icono, contentDescription = null, tint = colorTexto, modifier = Modifier.size(22.dp))
+                        }
+                        Column {
+                            Text(cuenta.nombre, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
+                            Text("${cuenta.tipo.replace("_", " ")} · ${cuenta.moneda}", fontSize = 11.sp, color = Color.LightGray)
+                        }
+                    }
+
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = Color.White)
+                    }
+                }
+
+                HorizontalDivider(color = Color.White.copy(alpha = 0.2f), modifier = Modifier.padding(vertical = 8.dp))
+
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    if (!cuenta.datosDePago.isNullOrBlank()) {
+                        item {
+                            Button(
+                                onClick = {
+                                    val msg = "Hola! Aquí tienes los datos para realizar el pago a nuestra cuenta:\n\n📌 *${cuenta.nombre}*\n${cuenta.datosDePago}\n\n¡Muchas gracias!"
+                                    clipboardManager.setText(AnnotatedString(cuenta.datosDePago))
+                                    com.example.gestor_deudores.data.utils.abrirWhatsApp(context, "", msg)
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00707A)),
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                                shape = RoundedCornerShape(12.dp)
                             ) {
-                                Text(
-                                    text = cuenta.nombre,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp,
-                                    maxLines = 1,
-                                    modifier = Modifier.weight(1f)
+                                Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("📋 Copiar datos de pago para WhatsApp", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text("📊 CONCILIACIÓN Y SALDOS DEL PERÍODO", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = com.example.gestor_deudores.ui.theme.estados)
+                                Spacer(modifier = Modifier.height(2.dp))
+
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Saldo al inicio del período:", fontSize = 12.sp, color = Color.DarkGray)
+                                    Text("$simboloMoneda ${String.format(Locale.US, "%.2f", saldoInicialPeriodo)}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.DarkGray)
+                                }
+
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("(+) Entradas del período:", fontSize = 12.sp, color = Color(0xFF2E7D32))
+                                    Text("+$simboloMoneda ${String.format(Locale.US, "%.2f", entradasPeriodo)}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
+                                }
+
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("(-) Salidas del período:", fontSize = 12.sp, color = Color(0xFFC62828))
+                                    Text("−$simboloMoneda ${String.format(Locale.US, "%.2f", salidasPeriodo)}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFC62828))
+                                }
+
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("(=) Saldo al final del período:", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1C1B1F))
+                                    Text("$simboloMoneda ${String.format(Locale.US, "%.2f", saldoFinalPeriodo)}", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF00707A))
+                                }
+                            }
+                        }
+                    }
+
+                    item {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("📜 HISTORIAL DE MOVIMIENTOS (${movsFiltrados.size})", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.White)
+
+                            OutlinedTextField(
+                                value = busquedaTexto,
+                                onValueChange = { busquedaTexto = it },
+                                placeholder = { Text("Buscar concepto, cliente o referencia...", fontSize = 11.sp, color = Color.Gray) },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                                singleLine = true
+                            )
+
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                val opcionesFiltro = listOf(
+                                    "TODOS" to "Todos",
+                                    "ENTRADAS" to "↓ Entradas",
+                                    "SALIDAS" to "↑ Salidas",
+                                    "TRANSFERENCIAS" to "⇄ Transferencias",
+                                    "AJUSTES" to "⚙️ Ajustes"
                                 )
-                                Row {
-                                    IconButton(
-                                        onClick = { onEditarSaldoClick(cuenta) },
-                                        modifier = Modifier.size(22.dp)
-                                    ) {
-                                        Icon(
-                                            Icons.Default.Edit,
-                                            contentDescription = "Editar Saldo",
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(16.dp)
+                                items(opcionesFiltro) { (clave, label) ->
+                                    FilterChip(
+                                        selected = filtroTipo == clave,
+                                        onClick = { filtroTipo = clave },
+                                        label = { Text(label, fontSize = 10.sp) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    if (movsFiltrados.isEmpty()) {
+                        item {
+                            Text("Aún no hay movimientos registrados para este filtro.", fontSize = 12.sp, color = Color.LightGray, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp))
+                        }
+                    } else {
+                        items(movsFiltrados) { (mov, saldoCorrido) ->
+                            val formatoF = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
+                            val fechaM = formatoF.format(Date(mov.fechaMillis))
+                            val esPositivo = mov.monto >= 0
+                            val colorMonto = if (esPositivo) Color(0xFF2E7D32) else Color(0xFFC62828)
+                            val sgn = if (esPositivo) "+$simboloMoneda" else "−$simboloMoneda"
+
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Text(
+                                            text = mov.concepto.ifBlank { mov.nota.ifBlank { mov.tipo } },
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = Color(0xFF1C1B1F),
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        Text(
+                                            text = "$sgn${String.format(Locale.US, "%.2f", Math.abs(mov.monto))}",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp,
+                                            color = colorMonto
                                         )
                                     }
-                                    IconButton(
-                                        onClick = { onEliminarCuentaClick(cuenta) },
-                                        modifier = Modifier.size(22.dp)
-                                    ) {
-                                        Icon(
-                                            Icons.Default.Delete,
-                                            contentDescription = "Eliminar",
-                                            tint = MaterialTheme.colorScheme.error,
-                                            modifier = Modifier.size(16.dp)
-                                        )
+
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Text(fechaM, fontSize = 10.sp, color = Color.Gray)
+                                        Text("Saldo después: $simboloMoneda${String.format(Locale.US, "%.2f", saldoCorrido)}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF00707A))
+                                    }
+
+                                    if (!mov.referenciaPago.isNullOrBlank()) {
+                                        Text("Ref: ${mov.referenciaPago}", fontSize = 10.sp, color = Color.DarkGray)
                                     }
                                 }
                             }
-
-                            Text(
-                                text = "${cuenta.tipo} · ${cuenta.moneda}",
-                                fontSize = 10.sp,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-
-                            Text(
-                                text = "$simbolo ${String.format(Locale.getDefault(), "%.2f", montoMostrar)}",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp
-                            )
                         }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Button(
+                            onClick = onIngresoClick,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("+ Ingreso", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+
+                        Button(
+                            onClick = onGastoClick,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC62828)),
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("− Gasto", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+
+                        Button(
+                            onClick = onTransferirClick,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00707A)),
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("⇄ Mover", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        OutlinedButton(
+                            onClick = onAjustarSaldoClick,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("⚙️ Ajustar Saldo", fontSize = 10.sp, color = Color.White)
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                ExportarCsvUtils.exportarExtractoCuentaCsv(
+                                    context = context,
+                                    cuentaNombre = cuenta.nombre,
+                                    cuentaTipo = cuenta.tipo,
+                                    moneda = cuenta.moneda,
+                                    uso = cuenta.uso,
+                                    periodoTexto = uiState.periodoSeleccionado.name,
+                                    saldoInicialPeriodo = saldoInicialPeriodo,
+                                    entradasPeriodo = entradasPeriodo,
+                                    salidasPeriodo = salidasPeriodo,
+                                    saldoFinalPeriodo = saldoFinalPeriodo,
+                                    movimientos = movsConSaldoCorridoDesc
+                                )
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("📄 Extracto CSV", fontSize = 10.sp, color = Color.White)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DialogoCrearEditarCuenta(
+    cuentaExistente: CuentaBancaria?,
+    onDismiss: () -> Unit,
+    onGuardar: (
+        nombre: String,
+        tipo: String,
+        moneda: String,
+        saldoInicial: Double,
+        institucion: String?,
+        alias: String?,
+        uso: String?,
+        metaUsd: Double?,
+        datosDePago: String?,
+        color: String?,
+        icono: String?
+    ) -> Unit
+) {
+    var nombre by remember { mutableStateOf(cuentaExistente?.nombre ?: "") }
+    var tipo by remember { mutableStateOf(cuentaExistente?.tipo ?: "BANCO") }
+    var moneda by remember { mutableStateOf(cuentaExistente?.moneda ?: "USD") }
+    var saldoInicialStr by remember { mutableStateOf(cuentaExistente?.saldoInicial?.toString() ?: "0.0") }
+    var institucion by remember { mutableStateOf(cuentaExistente?.institucion ?: "") }
+    var alias by remember { mutableStateOf(cuentaExistente?.alias ?: "") }
+    var uso by remember { mutableStateOf(cuentaExistente?.uso ?: "Cobros") }
+    var metaUsdStr by remember { mutableStateOf(cuentaExistente?.metaUsd?.toString() ?: "") }
+    var datosDePago by remember { mutableStateOf(cuentaExistente?.datosDePago ?: "") }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = if (cuentaExistente != null) "✏️ Editar Cuenta / Banco" else "➕ Nueva Cuenta o Banco",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp,
+                    color = com.example.gestor_deudores.ui.theme.estados
+                )
+
+                OutlinedTextField(
+                    value = nombre,
+                    onValueChange = { nombre = it },
+                    label = { Text("Nombre de la cuenta (ej. Mercantil Corriente)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Text("Tipo de Cuenta:", fontSize = 11.sp, color = Color.Gray)
+                val tiposDisponibles = listOf("BANCO" to "Banco Nacional", "PAGO_MOVIL" to "Pago Móvil", "EFECTIVO" to "Efectivo", "BILLETERA" to "Billetera Virtual", "BANCO_USD" to "Banco en $ / Zelle", "OTRA" to "Otra")
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    items(tiposDisponibles) { (clave, label) ->
+                        FilterChip(
+                            selected = tipo == clave,
+                            onClick = { tipo = clave },
+                            label = { Text(label, fontSize = 10.sp) }
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Moneda:", fontSize = 12.sp, color = Color.Gray)
+                    Row {
+                        FilterChip(
+                            selected = moneda == "USD",
+                            onClick = { moneda = "USD" },
+                            label = { Text("USD ($)", fontSize = 11.sp) }
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        FilterChip(
+                            selected = moneda == "VES",
+                            onClick = { moneda = "VES" },
+                            label = { Text("VES (Bs)", fontSize = 11.sp) }
+                        )
+                    }
+                }
+
+                Text("Etiqueta de Uso:", fontSize = 11.sp, color = Color.Gray)
+                val usosDisponibles = listOf("Cobros", "Reposición", "Ahorro", "Gastos del taller", "Personal")
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    items(usosDisponibles) { u ->
+                        FilterChip(
+                            selected = uso == u,
+                            onClick = { uso = u },
+                            label = { Text(u, fontSize = 10.sp) }
+                        )
+                    }
+                }
+
+                if (cuentaExistente == null) {
+                    OutlinedTextField(
+                        value = saldoInicialStr,
+                        onValueChange = { saldoInicialStr = it },
+                        label = { Text("Saldo Inicial ($moneda)") },
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+
+                OutlinedTextField(
+                    value = datosDePago,
+                    onValueChange = { datosDePago = it },
+                    label = { Text("Datos para recibir pagos (Teléfono, CI, Correo, etc.)") },
+                    placeholder = { Text("Ej. CI 12345678 · 04121234567 · Mercantil") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                OutlinedTextField(
+                    value = metaUsdStr,
+                    onValueChange = { metaUsdStr = it },
+                    label = { Text("Meta opcional de saldo ($)") },
+                    placeholder = { Text("Ej. 50.00") },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    TextButton(onClick = onDismiss) { Text("Cancelar", color = Color.Gray) }
+                    Button(
+                        onClick = {
+                            if (nombre.isNotBlank()) {
+                                val sInit = saldoInicialStr.replace(",", ".").toDoubleOrNull() ?: 0.0
+                                val metaVal = metaUsdStr.replace(",", ".").toDoubleOrNull()
+                                onGuardar(nombre, tipo, moneda, sInit, institucion, alias, uso, metaVal, datosDePago, null, null)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = com.example.gestor_deudores.ui.theme.estados)
+                    ) {
+                        Text("Guardar Cuenta", color = Color.White)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DialogoRegistrarMovimientoRapido(
+    cuenta: CuentaBancaria,
+    esIngreso: Boolean,
+    onDismiss: () -> Unit,
+    onGuardar: (monto: Double, concepto: String, ref: String?, foto: String?) -> Unit
+) {
+    var montoTexto by remember { mutableStateOf("") }
+    var conceptoTexto by remember { mutableStateOf("") }
+    var referenciaTexto by remember { mutableStateOf("") }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = fondo2)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = if (esIngreso) "➕ Registrar Ingreso · ${cuenta.nombre}" else "− Registrar Gasto · ${cuenta.nombre}",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    color = Color.White
+                )
+
+                OutlinedTextField(
+                    value = montoTexto,
+                    onValueChange = { montoTexto = it },
+                    label = { Text("Monto (${cuenta.moneda})") },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                OutlinedTextField(
+                    value = conceptoTexto,
+                    onValueChange = { conceptoTexto = it },
+                    label = { Text("Concepto / Descripción") },
+                    placeholder = { Text(if (esIngreso) "Ej. Abono cliente, Venta contado" else "Ej. Compra de tintas, Alquiler") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                OutlinedTextField(
+                    value = referenciaTexto,
+                    onValueChange = { referenciaTexto = it },
+                    label = { Text("Número de Referencia (Opcional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    TextButton(onClick = onDismiss) { Text("Cancelar", color = Color.LightGray) }
+                    Button(
+                        onClick = {
+                            val mVal = montoTexto.replace(",", ".").toDoubleOrNull() ?: 0.0
+                            if (mVal > 0) {
+                                onGuardar(mVal, conceptoTexto, referenciaTexto, null)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = if (esIngreso) Color(0xFF2E7D32) else Color(0xFFC62828))
+                    ) {
+                        Text(if (esIngreso) "Guardar Ingreso" else "Guardar Gasto", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DialogoTransferirEntreCuentas(
+    cuentaOrigenInicial: CuentaBancaria,
+    cuentasDisponibles: List<CuentaBancaria>,
+    tasaBcv: Double,
+    onDismiss: () -> Unit,
+    onTransferir: (
+        cuentaOrigen: CuentaBancaria,
+        cuentaDestino: CuentaBancaria,
+        montoOrigen: Double,
+        montoDestino: Double,
+        tasaUsada: Double,
+        concepto: String,
+        ref: String?
+    ) -> Unit
+) {
+    var cuentaOrigen by remember { mutableStateOf(cuentaOrigenInicial) }
+    var cuentaDestino by remember {
+        mutableStateOf(cuentasDisponibles.firstOrNull { it.id != cuentaOrigenInicial.id } ?: cuentaOrigenInicial)
+    }
+
+    var montoOrigenTexto by remember { mutableStateOf("") }
+    var conceptoTexto by remember { mutableStateOf("") }
+    var referenciaTexto by remember { mutableStateOf("") }
+
+    val mOrigVal = montoOrigenTexto.replace(",", ".").toDoubleOrNull() ?: 0.0
+    val mDestVal = remember(mOrigVal, cuentaOrigen, cuentaDestino, tasaBcv) {
+        if (cuentaOrigen.moneda == cuentaDestino.moneda) {
+            mOrigVal
+        } else if (cuentaOrigen.moneda == "USD" && cuentaDestino.moneda == "VES") {
+            (mOrigVal * tasaBcv).redondear2()
+        } else if (cuentaOrigen.moneda == "VES" && cuentaDestino.moneda == "USD" && tasaBcv > 0) {
+            (mOrigVal / tasaBcv).redondear2()
+        } else {
+            mOrigVal
+        }
+    }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = fondo2)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("⇄ Mover / Transferir Dinero", fontWeight = FontWeight.Bold, fontSize = 17.sp, color = Color.White)
+
+                Text("Cuenta Origen (Sale dinero):", fontSize = 11.sp, color = Color.LightGray)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    items(cuentasDisponibles) { c ->
+                        FilterChip(
+                            selected = cuentaOrigen.id == c.id,
+                            onClick = { cuentaOrigen = c },
+                            label = { Text("${c.nombre} (${c.moneda})", fontSize = 10.sp) }
+                        )
+                    }
+                }
+
+                Text("Cuenta Destino (Entra dinero):", fontSize = 11.sp, color = Color.LightGray)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    items(cuentasDisponibles.filter { it.id != cuentaOrigen.id }) { c ->
+                        FilterChip(
+                            selected = cuentaDestino.id == c.id,
+                            onClick = { cuentaDestino = c },
+                            label = { Text("${c.nombre} (${c.moneda})", fontSize = 10.sp) }
+                        )
+                    }
+                }
+
+                OutlinedTextField(
+                    value = montoOrigenTexto,
+                    onValueChange = { montoOrigenTexto = it },
+                    label = { Text("Monto a transferir (${cuentaOrigen.moneda})") },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                if (cuentaOrigen.moneda != cuentaDestino.moneda) {
+                    Text(
+                        text = "Monto estimado en destino: ${cuentaDestino.moneda} ${String.format(Locale.US, "%.2f", mDestVal)} (Tasa: $tasaBcv)",
+                        fontSize = 11.sp,
+                        color = Color(0xFF81C784),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                OutlinedTextField(
+                    value = conceptoTexto,
+                    onValueChange = { conceptoTexto = it },
+                    label = { Text("Motivo / Concepto (Opcional)") },
+                    placeholder = { Text("Ej. Fondeo de caja chica, Cambio a Bs") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                OutlinedTextField(
+                    value = referenciaTexto,
+                    onValueChange = { referenciaTexto = it },
+                    label = { Text("Número de Referencia (Opcional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    TextButton(onClick = onDismiss) { Text("Cancelar", color = Color.LightGray) }
+                    Button(
+                        onClick = {
+                            if (mOrigVal > 0 && cuentaOrigen.id != cuentaDestino.id) {
+                                onTransferir(cuentaOrigen, cuentaDestino, mOrigVal, mDestVal, tasaBcv, conceptoTexto, referenciaTexto)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00707A))
+                    ) {
+                        Text("Confirmar Transferencia", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DialogoAjustarSaldoCuenta(
+    cuenta: CuentaBancaria,
+    onDismiss: () -> Unit,
+    onGuardarAjuste: (nuevoSaldo: Double, motivo: String) -> Unit
+) {
+    var nuevoSaldoTexto by remember { mutableStateOf(cuenta.saldoActual.toString()) }
+    var motivoTexto by remember { mutableStateOf("") }
+    var errorMsg by remember { mutableStateOf("") }
+
+    val nVal = nuevoSaldoTexto.replace(",", ".").toDoubleOrNull() ?: cuenta.saldoActual
+    val dif = (nVal - cuenta.saldoActual).redondear2()
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = fondo2)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("⚙️ Ajustar Saldo · ${cuenta.nombre}", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
+                Text("Crea un movimiento de ajuste contable sin alterar el historial existente.", fontSize = 11.sp, color = Color.LightGray)
+
+                Text("Saldo actual en sistema: ${cuenta.moneda} ${String.format(Locale.US, "%.2f", cuenta.saldoActual)}", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold)
+
+                OutlinedTextField(
+                    value = nuevoSaldoTexto,
+                    onValueChange = { nuevoSaldoTexto = it },
+                    label = { Text("Nuevo Saldo Real (${cuenta.moneda})") },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Text(
+                    text = "Diferencia a registrar: ${if (dif >= 0) "+$dif" else "$dif"} ${cuenta.moneda}",
+                    fontSize = 11.sp,
+                    color = if (dif >= 0) Color(0xFF81C784) else Color(0xFFFF7043),
+                    fontWeight = FontWeight.Bold
+                )
+
+                OutlinedTextField(
+                    value = motivoTexto,
+                    onValueChange = {
+                        motivoTexto = it
+                        if (errorMsg.isNotEmpty()) errorMsg = ""
+                    },
+                    label = { Text("Motivo / Razón Obligatoria del Ajuste") },
+                    placeholder = { Text("Ej. Arqueo de caja, Corrección por comisión no registrada") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                if (errorMsg.isNotEmpty()) {
+                    Text(errorMsg, fontSize = 11.sp, color = Color.Red, fontWeight = FontWeight.Bold)
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    TextButton(onClick = onDismiss) { Text("Cancelar", color = Color.LightGray) }
+                    Button(
+                        onClick = {
+                            if (motivoTexto.isBlank()) {
+                                errorMsg = "Por favor ingresa el motivo del ajuste"
+                            } else {
+                                onGuardarAjuste(nVal, motivoTexto)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = com.example.gestor_deudores.ui.theme.estados)
+                    ) {
+                        Text("Guardar Ajuste", color = Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -1478,248 +2670,6 @@ fun ItemEstadoPedido(titulo: String, cantidad: Int, color: Color, modifier: Modi
         ) {
             Text(text = cantidad.toString(), fontWeight = FontWeight.Bold, fontSize = 18.sp, color = color)
             Text(text = titulo, fontSize = 10.sp, color = color)
-        }
-    }
-}
-
-// ==========================================
-// COMPONENTE 10: DIÁLOGOS DE CUENTAS Y COSTOS BASE
-// ==========================================
-@Composable
-fun DialogoAgregarCuentaBancaria(
-    onDismiss: () -> Unit,
-    onGuardarCuenta: (nombre: String, tipo: String, moneda: String, saldo: Double) -> Unit
-) {
-    var nombre by remember { mutableStateOf("") }
-    var tipo by remember { mutableStateOf("BANCO") }
-    var moneda by remember { mutableStateOf("USD") }
-    var saldoStr by remember { mutableStateOf("0.0") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Agregar Cuenta o Banco", fontWeight = FontWeight.Bold) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(
-                    value = nombre,
-                    onValueChange = { nombre = it },
-                    label = { Text("Nombre (ej: Mercantil, Zelle)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = saldoStr,
-                    onValueChange = { saldoStr = it },
-                    label = { Text("Saldo Inicial") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Moneda:", fontSize = 12.sp)
-                    Row {
-                        TextButton(onClick = { moneda = "USD" }) {
-                            Text("USD ($)", fontWeight = if (moneda == "USD") FontWeight.Bold else FontWeight.Normal)
-                        }
-                        TextButton(onClick = { moneda = "VES" }) {
-                            Text("VES (Bs)", fontWeight = if (moneda == "VES") FontWeight.Bold else FontWeight.Normal)
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    if (nombre.isNotBlank()) {
-                        val saldo = saldoStr.toDoubleOrNull() ?: 0.0
-                        onGuardarCuenta(nombre, tipo, moneda, saldo)
-                    }
-                }
-            ) {
-                Text("Guardar")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancelar")
-            }
-        }
-    )
-}
-
-@Composable
-fun DialogoAjustarSaldoCuenta(
-    cuenta: CuentaBancaria,
-    onDismiss: () -> Unit,
-    onGuardarMovimiento: (montoDiferencia: Double, nuevoSaldoTotal: Double, motivo: String) -> Unit
-) {
-    var esMovimiento by remember { mutableStateOf(true) }
-    var esIngreso by remember { mutableStateOf(true) }
-    var montoTexto by remember { mutableStateOf("") }
-    var saldoDirectoTexto by remember { mutableStateOf(cuenta.saldoActual.toString()) }
-    var motivoTexto by remember { mutableStateOf("") }
-
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = fondo2)
-        ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Text(
-                    text = "Ajustar Dinero · ${cuenta.nombre}",
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (esMovimiento) estados else com.example.gestor_deudores.ui.theme.fondo_claro)
-                            .clickable { esMovimiento = true }
-                            .padding(vertical = 8.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("➕ / ➖ Sumar o Restar", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (esMovimiento) Color.White else Color.DarkGray)
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (!esMovimiento) estados else com.example.gestor_deudores.ui.theme.fondo_claro)
-                            .clickable { esMovimiento = false }
-                            .padding(vertical = 8.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("⚙️ Saldo Directo", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (!esMovimiento) Color.White else Color.DarkGray)
-                    }
-                }
-
-                if (esMovimiento) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(if (esIngreso) Color(0xFF2E7D32) else com.example.gestor_deudores.ui.theme.fondo_claro)
-                                .clickable { esIngreso = true }
-                                .padding(vertical = 6.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("+ Ingreso (Sumar)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (esIngreso) Color.White else Color.DarkGray)
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(if (!esIngreso) Color(0xFFD32F2F) else com.example.gestor_deudores.ui.theme.fondo_claro)
-                                .clickable { esIngreso = false }
-                                .padding(vertical = 6.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("- Egreso (Restar)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (!esIngreso) Color.White else Color.DarkGray)
-                        }
-                    }
-
-                    val montoVal = montoTexto.replace(",", ".").toDoubleOrNull() ?: 0.0
-                    val cambioSgn = if (esIngreso) montoVal else -montoVal
-                    val saldoSimulado = (cuenta.saldoActual + cambioSgn).coerceAtLeast(0.0)
-
-                    OutlinedTextField(
-                        value = montoTexto,
-                        onValueChange = { montoTexto = it },
-                        label = { Text("Monto a ${if (esIngreso) "sumar" else "restar"} (${cuenta.moneda})") },
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-
-                    Text(
-                        text = "Nuevo saldo estimado: ${cuenta.moneda} ${String.format(Locale.US, "%.2f", saldoSimulado)}",
-                        fontSize = 11.sp,
-                        color = Color(0xFF4CAF50),
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    OutlinedTextField(
-                        value = motivoTexto,
-                        onValueChange = { motivoTexto = it },
-                        label = { Text("¿De qué es el dinero? (Descripción)") },
-                        placeholder = { Text("Ej. Abono cliente, Pago alquiler, Compra tazas") },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                } else {
-                    val nuevoSaldoVal = saldoDirectoTexto.replace(",", ".").toDoubleOrNull() ?: cuenta.saldoActual
-
-                    Text(
-                        text = "Saldo actual registrado: ${cuenta.moneda} ${cuenta.saldoActual}",
-                        fontSize = 12.sp,
-                        color = Color.LightGray
-                    )
-
-                    OutlinedTextField(
-                        value = saldoDirectoTexto,
-                        onValueChange = { saldoDirectoTexto = it },
-                        label = { Text("Nuevo Saldo Real (${cuenta.moneda})") },
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-
-                    OutlinedTextField(
-                        value = motivoTexto,
-                        onValueChange = { motivoTexto = it },
-                        label = { Text("Motivo del ajuste") },
-                        placeholder = { Text("Ej. Arqueo de caja al cierre") },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    TextButton(onClick = onDismiss) {
-                        Text("Cancelar", color = Color.LightGray)
-                    }
-
-                    Button(
-                        onClick = {
-                            if (esMovimiento) {
-                                val montoVal = montoTexto.replace(",", ".").toDoubleOrNull() ?: 0.0
-                                if (montoVal > 0) {
-                                    val difSgn = if (esIngreso) montoVal else -montoVal
-                                    val nuevoSaldo = (cuenta.saldoActual + difSgn).coerceAtLeast(0.0)
-                                    val descrip = motivoTexto.ifBlank { if (esIngreso) "Ingreso manual" else "Egreso manual" }
-                                    onGuardarMovimiento(difSgn, nuevoSaldo, descrip)
-                                }
-                            } else {
-                                val nuevoSaldoVal = saldoDirectoTexto.replace(",", ".").toDoubleOrNull() ?: cuenta.saldoActual
-                                val dif = nuevoSaldoVal - cuenta.saldoActual
-                                val descrip = motivoTexto.ifBlank { "Ajuste directo de saldo" }
-                                onGuardarMovimiento(dif, nuevoSaldoVal, descrip)
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = estados)
-                    ) {
-                        Text("Guardar Ajuste", color = Color.White, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
         }
     }
 }

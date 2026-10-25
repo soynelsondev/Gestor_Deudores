@@ -21,10 +21,13 @@ interface MovimientoCuentaDao {
     @Delete
     suspend fun eliminarMovimiento(movimiento: MovimientoCuenta)
 
-    @Query("SELECT * FROM movimientos_cuenta WHERE cuentaId = :cuentaId ORDER BY fechaMillis DESC")
+    @Query("SELECT * FROM movimientos_cuenta WHERE cuentaId = :cuentaId ORDER BY fechaMillis DESC, id DESC")
     fun obtenerMovimientosPorCuenta(cuentaId: Int): Flow<List<MovimientoCuenta>>
 
-    @Query("SELECT * FROM movimientos_cuenta WHERE cuentaId = :cuentaId ORDER BY fechaMillis DESC")
+    @Query("SELECT * FROM movimientos_cuenta WHERE cuentaId = :cuentaId ORDER BY fechaMillis ASC, id ASC")
+    suspend fun obtenerMovimientosPorCuentaAscSync(cuentaId: Int): List<MovimientoCuenta>
+
+    @Query("SELECT * FROM movimientos_cuenta WHERE cuentaId = :cuentaId ORDER BY fechaMillis DESC, id DESC")
     suspend fun obtenerMovimientosPorCuentaSync(cuentaId: Int): List<MovimientoCuenta>
 
     @Query("SELECT SUM(monto) FROM movimientos_cuenta WHERE cuentaId = :cuentaId")
@@ -33,9 +36,9 @@ interface MovimientoCuentaDao {
     @Query("SELECT SUM(monto) FROM movimientos_cuenta WHERE cuentaId = :cuentaId")
     suspend fun obtenerSumaMovimientosCuentaSync(cuentaId: Int): Double?
 
-    @Query("SELECT * FROM movimientos_cuenta ORDER BY fechaMillis DESC")
+    @Query("SELECT * FROM movimientos_cuenta ORDER BY fechaMillis DESC, id DESC")
     fun obtenerTodosLosMovimientos(): Flow<List<MovimientoCuenta>>
 
-    @Query("SELECT * FROM movimientos_cuenta ORDER BY fechaMillis DESC")
+    @Query("SELECT * FROM movimientos_cuenta ORDER BY fechaMillis DESC, id DESC")
     suspend fun obtenerTodosLosMovimientosSync(): List<MovimientoCuenta>
 }

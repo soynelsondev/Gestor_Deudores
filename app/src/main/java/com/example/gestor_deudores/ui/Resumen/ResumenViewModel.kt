@@ -277,40 +277,191 @@ class ResumenViewModel(
     }
 
     // --- ACCIONES DE GESTIÓN DE CUENTAS BANCARIAS / BILLETERAS ---
-    fun agregarCuentaBancaria(nombre: String, tipo: String, moneda: String, saldoInicial: Double) {
+    fun agregarCuentaBancaria(
+        nombre: String,
+        tipo: String,
+        moneda: String,
+        saldoInicial: Double,
+        institucion: String? = null,
+        alias: String? = null,
+        uso: String? = null,
+        metaUsd: Double? = null,
+        datosDePago: String? = null,
+        color: String? = null,
+        icono: String? = null
+    ) {
         viewModelScope.launch {
+            val saldoInitRed = saldoInicial.redondear2()
             val nuevaCuenta = CuentaBancaria(
                 nombre = nombre.trim(),
                 tipo = tipo,
                 moneda = moneda,
-                saldoActual = saldoInicial.redondear2()
+                saldoActual = saldoInitRed,
+                saldoInicial = saldoInitRed,
+                institucion = institucion?.trim()?.ifBlank { null },
+                alias = alias?.trim()?.ifBlank { null },
+                uso = uso?.trim()?.ifBlank { null },
+                metaUsd = metaUsd?.takeIf { it > 0.0 }?.redondear2(),
+                datosDePago = datosDePago?.trim()?.ifBlank { null },
+                color = color,
+                icono = icono
             )
-            cuentaBancariaDao.agregarCuenta(nuevaCuenta)
+            val cuentaId = cuentaBancariaDao.agregarCuenta(nuevaCuenta).toInt()
+
+            if (saldoInitRed != 0.0) {
+                val movInicial = MovimientoCuenta(
+                    cuentaId = cuentaId,
+                    tipo = "SALDO_INICIAL",
+                    monto = saldoInitRed,
+                    moneda = moneda,
+                    concepto = "Saldo inicial",
+                    referenciaTipo = "SALDO_INICIAL"
+                )
+                movimientoCuentaDao.agregarMovimiento(movInicial)
+            }
         }
     }
 
-    fun actualizarSaldoCuenta(cuenta: CuentaBancaria, nuevoSaldo: Double) {
+    fun editarCuentaBancaria(cuentaActualizada: CuentaBancaria) {
         viewModelScope.launch {
-            val cuentaActualizada = cuenta.copy(saldoActual = nuevoSaldo.redondear2())
             cuentaBancariaDao.actualizarCuenta(cuentaActualizada)
         }
     }
 
-    fun actualizarSaldoCuentaConMovimiento(cuenta: CuentaBancaria, montoDiferencia: Double, nuevoSaldo: Double, motivo: String) {
+    fun archivarCuentaBancaria(cuenta: CuentaBancaria) {
         viewModelScope.launch {
-            val cuentaActualizada = cuenta.copy(saldoActual = nuevoSaldo.redondear2())
-            cuentaBancariaDao.actualizarCuenta(cuentaActualizada)
+            cuentaBancariaDao.actualizarCuenta(cuenta.copy(activa = false))
+        }
+    }
 
-            if (montoDiferencia != 0.0) {
-                val tipoMov = if (montoDiferencia > 0) "ABONO" else "GASTO"
+    fun desarchivarCuentaBancaria(cuenta: CuentaBancaria) {
+        viewModelScope.launch {
+            cuentaBancariaDao.actualizarCuenta(cuenta.copy(activa = true))
+        }
+    }
+
+    fun registrarIngresoCuenta(
+        cuenta: CuentaBancaria,
+        monto: Double,
+        concepto: String,
+        referenciaPago: String? = null,
+        comprobanteRuta: String? = null
+    ) {
+        viewModelScope.launch {
+            val montoRed = Math.abs(monto).redondear2()
+            if (montoRed <= 0) return@launch
+
+            val mov = MovimientoCuenta(
+                cuentaId = cuenta.id,
+                tipo = "ABONO",
+                monto = montoRed,
+                moneda = cuenta.moneda,
+                concepto = concepto.trim().ifBlank { "Ingreso de dinero" },
+                referenciaTipo = "ABONO",
+                referenciaPago = referenciaPago?.trim()?.ifBlank { null },
+                comprobanteRuta = comprobanteRuta
+            )
+            movimientoCuentaDao.agregarMovimiento(mov)
+
+            val nuevoSaldo = (cuenta.saldoActual + montoRed).redondear2()
+            cuentaBancariaDao.actualizarCuenta(cuenta.copy(saldoActual = nuevoSaldo))
+        }
+    }
+
+    fun registrarGastoCuenta(
+        cuenta: CuentaBancaria,
+        monto: Double,
+        concepto: String,
+        referenciaPago: String? = null,
+        comprobanteRuta: String? = null
+    ) {
+        viewModelScope.launch {
+            val montoRed = Math.abs(monto).redondear2()
+            if (montoRed <= 0) return@launch
+
+            val mov = MovimientoCuenta(
+                cuentaId = cuenta.id,
+                tipo = "GASTO",
+                monto = -montoRed,
+                moneda = cuenta.moneda,
+                concepto = concepto.trim().ifBlank { "Gasto / Salida de dinero" },
+                referenciaTipo = "GASTO",
+                referenciaPago = referenciaPago?.trim()?.ifBlank { null },
+                comprobanteRuta = comprobanteRuta
+            )
+            movimientoCuentaDao.agregarMovimiento(mov)
+
+            val nuevoSaldo = (cuenta.saldoActual - montoRed).redondear2()
+            cuentaBancariaDao.actualizarCuenta(cuenta.copy(saldoActual = nuevoSaldo))
+        }
+    }
+
+    fun transferirEntreCuentas(
+        cuentaOrigen: CuentaBancaria,
+        cuentaDestino: CuentaBancaria,
+        montoOrigen: Double,
+        montoDestino: Double,
+        tasaUsada: Double = 0.0,
+        concepto: String = "",
+        referenciaPago: String? = null
+    ) {
+        viewModelScope.launch {
+            val montoOrigRed = Math.abs(montoOrigen).redondear2()
+            val montoDestRed = Math.abs(montoDestino).redondear2()
+            if (montoOrigRed <= 0 || montoDestRed <= 0) return@launch
+
+            val conceptoOrigen = "Transferencia hacia ${cuentaDestino.nombre}" + if (concepto.isNotBlank()) " · ${concepto.trim()}" else ""
+            val conceptoDestino = "Transferencia desde ${cuentaOrigen.nombre}" + if (concepto.isNotBlank()) " · ${concepto.trim()}" else ""
+
+            val movSalida = MovimientoCuenta(
+                cuentaId = cuentaOrigen.id,
+                tipo = "TRANSFERENCIA_SALIDA",
+                monto = -montoOrigRed,
+                moneda = cuentaOrigen.moneda,
+                tasa = tasaUsada,
+                concepto = conceptoOrigen,
+                referenciaTipo = "TRANSFERENCIA",
+                referenciaId = cuentaDestino.id,
+                referenciaPago = referenciaPago?.trim()?.ifBlank { null }
+            )
+            val movSalidaId = movimientoCuentaDao.agregarMovimiento(movSalida).toInt()
+
+            val movEntrada = MovimientoCuenta(
+                cuentaId = cuentaDestino.id,
+                tipo = "TRANSFERENCIA_ENTRADA",
+                monto = montoDestRed,
+                moneda = cuentaDestino.moneda,
+                tasa = tasaUsada,
+                concepto = conceptoDestino,
+                referenciaTipo = "TRANSFERENCIA",
+                referenciaId = movSalidaId,
+                referenciaPago = referenciaPago?.trim()?.ifBlank { null }
+            )
+            movimientoCuentaDao.agregarMovimiento(movEntrada)
+
+            cuentaBancariaDao.actualizarCuenta(cuentaOrigen.copy(saldoActual = (cuentaOrigen.saldoActual - montoOrigRed).redondear2()))
+            cuentaBancariaDao.actualizarCuenta(cuentaDestino.copy(saldoActual = (cuentaDestino.saldoActual + montoDestRed).redondear2()))
+        }
+    }
+
+    fun ajustarSaldoCuenta(cuenta: CuentaBancaria, nuevoSaldo: Double, motivo: String) {
+        viewModelScope.launch {
+            val nuevoSaldoRed = nuevoSaldo.redondear2()
+            val dif = (nuevoSaldoRed - cuenta.saldoActual).redondear2()
+
+            if (dif != 0.0) {
                 val mov = MovimientoCuenta(
                     cuentaId = cuenta.id,
-                    tipo = tipoMov,
-                    monto = montoDiferencia.redondear2(),
-                    nota = motivo.trim()
+                    tipo = "AJUSTE",
+                    monto = dif,
+                    moneda = cuenta.moneda,
+                    concepto = "Ajuste: ${motivo.trim().ifBlank { "Reconciliación de saldo" }}",
+                    referenciaTipo = "AJUSTE"
                 )
                 movimientoCuentaDao.agregarMovimiento(mov)
             }
+
+            cuentaBancariaDao.actualizarCuenta(cuenta.copy(saldoActual = nuevoSaldoRed))
         }
     }
 
@@ -754,7 +905,7 @@ class ResumenViewModel(
         initialValue = ResumenUiState(cargando = true)
     )
 
-    private fun calcularRangoMillis(periodo: PeriodoFiltro): Pair<Long, Long> {
+    fun calcularRangoMillis(periodo: PeriodoFiltro): Pair<Long, Long> {
         val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
         val finMillis = System.currentTimeMillis()
 

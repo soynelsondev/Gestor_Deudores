@@ -16,7 +16,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         CategoriaGasto::class, Gasto::class, Retiro::class, MovimientoCuenta::class,
         CierreCaja::class
     ],
-    version = 31,
+    version = 32,
     exportSchema = true
 )
 abstract class DeudaDataBase : RoomDatabase() {
@@ -672,6 +672,31 @@ abstract class DeudaDataBase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_31_32 = object : Migration(31, 32) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                addColumnIfNotExists(db, "cuentas_bancarias", "institucion", "`institucion` TEXT")
+                addColumnIfNotExists(db, "cuentas_bancarias", "alias", "`alias` TEXT")
+                addColumnIfNotExists(db, "cuentas_bancarias", "uso", "`uso` TEXT")
+                addColumnIfNotExists(db, "cuentas_bancarias", "metaUsd", "`metaUsd` REAL")
+                addColumnIfNotExists(db, "cuentas_bancarias", "datosDePago", "`datosDePago` TEXT")
+                addColumnIfNotExists(db, "cuentas_bancarias", "color", "`color` TEXT")
+                addColumnIfNotExists(db, "cuentas_bancarias", "icono", "`icono` TEXT")
+                addColumnIfNotExists(db, "cuentas_bancarias", "orden", "`orden` INTEGER NOT NULL DEFAULT 0")
+
+                addColumnIfNotExists(db, "movimientos_cuenta", "montoUsd", "`montoUsd` REAL NOT NULL DEFAULT 0.0")
+                addColumnIfNotExists(db, "movimientos_cuenta", "concepto", "`concepto` TEXT NOT NULL DEFAULT ''")
+                addColumnIfNotExists(db, "movimientos_cuenta", "referenciaTipo", "`referenciaTipo` TEXT")
+                addColumnIfNotExists(db, "movimientos_cuenta", "referenciaPago", "`referenciaPago` TEXT")
+                addColumnIfNotExists(db, "movimientos_cuenta", "comprobanteRuta", "`comprobanteRuta` TEXT")
+
+                try {
+                    db.execSQL("UPDATE cuentas_bancarias SET saldoInicial = saldoActual WHERE saldoInicial = 0.0 AND saldoActual != 0.0")
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+
         fun getDatabase(context: Context): DeudaDataBase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -687,7 +712,7 @@ abstract class DeudaDataBase : RoomDatabase() {
                         MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21,
                         MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25,
                         MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29,
-                        MIGRATION_29_30, MIGRATION_30_31
+                        MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32
                     )
                     .build()
 
