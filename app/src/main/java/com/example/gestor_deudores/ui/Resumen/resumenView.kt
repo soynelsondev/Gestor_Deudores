@@ -1551,7 +1551,7 @@ fun SeccionCuentasBancarias(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text("🏦 Bancos y Billeteras", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 16.sp)
-                        Text("Total en cuentas: $${String.format(Locale.US, "%.2f", totalCuentasUsd)} USD", fontWeight = FontWeight.Bold, color = Color(0xFF81C784), fontSize = 18.sp)
+                        Text("Total en cuentas: $${String.format(Locale.US, "%.2f", totalCuentasUsd)} USD", fontWeight = FontWeight.Bold, color = Color(0xFFFFD54F), fontSize = 13.sp)
                         if (tasaBcv > 0) {
                             Text("Tasa BCV: Bs. ${String.format(Locale.US, "%.2f", tasaBcv)}", fontSize = 11.sp, color = Color.LightGray)
                         }

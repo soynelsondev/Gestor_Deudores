@@ -809,7 +809,13 @@ fun obtenerNotasGeneralesLimpias(notasCompleta: String): String {
     return lineasSinInsumos
 }
 
-fun obtenerArticulosDePedido(notasCompleta: String): List<ArticuloPedido> {
+fun obtenerArticulosDePedido(
+    notasCompleta: String,
+    productoFallback: String = "",
+    cantidadFallback: Int = 1,
+    precioFallback: Double = 0.0
+): List<ArticuloPedido> {
+    // 1. JSON estructurado
     if (notasCompleta.contains("[ARTICULOS_JSON]") && notasCompleta.contains("[/ARTICULOS_JSON]")) {
         try {
             val json = notasCompleta.substringAfter("[ARTICULOS_JSON]").substringBefore("[/ARTICULOS_JSON]")
@@ -820,6 +826,46 @@ fun obtenerArticulosDePedido(notasCompleta: String): List<ArticuloPedido> {
             e.printStackTrace()
         }
     }
+
+    // 2. Si es formato en texto tipo "Prod #1 (Franela): x2 | Estampa: "Dorado""
+    val lineas = notasCompleta.split("\n").filter { it.contains("Prod #") || (it.contains("x") && it.contains("Precio:")) }
+    if (lineas.isNotEmpty()) {
+        val parsed = lineas.mapIndexed { idx, line ->
+            val pNombre = if (line.contains("(") && line.contains(")")) line.substringAfter("(").substringBefore(")") else "Producto #${idx + 1}"
+            val pDetalle = if (line.contains("Detalle:")) line.substringAfter("Detalle:").substringBefore("|").trim() else ""
+            val pEstampa = if (line.contains("Estampa:")) line.substringAfter("Estampa:").substringBefore("|").trim() else ""
+            val pNota = if (line.contains("Nota:")) line.substringAfter("Nota:").substringBefore("|").trim() else ""
+            ArticuloPedido(
+                id = "legacy_$idx",
+                producto = pNombre,
+                cantidadTexto = cantidadFallback.toString(),
+                precioUnitarioTexto = String.format(Locale.US, "%.2f", precioFallback),
+                detalle = pDetalle,
+                textoEstampar = pEstampa,
+                notaItem = pNota
+            )
+        }
+        if (parsed.isNotEmpty()) return parsed
+    }
+
+    // 3. Fallback: Parsear desde productoFallback si hay varios productos separados por coma
+    if (productoFallback.isNotBlank()) {
+        val partes = productoFallback.split(",")
+        val listaFallback = partes.mapIndexed { idx, p ->
+            val limpio = p.trim()
+            val cantMatch = Regex("""\(x(\d+)\)""").find(limpio)
+            val cantStr = cantMatch?.groupValues?.get(1) ?: cantidadFallback.toString()
+            val nombreLimpio = limpio.replace(Regex("""\(x\d+\).*"""), "").trim()
+            ArticuloPedido(
+                id = "item_$idx",
+                producto = if (nombreLimpio.isNotBlank()) nombreLimpio else productoFallback,
+                cantidadTexto = cantStr,
+                precioUnitarioTexto = String.format(Locale.US, "%.2f", precioFallback)
+            )
+        }
+        if (listaFallback.isNotEmpty()) return listaFallback
+    }
+
     return emptyList()
 }
 
@@ -847,11 +893,40 @@ fun DialogoDesgloseCompletoPedido(
         viewModel.obtenerSaldoRestantePedido(item.id, item.totalUsd, deudasCliente)
     }
 
-    val articulosParsed = remember(item.notas) { obtenerArticulosDePedido(item.notas) }
+    val articulosParsed = remember(item.notas, item.producto) {
+        obtenerArticulosDePedido(item.notas, item.producto, item.cantidad, item.precioUnitarioUsd)
+    }
     val notasLimpias = remember(item.notas) { obtenerNotasGeneralesLimpias(item.notas) }
 
     val tasaActiva = if (tasaBcvGlobal > 0) tasaBcvGlobal else 40.0
     val totalBs = item.totalUsd * tasaActiva
+
+    // Distribución inteligente de fotos de diseño a cada ítem
+    val fotosDistribuidas = remember(imagenesPedido, articulosParsed) {
+        val mapa = mutableMapOf<String, MutableList<com.example.gestor_deudores.data.database.PedidoImagen>>()
+        val fotosDiseno = imagenesPedido.filter { it.tipo == "DISENO" }
+
+        articulosParsed.forEach { art ->
+            mapa[art.id] = mutableListOf()
+            val directas = imagenesPedido.filter { img ->
+                img.itemId == art.id || art.fotosUris.contains(img.ruta) || art.fotosUris.contains(img.rutaMiniatura)
+            }
+            mapa[art.id]!!.addAll(directas)
+        }
+
+        val sinAsignar = fotosDiseno.filter { img ->
+            mapa.values.none { list -> list.any { it.id == img.id } }
+        }
+
+        if (sinAsignar.isNotEmpty() && articulosParsed.isNotEmpty()) {
+            sinAsignar.forEachIndexed { idx, img ->
+                val artTarget = articulosParsed[idx % articulosParsed.size]
+                mapa[artTarget.id]?.add(img)
+            }
+        }
+
+        mapa
+    }
 
     if (imagenSeleccionadaVisor != null) {
         DialogoVisorImagen(
@@ -940,7 +1015,7 @@ fun DialogoDesgloseCompletoPedido(
                         }
                     }
 
-                    // SECCIÓN 2: DESGLOSE PRODUCTO POR PRODUCTO
+                    // SECCIÓN 2: DESGLOSE PRODUCTO POR PRODUCTO (ÍTEM POR ÍTEM)
                     item {
                         Text("👕 DESGLOSE DE PRODUCTOS (${if (articulosParsed.isNotEmpty()) articulosParsed.size else 1} ítem/s)", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = estados)
                     }
@@ -951,6 +1026,7 @@ fun DialogoDesgloseCompletoPedido(
                             val cantTotal = art.obtenerCantidadTotal()
                             val precioUn = art.precioUnitarioTexto.replace(",", ".").toDoubleOrNull() ?: item.precioUnitarioUsd
                             val subtotalProd = cantTotal * precioUn
+                            val fotosEsteProd = fotosDistribuidas[art.id] ?: emptyList()
 
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
@@ -1016,10 +1092,7 @@ fun DialogoDesgloseCompletoPedido(
                                         )
                                     }
 
-                                    val fotosEsteProd = imagenesPedido.filter { img ->
-                                        img.itemId == art.id || art.fotosUris.contains(img.ruta) || art.fotosUris.contains(img.rutaMiniatura)
-                                    }
-
+                                    // FOTOS VINCULADAS A ESTE PRODUCTO ESPECÍFICO
                                     if (fotosEsteProd.isNotEmpty()) {
                                         Spacer(modifier = Modifier.height(4.dp))
                                         Text("🖼️ Fotos de este producto (${fotosEsteProd.size}):", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
