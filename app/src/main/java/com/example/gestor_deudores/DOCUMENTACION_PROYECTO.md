@@ -1,95 +1,136 @@
-# Documentación del Proyecto: Gestor de Deudores
-
-## 1. ¿De qué trata el proyecto? (Propósito)
-**Gestor de Deudores** es una aplicación móvil para Android diseñada para ayudar a comerciantes, prestamistas o emprendedores a llevar un control preciso, digital y organizado de sus cuentas por cobrar. 
-
-La aplicación permite registrar clientes (deudores), asignarles préstamos o créditos por mercancía, y registrar los pagos parciales o totales (abonos) que realizan a lo largo del tiempo. Su principal ventaja es que automatiza toda la matemática financiera: en lugar de tener un número estático, el sistema calcula el saldo restante de cada persona sumando y restando dinámicamente todo su historial de transacciones.
-
-## 2. Estado y Alcance de la Versión Actual
-Hasta esta versión, el proyecto se encuentra en un estado funcional, estable y con un flujo completo para la gestión diaria de cobranzas. Las características implementadas y operativas son:
-
-* **Gestión de Perfiles:** Creación, edición y eliminación (con borrado en cascada) de perfiles de clientes, incluyendo nombre, apellido, cédula y teléfono.
-* **Sistema de Transacciones:** Registro de deudas iniciales (monto, tipo, cuotas, fecha) con soporte para "abonos iniciales / adelantos" en el mismo paso.
-* **Abonos Rápidos:** Capacidad de registrar pagos parciales rápidamente desde un botón en la pantalla principal.
-* **Cálculo Matemático Dinámico:** El sistema interpreta los abonos como "deudas con valor negativo". Al sumar todo el historial, se obtiene el monto exacto restante sin riesgo de desajustes.
-* **Dashboard Principal:** 
-    * Buscador en tiempo real por nombre o apellido.
-    * Tarjeta de Resumen Global: Muestra cuántas personas deben dinero y el gran total de capital "en la calle".
-    * Pestañas inteligentes: Separa a los clientes en "Pendientes" (aún deben dinero) e "Historial" (ya pagaron todo).
-* **Historial Detallado:** Pantalla individual por cliente que lista cronológicamente todos sus movimientos, diferenciando visualmente los cargos (en negro/rojo) de los pagos (en verde).
-* **Edición Protegida:** Un flujo de edición de dos fases (Editar Persona -> Editar Deuda) con medidas de seguridad en la UI que bloquean la creación accidental de nuevos abonos al editar, y ajustan matemáticamente el saldo restante si se cambia el monto del préstamo original.
+# 📑 DOCUMENTACIÓN TÉCNICA Y MANUAL DE USO DEL PROYECTO
+## **Gestor Financiero y de Producción para Talleres y Comercios**
 
 ---
 
-## 3. Arquitectura y Estructura del Proyecto
+## 📌 1. PROPÓSITO DEL PROYECTO
 
-El proyecto sigue el patrón de arquitectura **MVVM (Model-View-ViewModel)** recomendado por Google para Android, usando **Jetpack Compose** para la interfaz de usuario (UI) y **Room** para la base de datos local.
+**Gestor Financiero y de Producción** es una aplicación móvil nativa para Android diseñada específicamente para **talleres de estampado, sublimación, bordado, confección y comercios de producción personalizada**.
 
-### Estructura de Paquetes
-*   `com.example.gestor_deudores` (Raíz): Contiene el `MainActivity` y la configuración de navegación (`navegacion.kt`).
-*   `data`: Contiene todo lo relacionado a la base de datos Room (`DeudaDataBase.kt`, `entity.kt`, `dao.kt`).
-*   `ui.home`: Contiene la vista principal (lista de deudores), historial y su ViewModel asociado.
-*   `ui.Registro`: Contiene la vista y ViewModel para registrar/editar la información personal del **Deudor**.
-*   `ui.registroDeuda`: Contiene la vista y ViewModel para registrar/editar la **Deuda** en sí misma, así como los abonos iniciales.
-*   `ui.theme`: Contiene paleta de colores, tipografías y componentes UI reutilizables.
+### ¿Qué problema resuelve?
+1. **Separación de Dinero de Materia Prima vs. Ganancia Real**: En los negocios de producción personalizada, cuando un cliente paga un adelanto o abono, gran parte de ese dinero pertenece a las camisetas, telas, tintas o envíos. Si el emprendedor gasta ese dinero como ganancia, el taller se queda sin capital para comprar insumos. La app separa automáticamente cada cobro en **Sobres de Insumos** y calcula la **Ganancia Neta Real** y el dinero **Disponible para Retirar**.
+2. **Control Multimoneda (USD y Bolívares VES)**: Permite registrar cuentas en Dólares ($) y Bolívares (Bs) a la tasa oficial del BCV, realizando conversiones en tiempo real sin mezclar monedas.
+3. **Gestión de Cuentas Bancarias y Billeteras (Sistema Zubli)**: Mantiene el saldo corrido en tiempo real de cada banco, pago móvil o caja de efectivo, permitiendo realizar extractos en CSV, transferencias entre cuentas y ajustes contables transparentes.
+4. **Desglose de Pedidos de Producción**: Controla el ciclo de vida de los pedidos por ítems individuales con sus variantes (tallas, colores), texto de estampado, notas y fotografías vinculadas por producto.
+5. **Cuentas por Cobrar y Cobros en Cascada ("Mis Cobros")**: Elimina la duplicación de cobranzas imputando los abonos globales del cliente a sus compras pendientes en orden cronológico.
 
-## 4. Modelos de Base de Datos (`entity.kt`)
+---
 
-El proyecto usa dos tablas principales relacionadas (1 a Muchos):
+## 🏗️ 2. ARQUITECTURA DEL SISTEMA Y PATRÓN MVVM
 
-*   **`Deudor`:** Almacena la información del cliente (nombre, apellido, cédula, teléfono).
-*   **`Deuda`:** Almacena el registro financiero (monto, fecha, descripción, rol). 
-    *   *Nota Clave:* Esta tabla se usa tanto para **Préstamos/Mercancía** como para **Abonos/Pagos**.
-    *   **Identificador de Abonos:** Si un registro tiene `rol = "PAGO"` o un `montoRestante` negativo/menor a cero, el sistema lo interpreta como un abono.
+El proyecto está construido siguiendo los principios de la **Android Modern App Architecture**:
+* **Patrón de Arquitectura**: **MVVM (Model-View-ViewModel)** estricto.
+  * **View (`ui/`)**: Compuesta exclusivamente por composables de **Jetpack Compose**. Es 100% declarativa, reactiva y libre de lógica de negocio o cálculos financieros.
+  * **ViewModel (`ui/*ViewModel.kt`)**: Actúa como el cerebro. Administra el estado de la UI (`StateFlow`), maneja corrutinas (`viewModelScope`), aplica reglas financieras y se comunica con la capa de datos.
+  * **Model / Data (`data/`)**: Capa de datos administrada mediante **Room Database (v32)** con entidades Kotlin, DAOs y migraciones atómicas.
 
-## 5. Lógica Matemática Crítica
+### Stack Tecnológico
+* **Lenguaje**: Kotlin 1.9+
+* **UI Toolkit**: Jetpack Compose con Material Design 3
+* **Base de Datos**: Room Persistence Library v32
+* **Asincronía & Flujos**: Kotlin Coroutines & `StateFlow` / `Flow`
+* **Navegación**: Jetpack Compose Navigation
+* **Exportación de Datos**: Generador de reportes PDF (`PdfDocument`) y CSV
 
-### A. Cálculo del Total Adeudado (`HomeViewModel.kt` y `dao.kt`)
-La deuda total de una persona NO se guarda como una variable estática en el `Deudor`. Se calcula de forma dinámica en tiempo real sumando todos los registros de su historial:
-*   Si Juan pide \$100, se guarda una `Deuda` con `montoRestante = 100`.
-*   Si Juan abona \$20, se guarda un recibo (Deuda) con `montoRestante = -20`.
-*   El sistema suma: `100 + (-20) = 80`. El total de la deuda es \$80.
+---
 
-### B. Actualización en Modo Edición (`RDeudaViewModel.kt`)
-Si un usuario se equivoca al registrar una deuda inicial (Ej: puso \$50 pero eran \$100), y luego va a editarla, la matemática es:
-1.  Se busca el registro viejo.
-2.  Se calcula la diferencia: `Nuevo Monto (100) - Monto Inicial Viejo (50) = Diferencia (50)`.
-3.  Se le suma esa diferencia al `montoRestante` actual, para no afectar los abonos que el cliente ya haya hecho.
+## 🗄️ 3. ESQUEMA DE BASE DE DATOS Y MIGRACIONES (Room v32)
 
-## 6. Flujos Importantes de la UI
+La base de datos Room (`DeudaDataBase.kt`) gestiona las siguientes entidades principales:
 
-### Flujo de Navegación (`navegacion.kt` & `rutas.kt`)
-El sistema usa `NavHost` de Jetpack Compose.
-*   **Modo Creación:** `Home` -> `Registro (Deudor)` -> `RegistroDeuda (Deuda)` -> `Home`.
-*   **Modo Edición:** `Home` (Botón Lápiz) -> `Registro (Editar Deudor)` -> `RegistroDeuda (Editar Deuda)` -> `Home`.
-*   Las rutas de edición pasan los IDs por la URL: `"$REGISTRO/{id}/{idDeuda}"`.
+### Entidades y Tablas Principales
 
-### Interfaz Segura en Edición (`registroDeudaView.kt`)
-Para evitar corrupción de datos, si la pantalla de deuda detecta que está en "Modo Edición" (`idDeudaActual > 0`), **oculta automáticamente** los campos de "Abono Inicial" y "Nº de Cuotas". Los abonos posteriores siempre deben hacerse desde el botón `+` en la tarjeta principal (Home).
+| Entidad / Tabla | Propósito | Campos Clave |
+| :--- | :--- | :--- |
+| `Deudor` (`deudores`) | Perfil del cliente | `id`, `nombre`, `apellido`, `cedula`, `telefono` |
+| `Deuda` (`Tabla_Deuda`) | Registro financiero de cargos y abonos | `id`, `idDeudor`, `montoInicial`, `montoRestante`, `tipo`, `descripcion`, `estado`, `fechaMillis` |
+| `CuentaBancaria` (`cuentas_bancarias`) | Bancos, billeteras y cajas de efectivo | `id`, `nombre`, `tipo`, `moneda`, `saldoInicial`, `uso`, `metaUsd`, `datosDePago`, `activa` |
+| `MovimientoCuenta` (`movimientos_cuenta`) | Historial de transacciones bancarias | `id`, `cuentaId`, `monto`, `montoUsd`, `concepto`, `tipo`, `referenciaPago`, `fechaMillis` |
+| `Pedido` (`pedidos`) | Órdenes de trabajo del taller | `id`, `deudorId`, `producto`, `cantidad`, `precioUnitarioUsd`, `totalUsd`, `estado`, `notas`, `fechaCreacionMillis` |
+| `Gasto` (`gastos`) | Compras de insumos y gastos operativos | `id`, `categoriaGastoId`, `montoUsd`, `monedaOriginal`, `montoOriginal`, `descripcion`, `fechaMillis` |
+| `Retiro` (`retiros`) | Retiros de ganancia del dueño | `id`, `montoUsd`, `nota`, `fechaMillis` |
+| `DistribucionAbono` (`distribucion_abonos`) | Desglose de ingresos en sobres de insumos | `id`, `abonoId`, `pedidoId`, `material`, `transporte`, `insumos`, `ganancia` |
+| `PlantillaCotizacion` (`plantillas_cotizacion`) | Presupuestos y costos base | `id`, `nombre`, `costoPiezaBaseUsd`, `costoPasajeUsd`, `costoInsumosUsd`, `margenGananciaPct` |
 
-## 7. Cambios y Correcciones Realizadas (Historial de Parches)
+### Regla de Inmutabilidad e Integridad Financiera
+1. **Los movimientos no se editan ni se eliminan**: Las correcciones o discrepancias en bancos se registran mediante nuevos movimientos de tipo `AJUSTE` exigiendo un motivo o razón obligatoria.
+2. **Migración Atómica `MIGRATION_31_32`**: Al actualizar la BD a la versión 32, el saldo anterior de cada cuenta se convierte de forma segura en `saldoInicial` sin alterar movimientos pasados ni perder información.
 
-A continuación, el historial de las correcciones implementadas por el asistente AI para reparar el flujo de edición:
+---
 
-1.  **Activación del Flujo de Edición Completo:** 
-    *   Se crearon las rutas faltantes en `rutas.kt` y `navegacion.kt` para permitir que, al terminar de editar el Deudor, la app salte a editar la Deuda (antes solo volvía al inicio).
-    *   Se ajustó el botón del lápiz en `homeView.kt` para enviar tanto el ID del Deudor como el ID de la Deuda.
-2.  **Soporte de Lectura en Base de Datos:**
-    *   Se agregó la consulta `obtenerDeudaPorId` en `dao.kt` para que el sistema pudiera buscar la deuda específica a editar.
-3.  **Lógica de Edición en `RDeudaViewModel.kt`:**
-    *   Se agregó la función `cargarDeuda()` para rellenar los campos de texto con los datos guardados.
-    *   Se dividió la función `GuardarDeuda()` en un bloque `if/else` (Creación vs Edición) aplicando la matemática de "Diferencia" explicada en la sección 5B.
-4.  **Corrección del Bug del Abono Fantasma (0.0):**
-    *   En `HomeViewModel.kt`, se cambió la forma de elegir la "deuda principal" para que ignore los recibos de abono (`lastOrNull { it.rol != "PAGO" }`). Esto aseguró que el botón Editar abriera la deuda real y no un recibo de pago de \$0.0.
-    *   Se eliminó la creación de nuevos abonos desde la lógica de edición en el ViewModel.
-5.  **Refinamiento de UI en Edición (`registroDeudaView.kt`):**
-    *   Se ocultaron condicionalmente los campos de texto de "Abono Inicial" y "Cuotas" si la pantalla se abre en modo edición, bloqueando manipulaciones erróneas del usuario.
+## 🧩 4. MÓDULOS Y FUNCIONALIDADES PRINCIPALES
 
-## 8. Guía para Futuras Modificaciones
+### 🟢 Módulo 1: Inicio / "Mis Cobros" (`homeView.kt`, `HomeViewModel.kt`)
+* **Propósito**: Administrar clientes y cuentas por cobrar.
+* **Cálculo de Cobro en Cascada**: Registra los pagos del cliente de forma global (`Abono / Pago Parcial`). El sistema calcula el saldo acumulado deudor restando todos los abonos a las deudas activas en orden cronológico.
+* **Historial por Cliente**: Lista cronológica de todos los cargos y abonos con fechas y referencias.
 
-*   **¿Quieres agregar nuevos datos a la persona (Ej: Dirección)?:** 
-    1. Agrégalo en `Deudor` (`entity.kt`). 
-    2. Actualiza los campos de texto en `registroView.kt`. 
-    3. Modifica `RegistroDeudorViewModel.kt` para recibir y guardar la dirección.
-*   **¿Quieres modificar el cálculo de la deuda global?:** Revisa la función `obtenerSumaDeudasPorDeudor` en `dao.kt` o el mapeo de `deudorFiltrados` en `HomeViewModel.kt`.
-*   **¿Quieres implementar notificaciones de cobro a futuro?:** Tendrás que migrar la propiedad `cuotas` (que es solo texto descriptivo) a un modelo de Base de Datos formal (Tabla `Cuota`), y usar **Android WorkManager** junto con **NotificationCompat** para revisar diariamente qué cuota tiene fecha de vencimiento igual a "Hoy".
+### 📦 Módulo 2: Pedidos y Producción (`pedidoView.kt`, `PedidoViewModel.kt`)
+* **Propósito**: Control de órdenes de trabajo para el taller.
+* **Embudo de Estado**: Transición de pedidos entre `RECIBIDO` $\rightarrow$ `EN_PRODUCCION` $\rightarrow$ `LISTO` $\rightarrow$ `ENTREGADO` $\rightarrow$ `CANCELADO`.
+* **Desglose Ítem por Ítem**: Descompone cada orden en artículos individuales con cantidad, precio unitario, variantes (tallas S, M, L, XL, colores), texto de estampado y notas por producto.
+* **Fotografías Vinculadas**: Adjunta fotos de diseño y muestras asociadas directamente a cada producto dentro de su ficha.
+
+### 🏦 Módulo 3: Bancos y Billeteras — Rediseño Zubli (`resumenView.kt`)
+* **Tipos de Cuentas**:
+  * `BANCO`: Bancos nacionales en Bs.
+  * `PAGO_MOVIL`: Pago Móvil en Bs.
+  * `EFECTIVO`: Cajas de efectivo ($ / Bs).
+  * `BILLETERA`: Billeteras digitales (Zelle, Zinli, Binance, PayPal).
+  * `BANCO_USD`: Bancos internacionales en Dólares.
+* **Tarjetas Visuales Zubli**: Muestran nombre completo, tipo con ícono, etiqueta de uso (`[Cobros]`, `[Reposición]`, `[Ahorro]`), saldo calculado en su moneda, equivalente en USD a tasa BCV e indicadores de ingresos/egresos (`↓ Entró +$20.00`, `↑ Salió −$5.23`).
+* **Detalle y Conciliación**:
+  ```
+  Saldo al inicio del período:   $  0.00
+  (+) Entradas del período:      +$ 20.00
+  (-) Salidas del período:       -$  5.23
+  (=) Saldo al final del período: $ 14.77
+  ```
+* **Historial con Saldo Corrido**: Muestra el saldo acumulado en la cuenta después de cada transacción.
+* **Herramientas**:
+  * `[ + Ingreso ]` y `[ − Gasto ]`: Registro rápido de movimientos.
+  * `[ ⇄ Mover ]`: Transferencias entre cuentas propias con conversión de moneda automática.
+  * `[ ⚙️ Ajustar Saldo ]`: Ajuste contable con motivo obligatorio.
+  * `[ 📄 Extracto CSV ]`: Generación y exportación de reporte contable en archivo CSV.
+
+### 📊 Módulo 4: Resumen Financiero y Sobres (`ResumenViewModel.kt`)
+* **Disponible para Retirar (`💎 DISPONIBLE PARA RETIRAR`)**:
+  Cálculo de la ganancia neta real disponible para transferirse al bolsillo personal del dueño, protegiendo las reservas de caja para compra de materia prima y pago de gastos del taller.
+* **Sobres de Insumos**: Apartado automático para *Prenda/Materia Prima*, *Logística/Pasajes* e *Insumos/Tintas*.
+* **Proyección de Cobros**: Anticipa los ingresos previstos a 7 y 30 días.
+* **Antigüedad de Cartera**: Mide la puntualidad de pago de los clientes y niveles de morosidad.
+
+### 🧮 Módulo 5: Cotizador y Plantillas (`cotizadorView.kt`, `CotizadorViewModel.kt`)
+* Presupuestador automático para clientes calculando costos base de tela/camisa, logística/pasaje, consumo de insumos/tintas y margen de ganancia deseado.
+
+---
+
+## 📖 5. MANUAL DE USUARIO Y GUÍA DE USO RÁPIDO
+
+### A. ¿Cómo registrar un cliente y cobrarle?
+1. Ve a la pestaña **Mis Cobros**.
+2. Pulsa el botón **`+ Nuevo Cliente`** e ingresa sus datos (Nombre, Apellido, Teléfono).
+3. Para registrar un pago recibido, toca la tarjeta del cliente y pulsa **`+ Registrar Abono`**.
+
+### B. ¿Cómo crear un Pedido de Producción?
+1. Ve a la pestaña **Pedidos** y pulsa **`+ Nuevo Pedido`**.
+2. Selecciona el cliente y agrega los productos con sus cantidades, precios, variantes y texto de estampado.
+3. El pedido aparecerá en la columna **Recibido**. Puedes avanzar su estado a **En Prod.**, **Listo** y **Entregado**.
+
+### C. ¿Cómo administrar Cuentas Bancarias y Efectivo?
+1. Ve a la sección **Bancos y Billeteras** en la pestaña **Resumen**.
+2. Pulsa **`+ Nueva cuenta`** para registrar tu banco, pago móvil o caja de efectivo.
+3. Toca cualquier tarjeta de cuenta para ver su **Conciliación de Período**, **Historial con Saldo Corrido** o exportar su **Extracto en CSV**.
+4. Para mover dinero entre cuentas (ej. cambiar dólares a bolívares), usa el botón **`⇄ Mover`**.
+
+---
+
+## 🛠️ 6. MANTENIMIENTO Y BUENAS PRÁCTICAS PARA DESARROLLADORES
+
+1. **Cumplimiento MVVM**:
+   * Nunca invoques estados o corrutinas directamente desde la vista sin pasar por el `ViewModel`.
+   * Los `ViewModels` emiten un único `StateFlow` inmutable (`uiState`) consumido por Compose con `collectAsState()`.
+2. **Precisiones Financieras**:
+   * Utiliza la extensión `.redondear2()` para todas las operaciones monetarias para evitar errores de punto flotante en IEEE 754.
+3. **Compilación y Pruebas**:
+   * Ejecuta `./gradlew :app:testDebugUnitTest` para verificar la suite de unit tests antes de cada despliegue.
