@@ -51,6 +51,9 @@ interface DeudaDao {
     @Query("SELECT * FROM Tabla_Deuda WHERE idDeudor = :idDelDeudor")
     fun obtenerDeudasPorDeudor(idDelDeudor: Int): Flow<List<Deuda>>
 
+    @Query("SELECT * FROM Tabla_Deuda WHERE idDeudor = :idDelDeudor")
+    suspend fun obtenerDeudasPorDeudorSync(idDelDeudor: Int): List<Deuda>
+
     @Query("SELECT SUM(montoRestante) FROM tabla_deuda WHERE idDeudor = :idDelDeudor AND estado != 'Cancelado'")
     fun obtenerSumaDeudasPorDeudor(idDelDeudor: Int): Flow<Double?>
 

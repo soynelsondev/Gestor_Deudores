@@ -885,14 +885,6 @@ fun DialogoDesgloseCompletoPedido(
     val imagenesPedido by viewModel.obtenerImagenesPorPedido(item.id).collectAsState(initial = emptyList())
     var imagenSeleccionadaVisor by remember { mutableStateOf<com.example.gestor_deudores.data.database.PedidoImagen?>(null) }
 
-    val deudasCliente by remember(item.deudorId) {
-        viewModel.obtenerDeudasPorDeudor(item.deudorId)
-    }.collectAsState(initial = emptyList())
-
-    val saldoRestante = remember(deudasCliente, item) {
-        viewModel.obtenerSaldoRestantePedido(item.id, item.totalUsd, deudasCliente)
-    }
-
     val articulosParsed = remember(item.notas, item.producto) {
         obtenerArticulosDePedido(item.notas, item.producto, item.cantidad, item.precioUnitarioUsd)
     }
@@ -1175,7 +1167,7 @@ fun DialogoDesgloseCompletoPedido(
                         }
                     }
 
-                    // SECCIÓN 3: RESUMEN FINANCIERO DE LA VENTA
+                    // SECCIÓN 3: PRECIO Y MONEDA DEL PEDIDO
                     item {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
@@ -1183,24 +1175,14 @@ fun DialogoDesgloseCompletoPedido(
                             shape = RoundedCornerShape(14.dp)
                         ) {
                             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text("💰 RESUMEN FINANCIERO", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = estados)
+                                Text("💰 PRECIO Y MONEDA", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = estados)
                                 Spacer(modifier = Modifier.height(4.dp))
 
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                     Text("TOTAL PEDIDO:", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                                     Text("${formatoUSD.format(item.totalUsd)} (Bs ${String.format(Locale.US, "%.2f", totalBs)})", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                                 }
-
-                                val abonado = (item.totalUsd - saldoRestante).coerceAtLeast(0.0)
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("Abonado / Pagado:", color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp)
-                                    Text(formatoUSD.format(abonado), color = Color(0xFF81C784), fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                }
-
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("Saldo Pendiente:", color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp)
-                                    Text(formatoUSD.format(saldoRestante), color = if (saldoRestante > 0.01) Color(0xFFFF7043) else Color(0xFF81C784), fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                }
+                                Text("📌 Registra tus cobros y abonos desde la pantalla principal 'Mis Cobros'", fontSize = 10.sp, color = Color.LightGray)
                             }
                         }
                     }
@@ -1256,38 +1238,8 @@ fun TarjetaPedido(
     val imagenesPedido by viewModel.obtenerImagenesPorPedido(item.id).collectAsState(initial = emptyList())
     var imagenSeleccionadaVisor by remember { mutableStateOf<com.example.gestor_deudores.data.database.PedidoImagen?>(null) }
 
-    val deudasCliente by remember(item.deudorId) {
-        viewModel.obtenerDeudasPorDeudor(item.deudorId)
-    }.collectAsState(initial = emptyList())
-
-    val saldoRestantePedido = remember(deudasCliente, item) {
-        viewModel.obtenerSaldoRestantePedido(item.id, item.totalUsd, deudasCliente)
-    }
-
     var mostrarConfirmarProduccion by remember { mutableStateOf(false) }
     var mostrarCancelarPedido by remember { mutableStateOf(false) }
-    var mostrarDialogoRegistrarCobro by remember { mutableStateOf(false) }
-
-    if (mostrarDialogoRegistrarCobro) {
-        DialogoRegistrarCobroPedido(
-            pedido = item,
-            saldoRestanteUsd = saldoRestantePedido,
-            tasaBcvActual = 40.0,
-            onConfirmarCobro = { montoUsd, metodo, ref, esBs ->
-                mostrarDialogoRegistrarCobro = false
-                viewModel.registrarCobroSaldoPedido(
-                    deudorId = item.deudorId,
-                    pedidoId = item.id,
-                    montoUsd = montoUsd,
-                    metodoPago = metodo,
-                    referencia = ref,
-                    esBs = esBs,
-                    tasaBcv = 40.0
-                ) {}
-            },
-            onDismiss = { mostrarDialogoRegistrarCobro = false }
-        )
-    }
 
     val colorEstado = when (item.estado) {
         "RECIBIDO" -> fondo2
@@ -1530,7 +1482,7 @@ fun TarjetaPedido(
                 }
             }
 
-            // TOTAL Y BARRAS DE ACCIÓN (SECCIÓN 9)
+            // TOTAL Y BARRAS DE ACCIÓN
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1543,42 +1495,22 @@ fun TarjetaPedido(
                     color = componentes
                 )
 
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (saldoRestantePedido > 0.01) {
-                        TextButton(
-                            onClick = { mostrarDialogoRegistrarCobro = true },
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                        ) {
-                            Text("💰 Cobrar ($${String.format(java.util.Locale.US, "%.2f", saldoRestantePedido)})", fontSize = 11.sp, color = estados, fontWeight = FontWeight.Bold)
-                        }
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(50))
-                                .background(Color(0xFFE8F5E9))
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Text("✅ 100% Pagado", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
-                        }
-                    }
-
-                    if (item.estado == "LISTO") {
-                        IconButton(
-                            onClick = {
-                                val msg = "Hola ${item.clienteNombre}, te escribimos para avisarte que tu pedido de *${item.producto}* ya está ¡LISTO para retirar/entregar! ¡Muchas gracias!"
-                                abrirWhatsApp(context, item.clienteTelefono, msg)
-                            },
-                            modifier = Modifier
-                                .size(32.dp)
-                                .background(verdeWhatsapp, shape = CircleShape)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Phone,
-                                contentDescription = "Avisar que está listo",
-                                tint = Color.White,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
+                if (item.estado == "LISTO") {
+                    IconButton(
+                        onClick = {
+                            val msg = "Hola ${item.clienteNombre}, te escribimos para avisarte que tu pedido de *${item.producto}* ya está ¡LISTO para retirar/entregar! ¡Muchas gracias!"
+                            abrirWhatsApp(context, item.clienteTelefono, msg)
+                        },
+                        modifier = Modifier
+                            .size(32.dp)
+                            .background(verdeWhatsapp, shape = CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Phone,
+                            contentDescription = "Avisar que está listo",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
                     }
                 }
             }

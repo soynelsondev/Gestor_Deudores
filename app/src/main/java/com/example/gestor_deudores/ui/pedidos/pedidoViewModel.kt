@@ -13,6 +13,8 @@ import com.example.gestor_deudores.data.database.PlantillaCotizacion
 import com.example.gestor_deudores.data.database.PlantillaDao
 import com.example.gestor_deudores.data.database.DistribucionAbono
 import com.example.gestor_deudores.data.database.DistribucionAbonoDao
+import com.example.gestor_deudores.data.utils.obtenerFechaMillisValida
+import com.example.gestor_deudores.data.utils.redondear2
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -243,6 +245,13 @@ class PedidoViewModel(
         viewModelScope.launch {
             val pedidoObj = pedidoDao.obtenerPedidoPorId(pedidoConCliente.id)
             if (pedidoObj != null) {
+                val deudasCliente = deudaDao.obtenerDeudasPorDeudorSync(pedidoConCliente.deudorId)
+                val cargoAsociado = deudasCliente.find {
+                    it.tipo == "CARGO" && (it.descripcion.contains("Pedido #${pedidoConCliente.id}") || it.tipoDeuda.contains("Pedido #${pedidoConCliente.id}"))
+                }
+                if (cargoAsociado != null) {
+                    deudaDao.eliminarDeuda(cargoAsociado)
+                }
                 pedidoDao.eliminarPedido(pedidoObj)
             }
             onExito()
@@ -288,6 +297,15 @@ class PedidoViewModel(
             )
             pedidoDao.actualizarPedido(pedidoEditado)
 
+            // Cancelamos también el CARGO en Tabla_Deuda para que la deuda desaparezca de 'Mis Cobros'
+            val deudasCliente = deudaDao.obtenerDeudasPorDeudorSync(pedidoConCliente.deudorId)
+            val cargoAsociado = deudasCliente.find {
+                it.tipo == "CARGO" && (it.descripcion.contains("Pedido #${pedidoConCliente.id}") || it.tipoDeuda.contains("Pedido #${pedidoConCliente.id}") || (it.montoInicial == pedidoConCliente.totalUsd && it.fechaMillis == pedidoConCliente.fechaCreacionMillis))
+            }
+            if (cargoAsociado != null) {
+                deudaDao.actualizarDeuda(cargoAsociado.copy(estado = "Cancelado"))
+            }
+
             if (devolverAbono) {
                 val formatoFecha = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault())
                 val fechaStr = formatoFecha.format(java.util.Date())
@@ -313,11 +331,39 @@ class PedidoViewModel(
     }
 
     fun obtenerSaldoRestantePedido(pedidoId: Int, totalUsd: Double, deudas: List<Deuda>): Double {
-        val abonosDelPedido = deudas.filter { 
-            it.tipo == "ABONO" && (it.descripcion.contains("Pedido #$pedidoId") || it.tipoDeuda.contains("Pedido #$pedidoId"))
+        if (deudas.isEmpty()) return totalUsd.redondear2()
+
+        val deudasActivas = deudas.filter { it.estado != "Cancelado" }
+        val abonos = deudasActivas.filter { it.tipo == "ABONO" }
+        if (abonos.isEmpty()) return totalUsd.redondear2()
+
+        val totalAbonos = abonos.sumOf { Math.abs(it.montoRestante) }.redondear2()
+        var abonoDisponible = totalAbonos
+
+        val cargos = deudasActivas.filter { it.tipo == "CARGO" }.sortedBy { obtenerFechaMillisValida(it) }
+        val cargoPedido = cargos.find {
+            it.descripcion.contains("Pedido #$pedidoId") || it.tipoDeuda.contains("Pedido #$pedidoId")
         }
-        val totalAbonado = abonosDelPedido.sumOf { Math.abs(it.montoRestante) }
-        return (totalUsd - totalAbonado).coerceAtLeast(0.0)
+
+        if (cargoPedido == null) {
+            return (totalUsd - abonoDisponible).coerceAtLeast(0.0).redondear2()
+        }
+
+        for (cargo in cargos) {
+            val montoCargo = cargo.montoInicial.redondear2()
+            val esEstePedido = cargo.id == cargoPedido.id || (cargo.descripcion.contains("Pedido #$pedidoId") || cargo.tipoDeuda.contains("Pedido #$pedidoId"))
+
+            if (abonoDisponible >= montoCargo) {
+                abonoDisponible = (abonoDisponible - montoCargo).redondear2()
+                if (esEstePedido) return 0.0
+            } else {
+                val saldoCargo = (montoCargo - abonoDisponible).redondear2()
+                if (esEstePedido) return saldoCargo
+                abonoDisponible = 0.0
+            }
+        }
+
+        return (totalUsd - abonoDisponible).coerceAtLeast(0.0).redondear2()
     }
 
     fun registrarCobroSaldoPedido(
