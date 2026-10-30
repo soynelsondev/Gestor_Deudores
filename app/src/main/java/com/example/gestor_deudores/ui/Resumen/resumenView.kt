@@ -788,6 +788,13 @@ fun SeccionFiltrosYEncabezado(
         ) {
             item {
                 FilterChip(
+                    selected = periodoSeleccionado == PeriodoFiltro.HOY,
+                    onClick = { onPeriodoCambiado(PeriodoFiltro.HOY) },
+                    label = { Text("Hoy") }
+                )
+            }
+            item {
+                FilterChip(
                     selected = periodoSeleccionado == PeriodoFiltro.ESTA_SEMANA,
                     onClick = { onPeriodoCambiado(PeriodoFiltro.ESTA_SEMANA) },
                     label = { Text("Esta Semana") }
@@ -1037,6 +1044,7 @@ fun SeccionAlertasFinancieras(alertas: List<AlertaFinanciera>) {
 @Composable
 fun TarjetasKpiTotales(uiState: ResumenUiState, montosOcultos: Boolean = false) {
     val etiquetaPeriodo = when (uiState.periodoSeleccionado) {
+        PeriodoFiltro.HOY -> "Hoy"
         PeriodoFiltro.ESTA_SEMANA -> "Esta semana"
         PeriodoFiltro.ESTE_MES -> "Este mes"
         PeriodoFiltro.MES_ANTERIOR -> "Mes anterior"
@@ -1494,6 +1502,13 @@ fun SeccionCuentasBancarias(
         val cal = java.util.Calendar.getInstance()
         val finM = System.currentTimeMillis()
         val iniM = when (periodoSeleccionado) {
+            PeriodoFiltro.HOY -> {
+                cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
+                cal.set(java.util.Calendar.MINUTE, 0)
+                cal.set(java.util.Calendar.SECOND, 0)
+                cal.set(java.util.Calendar.MILLISECOND, 0)
+                cal.timeInMillis
+            }
             PeriodoFiltro.ESTA_SEMANA -> {
                 cal.set(java.util.Calendar.DAY_OF_WEEK, cal.firstDayOfWeek)
                 cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
@@ -1517,20 +1532,20 @@ fun SeccionCuentasBancarias(
 
     val totalCuentasUsd = remember(cuentasActivas, movimientos, tasaBcv) {
         cuentasActivas.sumOf { cuenta ->
-            val saldo = cuenta.saldoInicial + movimientos.filter { it.cuentaId == cuenta.id }.sumOf { it.monto }
+            val saldo = cuenta.saldoInicial + movimientos.filter { it.cuentaId == cuenta.id && it.tipo != "SALDO_INICIAL" }.sumOf { it.monto }
             if (cuenta.moneda == "VES" && tasaBcv > 0) saldo / tasaBcv else saldo
         }.redondear2()
     }
 
     val totalUsdSolo = remember(cuentasActivas, movimientos) {
         cuentasActivas.filter { it.moneda == "USD" }.sumOf { cuenta ->
-            cuenta.saldoInicial + movimientos.filter { it.cuentaId == cuenta.id }.sumOf { it.monto }
+            cuenta.saldoInicial + movimientos.filter { it.cuentaId == cuenta.id && it.tipo != "SALDO_INICIAL" }.sumOf { it.monto }
         }.redondear2()
     }
 
     val totalVesSolo = remember(cuentasActivas, movimientos) {
         cuentasActivas.filter { it.moneda == "VES" }.sumOf { cuenta ->
-            cuenta.saldoInicial + movimientos.filter { it.cuentaId == cuenta.id }.sumOf { it.monto }
+            cuenta.saldoInicial + movimientos.filter { it.cuentaId == cuenta.id && it.tipo != "SALDO_INICIAL" }.sumOf { it.monto }
         }.redondear2()
     }
 
@@ -1605,7 +1620,7 @@ fun SeccionCuentasBancarias(
                 items(cuentasActivas) { cuenta ->
                     val movsCuenta = movimientos.filter { it.cuentaId == cuenta.id }
                     
-                    val saldoCalculado = (cuenta.saldoInicial + movsCuenta.sumOf { it.monto }).redondear2()
+                    val saldoCalculado = (cuenta.saldoInicial + movsCuenta.filter { it.tipo != "SALDO_INICIAL" }.sumOf { it.monto }).redondear2()
 
                     val movsPeriodo = movsCuenta.filter { it.fechaMillis in inicioPeriodo..finPeriodo }
                     val entroPeriodo = movsPeriodo.filter { it.monto > 0 }.sumOf { it.monto }.redondear2()
@@ -1881,6 +1896,13 @@ fun DialogoDetalleCuenta(
         val cal = java.util.Calendar.getInstance()
         val finM = System.currentTimeMillis()
         val iniM = when (uiState.periodoSeleccionado) {
+            PeriodoFiltro.HOY -> {
+                cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
+                cal.set(java.util.Calendar.MINUTE, 0)
+                cal.set(java.util.Calendar.SECOND, 0)
+                cal.set(java.util.Calendar.MILLISECOND, 0)
+                cal.timeInMillis
+            }
             PeriodoFiltro.ESTA_SEMANA -> {
                 cal.set(java.util.Calendar.DAY_OF_WEEK, cal.firstDayOfWeek)
                 cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
@@ -2346,6 +2368,20 @@ fun DialogoCrearEditarCuenta(
     }
 }
 
+fun sanitizarTextoMonto(input: String): String {
+    if (input.isBlank()) return ""
+    var reemp = input.replace(',', '.')
+    var limpio = reemp.filter { it.isDigit() || it == '.' }
+    val primerPunto = limpio.indexOf('.')
+    if (primerPunto != -1) {
+        val parteEntera = limpio.substring(0, primerPunto)
+        val parteDecimal = limpio.substring(primerPunto + 1).replace(".", "")
+        val decimalCortado = if (parteDecimal.length > 2) parteDecimal.substring(0, 2) else parteDecimal
+        limpio = "$parteEntera.$decimalCortado"
+    }
+    return limpio
+}
+
 @Composable
 fun DialogoRegistrarMovimientoRapido(
     cuenta: CuentaBancaria,
@@ -2376,7 +2412,7 @@ fun DialogoRegistrarMovimientoRapido(
 
                 OutlinedTextField(
                     value = montoTexto,
-                    onValueChange = { montoTexto = it },
+                    onValueChange = { montoTexto = sanitizarTextoMonto(it) },
                     label = { Text("Monto (${cuenta.moneda})") },
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
@@ -2496,7 +2532,7 @@ fun DialogoTransferirEntreCuentas(
 
                 OutlinedTextField(
                     value = montoOrigenTexto,
-                    onValueChange = { montoOrigenTexto = it },
+                    onValueChange = { montoOrigenTexto = sanitizarTextoMonto(it) },
                     label = { Text("Monto a transferir (${cuentaOrigen.moneda})") },
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
@@ -2580,7 +2616,7 @@ fun DialogoAjustarSaldoCuenta(
 
                 OutlinedTextField(
                     value = nuevoSaldoTexto,
-                    onValueChange = { nuevoSaldoTexto = it },
+                    onValueChange = { nuevoSaldoTexto = sanitizarTextoMonto(it) },
                     label = { Text("Nuevo Saldo Real (${cuenta.moneda})") },
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),

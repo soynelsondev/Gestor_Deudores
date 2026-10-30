@@ -238,6 +238,7 @@ fun PedidosPrincipal(viewModel: PedidoViewModel, navController: NavController, t
                     TarjetaPedido(
                         item = item,
                         viewModel = viewModel,
+                        tasaBcvGlobal = tasaBcvGlobal,
                         onCambiarEstado = { nuevoEstado ->
                             viewModel.cambiarEstadoPedido(item, nuevoEstado)
                         }
@@ -1224,6 +1225,7 @@ fun DialogoDesgloseCompletoPedido(
 fun TarjetaPedido(
     item: PedidoConCliente,
     viewModel: PedidoViewModel,
+    tasaBcvGlobal: Double = 0.0,
     onCambiarEstado: (String) -> Unit
 ) {
     val context = LocalContext.current
@@ -1404,7 +1406,7 @@ fun TarjetaPedido(
                 DialogoDesgloseCompletoPedido(
                     item = item,
                     viewModel = viewModel,
-                    tasaBcvGlobal = 40.0,
+                    tasaBcvGlobal = tasaBcvGlobal,
                     onDismiss = { mostrarDesgloseModal = false }
                 )
             }

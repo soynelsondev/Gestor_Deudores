@@ -34,6 +34,7 @@ import java.util.Calendar
 import java.util.TimeZone
 
 enum class PeriodoFiltro {
+    HOY,
     ESTA_SEMANA,
     ESTE_MES,
     MES_ANTERIOR,
@@ -363,8 +364,9 @@ class ResumenViewModel(
             )
             movimientoCuentaDao.agregarMovimiento(mov)
 
-            val nuevoSaldo = (cuenta.saldoActual + montoRed).redondear2()
-            cuentaBancariaDao.actualizarCuenta(cuenta.copy(saldoActual = nuevoSaldo))
+            val movsActuales = movimientoCuentaDao.obtenerMovimientosPorCuentaAscSync(cuenta.id)
+            val saldoCalculado = (cuenta.saldoInicial + movsActuales.filter { it.tipo != "SALDO_INICIAL" }.sumOf { it.monto }).redondear2()
+            cuentaBancariaDao.actualizarCuenta(cuenta.copy(saldoActual = saldoCalculado))
         }
     }
 
@@ -391,8 +393,9 @@ class ResumenViewModel(
             )
             movimientoCuentaDao.agregarMovimiento(mov)
 
-            val nuevoSaldo = (cuenta.saldoActual - montoRed).redondear2()
-            cuentaBancariaDao.actualizarCuenta(cuenta.copy(saldoActual = nuevoSaldo))
+            val movsActuales = movimientoCuentaDao.obtenerMovimientosPorCuentaAscSync(cuenta.id)
+            val saldoCalculado = (cuenta.saldoInicial + movsActuales.filter { it.tipo != "SALDO_INICIAL" }.sumOf { it.monto }).redondear2()
+            cuentaBancariaDao.actualizarCuenta(cuenta.copy(saldoActual = saldoCalculado))
         }
     }
 
@@ -439,15 +442,22 @@ class ResumenViewModel(
             )
             movimientoCuentaDao.agregarMovimiento(movEntrada)
 
-            cuentaBancariaDao.actualizarCuenta(cuentaOrigen.copy(saldoActual = (cuentaOrigen.saldoActual - montoOrigRed).redondear2()))
-            cuentaBancariaDao.actualizarCuenta(cuentaDestino.copy(saldoActual = (cuentaDestino.saldoActual + montoDestRed).redondear2()))
+            val movsOrigen = movimientoCuentaDao.obtenerMovimientosPorCuentaAscSync(cuentaOrigen.id)
+            val saldoOrigCalculado = (cuentaOrigen.saldoInicial + movsOrigen.filter { it.tipo != "SALDO_INICIAL" }.sumOf { it.monto }).redondear2()
+            cuentaBancariaDao.actualizarCuenta(cuentaOrigen.copy(saldoActual = saldoOrigCalculado))
+
+            val movsDestino = movimientoCuentaDao.obtenerMovimientosPorCuentaAscSync(cuentaDestino.id)
+            val saldoDestCalculado = (cuentaDestino.saldoInicial + movsDestino.filter { it.tipo != "SALDO_INICIAL" }.sumOf { it.monto }).redondear2()
+            cuentaBancariaDao.actualizarCuenta(cuentaDestino.copy(saldoActual = saldoDestCalculado))
         }
     }
 
     fun ajustarSaldoCuenta(cuenta: CuentaBancaria, nuevoSaldo: Double, motivo: String) {
         viewModelScope.launch {
+            val movsActuales = movimientoCuentaDao.obtenerMovimientosPorCuentaAscSync(cuenta.id)
+            val saldoCalculado = (cuenta.saldoInicial + movsActuales.filter { it.tipo != "SALDO_INICIAL" }.sumOf { it.monto }).redondear2()
             val nuevoSaldoRed = nuevoSaldo.redondear2()
-            val dif = (nuevoSaldoRed - cuenta.saldoActual).redondear2()
+            val dif = (nuevoSaldoRed - saldoCalculado).redondear2()
 
             if (dif != 0.0) {
                 val mov = MovimientoCuenta(
@@ -650,7 +660,11 @@ class ResumenViewModel(
         val retirosAcumuladosUsd = retirosEnPeriodo.sumOf { it.montoUsd }.redondear2()
         val gananciaPendienteUsd = (gananciaNetaUsd - retirosAcumuladosUsd).coerceAtLeast(0.0).redondear2()
 
-        val cajaUsd = cuentas.sumOf { if (it.moneda == "VES" && tasa > 0) it.saldoActual / tasa else it.saldoActual }.redondear2()
+        val cajaUsd = cuentas.sumOf { cuenta ->
+            val movsCuenta = dbData.movimientos.filter { it.cuentaId == cuenta.id }
+            val saldoReal = (cuenta.saldoInicial + movsCuenta.filter { it.tipo != "SALDO_INICIAL" }.sumOf { it.monto }).redondear2()
+            if (cuenta.moneda == "VES" && tasa > 0) saldoReal / tasa else saldoReal
+        }.redondear2()
         val reservasUsd = (disponibleMaterialUsd.coerceAtLeast(0.0) + disponibleTransporteUsd.coerceAtLeast(0.0) + disponibleInsumosUsd.coerceAtLeast(0.0)).redondear2()
         val disponibleParaRetirarUsd = gananciaPendienteUsd.coerceAtMost((cajaUsd - reservasUsd).coerceAtLeast(0.0)).redondear2()
 
@@ -864,6 +878,9 @@ class ResumenViewModel(
             costoInsumosMesAnterior = insumosMesAntUsd
         )
 
+        val proyeccionCobros = com.example.gestor_deudores.data.utils.calcularProyeccionCobros(deudas, deudores)
+        val antiguedadCartera = com.example.gestor_deudores.data.utils.calcularAntiguedadCartera(deudas)
+
         ResumenUiState(
             cargando = false,
             periodoSeleccionado = periodo,
@@ -897,7 +914,10 @@ class ResumenViewModel(
             costoInsumosUsd = fondoTintasPapel,
             costoPasajesMesAnterior = pasajesMesAntUsd,
             costoInsumosMesAnterior = insumosMesAntUsd,
-            perfilNegocio = perfil ?: com.example.gestor_deudores.data.database.PerfilNegocio()
+            perfilNegocio = perfil ?: com.example.gestor_deudores.data.database.PerfilNegocio(),
+            movimientosCuenta = dbData.movimientos,
+            proyeccionCobros = proyeccionCobros,
+            antiguedadCartera = antiguedadCartera
         )
     }.stateIn(
         scope = viewModelScope,
@@ -910,6 +930,14 @@ class ResumenViewModel(
         val finMillis = System.currentTimeMillis()
 
         return when (periodo) {
+            PeriodoFiltro.HOY -> {
+                cal.timeInMillis = finMillis
+                cal.set(Calendar.HOUR_OF_DAY, 0)
+                cal.set(Calendar.MINUTE, 0)
+                cal.set(Calendar.SECOND, 0)
+                cal.set(Calendar.MILLISECOND, 0)
+                Pair(cal.timeInMillis, finMillis)
+            }
             PeriodoFiltro.ESTA_SEMANA -> {
                 // Ir al lunes de esta semana
                 cal.set(Calendar.DAY_OF_WEEK, cal.firstDayOfWeek)
