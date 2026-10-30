@@ -67,9 +67,8 @@ fun CotizadorPrincipal(
 
     val context = LocalContext.current
 
-    LaunchedEffect(tasaBcvGlobal) {
-        viewModel.actualizarTasaBcv(tasaBcvGlobal, context)
-    }
+    // La tasa de cambio ahora se gestiona automáticamente a través del Repositorio
+    // inyectado en el CotizadorViewModel.
 
     // El Formulario Gigante (Oculto por defecto, se abre como un Dialog o BottomSheet)
     if (mostrarFormulario) {

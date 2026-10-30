@@ -14,8 +14,14 @@ import com.example.gestor_deudores.ui.home.HomeViewModel
 import com.example.gestor_deudores.ui.cotizador.CotizadorViewModel
 import com.example.gestor_deudores.ui.pedidos.PedidoViewModel
 import com.example.gestor_deudores.ui.Resumen.ResumenViewModel
+import com.example.gestor_deudores.data.api.RetrofitClient
+import com.example.gestor_deudores.data.repository.TasaBcvRepository
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    private lateinit var tasaBcvRepository: TasaBcvRepository
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -31,6 +37,12 @@ class MainActivity : ComponentActivity() {
         com.example.gestor_deudores.data.utils.NotificacionUtils.programarNotificacionMensual(applicationContext)
 
         val baseDeDatos = DeudaDataBase.getDatabase(applicationContext)
+        tasaBcvRepository = TasaBcvRepository(applicationContext, RetrofitClient.apiService)
+
+        // Buscamos la tasa al abrir la app de forma silenciosa
+        lifecycleScope.launch {
+            tasaBcvRepository.actualizarTasa()
+        }
 
         val viewModelFactory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -66,7 +78,8 @@ class MainActivity : ComponentActivity() {
                     return CotizadorViewModel(
                         baseDeDatos.plantillaDao(),
                         baseDeDatos.insumoBibliotecaDao(),
-                        baseDeDatos.historialPrecioInsumoDao()
+                        baseDeDatos.historialPrecioInsumoDao(),
+                        tasaBcvRepository
                     ) as T
                 }
                 if (modelClass.isAssignableFrom(ResumenViewModel::class.java)) {
