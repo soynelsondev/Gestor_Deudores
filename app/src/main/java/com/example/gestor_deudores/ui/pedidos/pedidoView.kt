@@ -2194,10 +2194,30 @@ fun DialogoCrearPedido(
     var referenciaAbono by remember { mutableStateOf("") }
     val tasaBcvActual = if (tasaBcvGlobal > 0.0) tasaBcvGlobal else 40.0
 
+    val hoyInicioMillis = remember {
+        java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, 0)
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    }
+
+    val selectableDatesSoloFuturo = remember(hoyInicioMillis) {
+        object : SelectableDates {
+            override fun isSelectableDate(utcTimeMillis: Long): Boolean {
+                return utcTimeMillis >= hoyInicioMillis - (24 * 60 * 60 * 1000L)
+            }
+        }
+    }
+
     // Saldo y Cuotas (4.4)
     var fechaPrimeraCuotaMillis by remember { mutableStateOf(System.currentTimeMillis() + (7 * 24 * 60 * 60 * 1000L)) }
     var mostrarCalendarioCuota by remember { mutableStateOf(false) }
-    val datePickerStateCuota = rememberDatePickerState(initialSelectedDateMillis = fechaPrimeraCuotaMillis)
+    val datePickerStateCuota = rememberDatePickerState(
+        initialSelectedDateMillis = fechaPrimeraCuotaMillis,
+        selectableDates = selectableDatesSoloFuturo
+    )
 
     // Entrega (4.5)
     var tipoEntrega by remember { mutableStateOf("RETIRO") } // RETIRO vs DELIVERY
@@ -2207,7 +2227,10 @@ fun DialogoCrearPedido(
     // Fecha de entrega obligatoria (por defecto 3 días a futuro)
     val tresDiasFuturo = System.currentTimeMillis() + (3 * 24 * 60 * 60 * 1000L)
     var fechaEntregaMillis by remember { mutableStateOf<Long?>(tresDiasFuturo) }
-    val datePickerState = rememberDatePickerState(initialSelectedDateMillis = tresDiasFuturo)
+    val datePickerState = rememberDatePickerState(
+        initialSelectedDateMillis = tresDiasFuturo,
+        selectableDates = selectableDatesSoloFuturo
+    )
 
     // Restablecer Borrador guardado si existe
     val borradorActual by viewModel.borradorActual.collectAsState()
@@ -2309,7 +2332,14 @@ fun DialogoCrearPedido(
             confirmButton = {
                 TextButton(onClick = {
                     datePickerState.selectedDateMillis?.let { millis ->
-                        fechaEntregaMillis = millis
+                        val tzOffset = java.util.TimeZone.getDefault().getOffset(millis)
+                        val fechaLocal = millis - tzOffset
+                        if (fechaLocal < hoyInicioMillis) {
+                            errorMsg = "No puedes seleccionar una fecha de entrega anterior a hoy"
+                        } else {
+                            fechaEntregaMillis = fechaLocal
+                            errorMsg = ""
+                        }
                     }
                     mostrarCalendario = false
                 }) {
@@ -2327,13 +2357,20 @@ fun DialogoCrearPedido(
     }
 
     if (mostrarCalendarioCuota) {
+    if (mostrarCalendarioCuota) {
         DatePickerDialog(
             onDismissRequest = { mostrarCalendarioCuota = false },
             confirmButton = {
                 TextButton(onClick = {
                     datePickerStateCuota.selectedDateMillis?.let { millis ->
                         val tzOffset = java.util.TimeZone.getDefault().getOffset(millis)
-                        fechaPrimeraCuotaMillis = millis - tzOffset
+                        val fechaLocal = millis - tzOffset
+                        if (fechaLocal < hoyInicioMillis) {
+                            errorMsg = "No puedes seleccionar una fecha de cuota anterior a hoy"
+                        } else {
+                            fechaPrimeraCuotaMillis = fechaLocal
+                            errorMsg = ""
+                        }
                     }
                     mostrarCalendarioCuota = false
                 }) {
