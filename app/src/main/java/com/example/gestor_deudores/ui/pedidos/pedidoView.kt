@@ -2357,7 +2357,6 @@ fun DialogoCrearPedido(
     }
 
     if (mostrarCalendarioCuota) {
-    if (mostrarCalendarioCuota) {
         DatePickerDialog(
             onDismissRequest = { mostrarCalendarioCuota = false },
             confirmButton = {
