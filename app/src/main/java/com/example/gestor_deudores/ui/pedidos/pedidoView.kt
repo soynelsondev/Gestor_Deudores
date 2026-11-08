@@ -84,6 +84,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.SelectableDates
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -2325,6 +2326,30 @@ fun DialogoCrearPedido(
         }
     }
 
+    if (mostrarCalendarioCuota) {
+        DatePickerDialog(
+            onDismissRequest = { mostrarCalendarioCuota = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerStateCuota.selectedDateMillis?.let { millis ->
+                        val tzOffset = java.util.TimeZone.getDefault().getOffset(millis)
+                        fechaPrimeraCuotaMillis = millis - tzOffset
+                    }
+                    mostrarCalendarioCuota = false
+                }) {
+                    Text("Aceptar", color = estados)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { mostrarCalendarioCuota = false }) {
+                    Text("Cancelar", color = Color.Gray)
+                }
+            }
+        ) {
+            DatePicker(state = datePickerStateCuota)
+        }
+    }
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -3385,7 +3410,16 @@ fun DialogoCrearPedido(
                                             modifier = Modifier
                                                 .clip(RoundedCornerShape(50))
                                                 .background(if (sel) estados else fondo_claro)
-                                                .clickable { frecuenciaSeleccionada = clave }
+                                                .clickable { 
+                                                    frecuenciaSeleccionada = clave 
+                                                    val cal = java.util.Calendar.getInstance()
+                                                    when (clave) {
+                                                        "SEMANAL" -> cal.add(java.util.Calendar.DAY_OF_YEAR, 7)
+                                                        "QUINCENAL" -> cal.add(java.util.Calendar.DAY_OF_YEAR, 15)
+                                                        "MENSUAL" -> cal.add(java.util.Calendar.MONTH, 1)
+                                                    }
+                                                    fechaPrimeraCuotaMillis = cal.timeInMillis
+                                                }
                                                 .padding(horizontal = 10.dp, vertical = 6.dp)
                                         ) {
                                             Text(label, fontSize = 11.sp, color = if (sel) Color.White else Color.DarkGray, fontWeight = FontWeight.Bold)
@@ -3399,7 +3433,16 @@ fun DialogoCrearPedido(
                                             modifier = Modifier
                                                 .clip(RoundedCornerShape(50))
                                                 .background(if (sel) estados else fondo_claro)
-                                                .clickable { frecuenciaSeleccionada = clave }
+                                                .clickable { 
+                                                    frecuenciaSeleccionada = clave 
+                                                    val cal = java.util.Calendar.getInstance()
+                                                    when (clave) {
+                                                        "SEMANAL" -> cal.add(java.util.Calendar.DAY_OF_YEAR, 7)
+                                                        "QUINCENAL" -> cal.add(java.util.Calendar.DAY_OF_YEAR, 15)
+                                                        "MENSUAL" -> cal.add(java.util.Calendar.MONTH, 1)
+                                                    }
+                                                    fechaPrimeraCuotaMillis = cal.timeInMillis
+                                                }
                                                 .padding(horizontal = 10.dp, vertical = 6.dp)
                                         ) {
                                             Text(label, fontSize = 11.sp, color = if (sel) Color.White else Color.DarkGray, fontWeight = FontWeight.Bold)
@@ -3437,13 +3480,36 @@ fun DialogoCrearPedido(
                                     modifier = Modifier.fillMaxWidth(),
                                     colors = CardDefaults.cardColors(containerColor = fondo_claro)
                                 ) {
-                                    Text(
-                                        text = "$numC cuota(s) de $${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(montoCuota)} / c.u. (1ra cuota: $fecha1raStr)",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.DarkGray,
-                                        modifier = Modifier.padding(8.dp)
-                                    )
+                                    Column(
+                                        modifier = Modifier.padding(10.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text(
+                                            text = "$numC cuota(s) de $${NumberFormat.getCurrencyInstance(Locale("en", "US")).format(montoCuota)} c/u",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.DarkGray
+                                        )
+                                        HorizontalDivider(color = Color.Gray.copy(alpha = 0.2f))
+                                        val calCuotas = java.util.Calendar.getInstance()
+                                        calCuotas.timeInMillis = fechaPrimeraCuotaMillis
+                                        val fmtCuota = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+                                        for (i in 1..numC) {
+                                            val fCuotaStr = fmtCuota.format(calCuotas.time)
+                                            Text(
+                                                text = "• Cuota $i: $fCuotaStr — $${String.format(Locale.US, "%.2f", montoCuota)}",
+                                                fontSize = 10.sp,
+                                                color = Color.DarkGray,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                            when (frecuenciaSeleccionada) {
+                                                "SEMANAL" -> calCuotas.add(java.util.Calendar.DAY_OF_YEAR, 7)
+                                                "QUINCENAL" -> calCuotas.add(java.util.Calendar.DAY_OF_YEAR, 15)
+                                                "MENSUAL" -> calCuotas.add(java.util.Calendar.MONTH, 1)
+                                                else -> calCuotas.add(java.util.Calendar.DAY_OF_YEAR, 7)
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
