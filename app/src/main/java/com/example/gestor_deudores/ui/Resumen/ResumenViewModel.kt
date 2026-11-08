@@ -919,7 +919,7 @@ class ResumenViewModel(
     )
 
     fun calcularRangoMillis(periodo: PeriodoFiltro): Pair<Long, Long> {
-        val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+        val cal = Calendar.getInstance() // Zona horaria local del teléfono
         val finMillis = System.currentTimeMillis()
 
         return when (periodo) {
@@ -933,6 +933,7 @@ class ResumenViewModel(
             }
             PeriodoFiltro.ESTA_SEMANA -> {
                 // Ir al lunes de esta semana
+                cal.timeInMillis = finMillis
                 cal.set(Calendar.DAY_OF_WEEK, cal.firstDayOfWeek)
                 cal.set(Calendar.HOUR_OF_DAY, 0)
                 cal.set(Calendar.MINUTE, 0)
@@ -941,6 +942,7 @@ class ResumenViewModel(
                 Pair(cal.timeInMillis, finMillis)
             }
             PeriodoFiltro.ESTE_MES -> {
+                cal.timeInMillis = finMillis
                 cal.set(Calendar.DAY_OF_MONTH, 1)
                 cal.set(Calendar.HOUR_OF_DAY, 0)
                 cal.set(Calendar.MINUTE, 0)
@@ -949,6 +951,7 @@ class ResumenViewModel(
                 Pair(cal.timeInMillis, finMillis)
             }
             PeriodoFiltro.MES_ANTERIOR -> {
+                cal.timeInMillis = finMillis
                 cal.add(Calendar.MONTH, -1)
                 cal.set(Calendar.DAY_OF_MONTH, 1)
                 cal.set(Calendar.HOUR_OF_DAY, 0)
@@ -964,6 +967,7 @@ class ResumenViewModel(
                 Pair(inicioAnterior, cal.timeInMillis)
             }
             PeriodoFiltro.ULTIMOS_3_MESES -> {
+                cal.timeInMillis = finMillis
                 cal.add(Calendar.MONTH, -3)
                 cal.set(Calendar.DAY_OF_MONTH, 1)
                 cal.set(Calendar.HOUR_OF_DAY, 0)

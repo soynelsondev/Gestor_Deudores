@@ -26,16 +26,23 @@ fun obtenerFechaMillisValida(deuda: Deuda): Long {
 
     if (deuda.fecha.isNotBlank()) {
         val formatos = listOf(
-            SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).apply { timeZone = TimeZone.getTimeZone("UTC") },
-            SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).apply { timeZone = TimeZone.getTimeZone("UTC") },
-            SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).apply { timeZone = TimeZone.getTimeZone("UTC") }
+            SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()),
+            SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()),
+            SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         )
 
         for (formato in formatos) {
             try {
                 val parsed = formato.parse(deuda.fecha)
                 if (parsed != null && parsed.time > 0L) {
-                    return parsed.time
+                    val cal = Calendar.getInstance().apply {
+                        time = parsed
+                        set(Calendar.HOUR_OF_DAY, 12)
+                        set(Calendar.MINUTE, 0)
+                        set(Calendar.SECOND, 0)
+                        set(Calendar.MILLISECOND, 0)
+                    }
+                    return cal.timeInMillis
                 }
             } catch (e: Exception) {
                 // Continuar
@@ -81,7 +88,7 @@ fun calcularEstadoCobro(deudas: List<Deuda>): EstadoCobro {
             proximaCuotaMonto = if (cuotaActual == numCuotas) saldoCargo else montoCuota
 
             val fechaCargoValida = obtenerFechaMillisValida(cargo)
-            val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+            val cal = Calendar.getInstance().apply {
                 timeInMillis = fechaCargoValida
                 set(Calendar.HOUR_OF_DAY, 12)
             }
