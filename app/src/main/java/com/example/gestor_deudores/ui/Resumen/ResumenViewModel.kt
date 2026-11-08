@@ -570,15 +570,15 @@ class ResumenViewModel(
             val montoAbono = Math.abs(abono.montoRestante).redondear2()
             val distExistente = dbData.distribuciones.find { it.abonoId == abono.id }
 
-            if (distExistente != null) {
-                if (distExistente.tipoAbono != "NO_AFECTA") {
-                    asignadoMaterialUsd += distExistente.material
-                    asignadoTransporteUsd += distExistente.transporte
-                    asignadoInsumosUsd += distExistente.insumos
-                    asignadoMiPagoUsd += distExistente.miPago
-                    gananciaLibreUsd += distExistente.ganancia
-                }
+            if (distExistente != null && distExistente.tipoAbono == "NO_AFECTA") {
+                // Abonos especiales o editados manualmente
+                asignadoMaterialUsd += distExistente.material
+                asignadoTransporteUsd += distExistente.transporte
+                asignadoInsumosUsd += distExistente.insumos
+                asignadoMiPagoUsd += distExistente.miPago
+                gananciaLibreUsd += distExistente.ganancia
             } else {
+                // Cálculo dinámico exacto siempre basado en la fotografía del pedido
                 val cargoOriginal = cargosActivos.find { it.idDeudor == abono.idDeudor && it.tipoDeuda != "Abono / Pago Parcial" }
                 val pedidoFotografia = pedidos.find { it.deudorId == abono.idDeudor && it.totalUsd == cargoOriginal?.montoInicial }
 
@@ -611,24 +611,27 @@ class ResumenViewModel(
                 val abonoIdAuto = abono.id
                 val pedidoIdAuto = pedidoFotografia?.id
                 val fechaAuto = obtenerFechaMillisValida(abono)
-                viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                    try {
-                        val distAuto = DistribucionAbono(
-                            abonoId = abonoIdAuto,
-                            pedidoId = pedidoIdAuto,
-                            tipoAbono = "VENTA_PEDIDO",
-                            montoUsd = montoAbono,
-                            material = mat,
-                            transporte = trans,
-                            insumos = ins,
-                            miPago = 0.0,
-                            ganancia = gan,
-                            origen = origenStr,
-                            fechaMillis = fechaAuto
-                        )
-                        distribucionAbonoDao.agregarDistribucion(distAuto)
-                    } catch (e: Exception) {
-                        // Ignorar si ya existe
+                
+                if (distExistente == null) {
+                    viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                        try {
+                            val distAuto = DistribucionAbono(
+                                abonoId = abonoIdAuto,
+                                pedidoId = pedidoIdAuto,
+                                tipoAbono = "VENTA_PEDIDO",
+                                montoUsd = montoAbono,
+                                material = mat,
+                                transporte = trans,
+                                insumos = ins,
+                                miPago = 0.0,
+                                ganancia = gan,
+                                origen = origenStr,
+                                fechaMillis = fechaAuto
+                            )
+                            distribucionAbonoDao.agregarDistribucion(distAuto)
+                        } catch (e: Exception) {
+                            // Ignorar si ya existe
+                        }
                     }
                 }
             }
@@ -735,10 +738,10 @@ class ResumenViewModel(
                     montoTotalAbonoUsd = ingresosCobradosUsd,
                     fechaStr = "Consolidado Período",
                     desgloseItems = listOf(
-                        DesglosePagoItem("Material Base (Sublimación/Rígidos)", fondoTextil, (fondoTextil / totalFondos * 100).toFloat()),
-                        DesglosePagoItem("Pasajes & Transporte", fondoPasajes, (fondoPasajes / totalFondos * 100).toFloat()),
-                        DesglosePagoItem("Costos Adicionales de Producción", fondoTintasPapel, (fondoTintasPapel / totalFondos * 100).toFloat(), subItemsConsolidado),
-                        DesglosePagoItem("Ganancia Neta Libre", fondoGanancia, (fondoGanancia / totalFondos * 100).toFloat())
+                        DesglosePagoItem("Material Base (Sublimación/Rígidos)", asignadoMaterialUsd, (asignadoMaterialUsd / ingresosCobradosUsd * 100).toFloat()),
+                        DesglosePagoItem("Pasajes & Transporte", asignadoTransporteUsd, (asignadoTransporteUsd / ingresosCobradosUsd * 100).toFloat()),
+                        DesglosePagoItem("Costos Adicionales de Producción", asignadoInsumosUsd, (asignadoInsumosUsd / ingresosCobradosUsd * 100).toFloat(), subItemsConsolidado),
+                        DesglosePagoItem("Ganancia Neta Libre", gananciaLibreUsd, (gananciaLibreUsd / ingresosCobradosUsd * 100).toFloat())
                     )
                 )
             )
@@ -764,36 +767,18 @@ class ResumenViewModel(
             if (pedidoFotografia != null && (pedidoFotografia.costoPiezaBaseUsd > 0 || pedidoFotografia.costoInsumosUsd > 0)) {
                 val proporcion = if (pedidoFotografia.totalUsd > 0) montoAbono / pedidoFotografia.totalUsd else 1.0
                 
-                // Si la plantilla base existe hoy, desglosamos visualmente
-                val plantillaOrigen = plantillas.find { it.nombrePlantilla == pedidoFotografia.nombrePiezaBase }
+                pTextil = (pedidoFotografia.costoPiezaBaseUsd * proporcion).redondear2()
+                pPasaje = (pedidoFotografia.costoPasajeUsd * proporcion).redondear2()
+                pInsumo = (pedidoFotografia.costoInsumosUsd * proporcion).redondear2()
                 
-                if (plantillaOrigen != null) {
-                    val mCosto = com.example.gestor_deudores.data.utils.calcularCostosPlantilla(
-                        plantilla = plantillaOrigen,
-                        tasaBcv = _tasaBcv.value,
-                        cantidadPedido = if (pedidoFotografia.cantidad > 0) pedidoFotografia.cantidad else 1
-                    )
-                    val escala = (if(pedidoFotografia.cantidad>0) pedidoFotografia.cantidad else 1) * proporcion
-                    
-                    val pasajeV = (mCosto.costoPasajeUsd * escala).redondear2()
-                    val insumoV = (mCosto.costoInsumosUsd * escala).redondear2()
-                    
-                    pPasaje = pasajeV
-                    pInsumo = insumoV
-                    
-                    // Llenamos los subItems con una estimación lógica de la plantilla actual
-                    if (insumoV > 0) {
-                        subItemsExtras.add(DesglosePagoItem("Papel, Tintas y Empaque", (insumoV * 0.40).redondear2(), 40f))
-                        subItemsExtras.add(DesglosePagoItem("Impresión (DTF)", (insumoV * 0.30).redondear2(), 30f))
-                        subItemsExtras.add(DesglosePagoItem("Diseño & Extras", (insumoV * 0.15).redondear2(), 15f))
-                        subItemsExtras.add(DesglosePagoItem("Operatividad (Luz)", (insumoV * 0.15).redondear2(), 15f))
-                    }
-                } else {
-                    pPasaje = 0.0
-                    pInsumo = 0.0
+                // Llenamos los subItems con una estimación lógica en base al insumo real fotografiado
+                if (pInsumo > 0) {
+                    subItemsExtras.add(DesglosePagoItem("Papel, Tintas y Empaque", (pInsumo * 0.40).redondear2(), 40f))
+                    subItemsExtras.add(DesglosePagoItem("Impresión (DTF)", (pInsumo * 0.30).redondear2(), 30f))
+                    subItemsExtras.add(DesglosePagoItem("Diseño & Extras", (pInsumo * 0.15).redondear2(), 15f))
+                    subItemsExtras.add(DesglosePagoItem("Operatividad (Luz)", (pInsumo * 0.15).redondear2(), 15f))
                 }
 
-                pTextil = (pedidoFotografia.costoPiezaBaseUsd * proporcion).redondear2()
                 pGanancia = (montoAbono - (pTextil + pPasaje + pInsumo)).coerceAtLeast(0.0).redondear2()
                 nombreInsumoReal = "Pieza Base: ${pedidoFotografia.nombrePiezaBase}"
             } else {
