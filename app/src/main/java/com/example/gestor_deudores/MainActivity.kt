@@ -27,8 +27,9 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Programar notificación periódica de cierre de mes
+        // Programar notificación periódica de cierre de mes y resumen semanal
         com.example.gestor_deudores.data.utils.NotificacionUtils.programarNotificacionMensual(applicationContext)
+        com.example.gestor_deudores.data.utils.NotificacionUtils.programarNotificacionSemanal(applicationContext)
 
         val baseDeDatos = DeudaDataBase.getDatabase(applicationContext)
 

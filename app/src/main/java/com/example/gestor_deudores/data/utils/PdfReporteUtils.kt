@@ -163,6 +163,15 @@ fun generarYCompartirPdf(context: Context, uiState: ResumenUiState) {
         yPos += 20f
     }
 
+    fun recortarTexto(p: Paint, texto: String, anchoMax: Float): String {
+        if (p.measureText(texto) <= anchoMax) return texto
+        var recortado = texto
+        while (recortado.isNotEmpty() && p.measureText("$recortado...") > anchoMax) {
+            recortado = recortado.substring(0, recortado.length - 1)
+        }
+        return if (recortado.isEmpty()) "" else "$recortado..."
+    }
+
     // =====================================
     // SECCIÓN 2: DISTRIBUCIÓN DE FONDOS
     // =====================================
@@ -196,7 +205,8 @@ fun generarYCompartirPdf(context: Context, uiState: ResumenUiState) {
             canvas.drawRect(col1, yPos - 12f, 555f, yPos + 6f, paint)
         }
         paint.color = Color.BLACK
-        canvas.drawText(fondo.nombre, col1 + 5f, yPos, paint)
+        val nombreFondoAjustado = recortarTexto(paint, fondo.nombre, col2 - col1 - 10f)
+        canvas.drawText(nombreFondoAjustado, col1 + 5f, yPos, paint)
         canvas.drawText("$${String.format(Locale.US, "%.2f", fondo.montoUsd)}", col2, yPos, paint)
         canvas.drawText("${String.format(Locale.US, "%.1f", fondo.porcentajeDelTotal)}%", col3, yPos, paint)
         yPos += lineSpacing
@@ -229,7 +239,8 @@ fun generarYCompartirPdf(context: Context, uiState: ResumenUiState) {
     } else {
         uiState.topProductos.forEachIndexed { index, pair ->
             checkY(lineSpacing)
-            canvas.drawText("  ${index + 1}. ${pair.first}: ${pair.second} unidades", margin + 10f, yPos, paint)
+            val textProd = recortarTexto(paint, "  ${index + 1}. ${pair.first}: ${pair.second} unidades", 555f - margin - 20f)
+            canvas.drawText(textProd, margin + 10f, yPos, paint)
             yPos += lineSpacing
         }
     }
@@ -269,7 +280,7 @@ fun generarYCompartirPdf(context: Context, uiState: ResumenUiState) {
         yPos += lineSpacing
     } else {
         abonosIndividuales.forEachIndexed { index, abono ->
-            checkY(30f) // Prevemos espacio para el desglose interno
+            checkY(30f)
             paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
             paint.textSize = 11f
             
@@ -279,14 +290,14 @@ fun generarYCompartirPdf(context: Context, uiState: ResumenUiState) {
             }
             
             paint.color = Color.BLACK
-            // Acortamos la fecha para que quepa bien
             val fechaCorta = if(abono.fechaStr.length > 10) abono.fechaStr.substring(0, 10) else abono.fechaStr
             canvas.drawText(fechaCorta, colA + 5f, yPos, paint)
             
             paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            canvas.drawText(abono.clienteNombre, colB, yPos, paint)
+            val clienteNombreAjustado = recortarTexto(paint, abono.clienteNombre, colC - colB - 10f)
+            canvas.drawText(clienteNombreAjustado, colB, yPos, paint)
             
-            paint.color = Color.rgb(46, 125, 50) // Verde oscuro para el dinero
+            paint.color = Color.rgb(46, 125, 50)
             canvas.drawText("$${String.format(Locale.US, "%.2f", abono.montoTotalAbonoUsd)}", colC, yPos, paint)
             yPos += lineSpacing
         }
@@ -313,49 +324,58 @@ fun generarYCompartirPdf(context: Context, uiState: ResumenUiState) {
         yPos += lineSpacing
     } else {
         uiState.alertasFinancieras.forEach { alerta ->
-            checkY(60f)
-            
-            val colorBorde = when (alerta.nivel) {
-                "DANGER" -> Color.rgb(211, 47, 47) // Rojo oscuro
-                "WARNING" -> Color.rgb(245, 124, 0) // Naranja
-                "SUCCESS" -> Color.rgb(56, 142, 60) // Verde
-                else -> Color.rgb(25, 118, 210) // Azul
+            paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+            paint.textSize = 10f
+
+            val words = alerta.mensaje.split(" ")
+            val lineasMensaje = mutableListOf<String>()
+            var currentLine = ""
+            val anchoMax = 555f - margin - 30f
+
+            for (word in words) {
+                if (paint.measureText("$currentLine $word") < anchoMax) {
+                    currentLine += "$word "
+                } else {
+                    lineasMensaje.add(currentLine.trim())
+                    currentLine = "$word "
+                }
             }
-            
-            // Dibujamos un rectángulo tipo tarjeta
+            if (currentLine.isNotBlank()) {
+                lineasMensaje.add(currentLine.trim())
+            }
+
+            val altoTarjeta = 25f + (lineasMensaje.size * 14f) + 10f
+            checkY(altoTarjeta + 20f)
+
+            val colorBorde = when (alerta.nivel) {
+                "DANGER" -> Color.rgb(211, 47, 47)
+                "WARNING" -> Color.rgb(245, 124, 0)
+                "SUCCESS" -> Color.rgb(56, 142, 60)
+                else -> Color.rgb(25, 118, 210)
+            }
+
             paint.style = Paint.Style.STROKE
-            paint.strokeWidth = 2f
+            paint.strokeWidth = 1.5f
             paint.color = colorBorde
-            canvas.drawRoundRect(margin, yPos - 15f, 555f, yPos + 40f, 8f, 8f, paint)
-            
+            canvas.drawRoundRect(margin, yPos, 555f, yPos + altoTarjeta, 8f, 8f, paint)
+
             paint.style = Paint.Style.FILL
             paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             paint.textSize = 11f
             paint.color = colorBorde
-            canvas.drawText(">> ${alerta.titulo}", margin + 10f, yPos, paint)
-            yPos += 15f
-            
+            val tituloAjustado = recortarTexto(paint, ">> ${alerta.titulo}", 555f - margin - 30f)
+            canvas.drawText(tituloAjustado, margin + 10f, yPos + 18f, paint)
+
             paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
             paint.textSize = 10f
             paint.color = Color.DKGRAY
-            
-            // Formateador simple de saltos de línea para el PDF
-            val words = alerta.mensaje.split(" ")
-            var line = ""
-            for (word in words) {
-                if (paint.measureText("$line $word") < (555f - margin - 30f)) {
-                    line += "$word "
-                } else {
-                    canvas.drawText(line, margin + 10f, yPos, paint)
-                    yPos += 15f
-                    checkY(20f)
-                    line = "$word "
-                }
+            var lineY = yPos + 34f
+            for (l in lineasMensaje) {
+                canvas.drawText(l, margin + 10f, lineY, paint)
+                lineY += 14f
             }
-            if (line.isNotEmpty()) {
-                canvas.drawText(line, margin + 10f, yPos, paint)
-                yPos += 30f
-            }
+
+            yPos += altoTarjeta + 15f
         }
     }
 
