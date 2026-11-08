@@ -381,6 +381,10 @@ class ResumenViewModel(
             val montoRed = Math.abs(monto).redondear2()
             if (montoRed <= 0) return@launch
 
+            val movsPrevios = movimientoCuentaDao.obtenerMovimientosPorCuentaAscSync(cuenta.id)
+            val saldoDisponible = (cuenta.saldoInicial + movsPrevios.filter { it.tipo != "SALDO_INICIAL" }.sumOf { it.monto }).redondear2()
+            if (montoRed > saldoDisponible) return@launch // Bloqueo de seguridad: Evita saldo negativo
+
             val mov = MovimientoCuenta(
                 cuentaId = cuenta.id,
                 tipo = "GASTO",
@@ -412,6 +416,10 @@ class ResumenViewModel(
             val montoOrigRed = Math.abs(montoOrigen).redondear2()
             val montoDestRed = Math.abs(montoDestino).redondear2()
             if (montoOrigRed <= 0 || montoDestRed <= 0) return@launch
+
+            val movsOrigenPrevios = movimientoCuentaDao.obtenerMovimientosPorCuentaAscSync(cuentaOrigen.id)
+            val saldoOrigenDisponible = (cuentaOrigen.saldoInicial + movsOrigenPrevios.filter { it.tipo != "SALDO_INICIAL" }.sumOf { it.monto }).redondear2()
+            if (montoOrigRed > saldoOrigenDisponible) return@launch // Bloqueo de seguridad: Evita saldo negativo
 
             val conceptoOrigen = "Transferencia hacia ${cuentaDestino.nombre}" + if (concepto.isNotBlank()) " · ${concepto.trim()}" else ""
             val conceptoDestino = "Transferencia desde ${cuentaOrigen.nombre}" + if (concepto.isNotBlank()) " · ${concepto.trim()}" else ""

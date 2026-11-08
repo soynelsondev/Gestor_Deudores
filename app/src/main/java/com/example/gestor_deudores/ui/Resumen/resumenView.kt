@@ -333,6 +333,7 @@ fun ResumenPrincipal(
         cuentaParaIngresoGasto?.let { (cuenta, esIngreso) ->
             DialogoRegistrarMovimientoRapido(
                 cuenta = cuenta,
+                movimientos = uiState.movimientosCuenta,
                 esIngreso = esIngreso,
                 onDismiss = { cuentaParaIngresoGasto = null },
                 onGuardar = { monto, concepto, ref, foto ->
@@ -350,6 +351,7 @@ fun ResumenPrincipal(
             DialogoTransferirEntreCuentas(
                 cuentaOrigenInicial = cuenta,
                 cuentasDisponibles = uiState.cuentasBancarias.filter { it.activa },
+                movimientos = uiState.movimientosCuenta,
                 tasaBcv = uiState.tasaBcv,
                 onDismiss = { cuentaParaTransferir = null },
                 onTransferir = { cOrigen, cDest, mOrig, mDest, tasa, concepto, ref ->
@@ -2390,6 +2392,7 @@ fun sanitizarTextoMonto(input: String): String {
 @Composable
 fun DialogoRegistrarMovimientoRapido(
     cuenta: CuentaBancaria,
+    movimientos: List<MovimientoCuenta> = emptyList(),
     esIngreso: Boolean,
     onDismiss: () -> Unit,
     onGuardar: (monto: Double, concepto: String, ref: String?, foto: String?) -> Unit
@@ -2397,6 +2400,12 @@ fun DialogoRegistrarMovimientoRapido(
     var montoTexto by remember { mutableStateOf("") }
     var conceptoTexto by remember { mutableStateOf("") }
     var referenciaTexto by remember { mutableStateOf("") }
+    var errorMsg by remember { mutableStateOf("") }
+
+    val movsCuenta = movimientos.filter { it.cuentaId == cuenta.id }
+    val saldoDisponible = remember(cuenta, movimientos) {
+        (cuenta.saldoInicial + movsCuenta.filter { it.tipo != "SALDO_INICIAL" }.sumOf { it.monto }).redondear2()
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -2415,9 +2424,20 @@ fun DialogoRegistrarMovimientoRapido(
                     color = Color.White
                 )
 
+                if (!esIngreso) {
+                    Text(
+                        text = "Saldo disponible: ${cuenta.moneda} ${String.format(Locale.US, "%.2f", saldoDisponible)}",
+                        fontSize = 11.sp,
+                        color = Color.LightGray
+                    )
+                }
+
                 OutlinedTextField(
                     value = montoTexto,
-                    onValueChange = { montoTexto = sanitizarTextoMonto(it) },
+                    onValueChange = { 
+                        montoTexto = sanitizarTextoMonto(it)
+                        errorMsg = ""
+                    },
                     label = { Text("Monto (${cuenta.moneda})") },
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
@@ -2441,6 +2461,10 @@ fun DialogoRegistrarMovimientoRapido(
                     shape = RoundedCornerShape(12.dp)
                 )
 
+                if (errorMsg.isNotEmpty()) {
+                    Text(errorMsg, fontSize = 11.sp, color = Color(0xFFFF8A80), fontWeight = FontWeight.Bold)
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
@@ -2449,7 +2473,9 @@ fun DialogoRegistrarMovimientoRapido(
                     Button(
                         onClick = {
                             val mVal = montoTexto.replace(",", ".").toDoubleOrNull() ?: 0.0
-                            if (mVal > 0) {
+                            if (!esIngreso && mVal > saldoDisponible) {
+                                errorMsg = "Saldo insuficiente. Máximo disponible: ${cuenta.moneda} ${String.format(Locale.US, "%.2f", saldoDisponible)}"
+                            } else if (mVal > 0) {
                                 onGuardar(mVal, conceptoTexto, referenciaTexto, null)
                             }
                         },
@@ -2467,6 +2493,7 @@ fun DialogoRegistrarMovimientoRapido(
 fun DialogoTransferirEntreCuentas(
     cuentaOrigenInicial: CuentaBancaria,
     cuentasDisponibles: List<CuentaBancaria>,
+    movimientos: List<MovimientoCuenta> = emptyList(),
     tasaBcv: Double,
     onDismiss: () -> Unit,
     onTransferir: (
@@ -2487,6 +2514,12 @@ fun DialogoTransferirEntreCuentas(
     var montoOrigenTexto by remember { mutableStateOf("") }
     var conceptoTexto by remember { mutableStateOf("") }
     var referenciaTexto by remember { mutableStateOf("") }
+    var errorMsg by remember { mutableStateOf("") }
+
+    val movsOrigen = movimientos.filter { it.cuentaId == cuentaOrigen.id }
+    val saldoOrigenDisponible = remember(cuentaOrigen, movimientos) {
+        (cuentaOrigen.saldoInicial + movsOrigen.filter { it.tipo != "SALDO_INICIAL" }.sumOf { it.monto }).redondear2()
+    }
 
     val mOrigVal = montoOrigenTexto.replace(",", ".").toDoubleOrNull() ?: 0.0
     val mDestVal = remember(mOrigVal, cuentaOrigen, cuentaDestino, tasaBcv) {
@@ -2518,11 +2551,20 @@ fun DialogoTransferirEntreCuentas(
                     items(cuentasDisponibles) { c ->
                         FilterChip(
                             selected = cuentaOrigen.id == c.id,
-                            onClick = { cuentaOrigen = c },
+                            onClick = { 
+                                cuentaOrigen = c 
+                                errorMsg = ""
+                            },
                             label = { Text("${c.nombre} (${c.moneda})", fontSize = 10.sp) }
                         )
                     }
                 }
+
+                Text(
+                    text = "Saldo disponible en origen: ${cuentaOrigen.moneda} ${String.format(Locale.US, "%.2f", saldoOrigenDisponible)}",
+                    fontSize = 11.sp,
+                    color = Color.LightGray
+                )
 
                 Text("Cuenta Destino (Entra dinero):", fontSize = 11.sp, color = Color.LightGray)
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -2537,7 +2579,10 @@ fun DialogoTransferirEntreCuentas(
 
                 OutlinedTextField(
                     value = montoOrigenTexto,
-                    onValueChange = { montoOrigenTexto = sanitizarTextoMonto(it) },
+                    onValueChange = { 
+                        montoOrigenTexto = sanitizarTextoMonto(it)
+                        errorMsg = ""
+                    },
                     label = { Text("Monto a transferir (${cuentaOrigen.moneda})") },
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
@@ -2570,6 +2615,10 @@ fun DialogoTransferirEntreCuentas(
                     shape = RoundedCornerShape(12.dp)
                 )
 
+                if (errorMsg.isNotEmpty()) {
+                    Text(errorMsg, fontSize = 11.sp, color = Color(0xFFFF8A80), fontWeight = FontWeight.Bold)
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
@@ -2577,7 +2626,9 @@ fun DialogoTransferirEntreCuentas(
                     TextButton(onClick = onDismiss) { Text("Cancelar", color = Color.LightGray) }
                     Button(
                         onClick = {
-                            if (mOrigVal > 0 && cuentaOrigen.id != cuentaDestino.id) {
+                            if (mOrigVal > saldoOrigenDisponible) {
+                                errorMsg = "Saldo insuficiente en ${cuentaOrigen.nombre}. Máximo disponible: ${cuentaOrigen.moneda} ${String.format(Locale.US, "%.2f", saldoOrigenDisponible)}"
+                            } else if (mOrigVal > 0 && cuentaOrigen.id != cuentaDestino.id) {
                                 onTransferir(cuentaOrigen, cuentaDestino, mOrigVal, mDestVal, tasaBcv, conceptoTexto, referenciaTexto)
                             }
                         },
