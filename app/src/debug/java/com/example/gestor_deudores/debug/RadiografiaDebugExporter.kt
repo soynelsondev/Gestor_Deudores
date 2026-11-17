@@ -53,6 +53,30 @@ data class RadiografiaBaselineExport(
     val abonosDesgloseCalculados: List<DataBaselineAbono>
 )
 
+data class DataDetalleVinculoAbono(
+    val abonoId: Int,
+    val clienteId: Int,
+    val clienteNombre: String,
+    val fechaStr: String,
+    val montoAbonoUsd: Double,
+    val pedidoIdAsignado: Int?,
+    val origenResultante: String,
+    val marcaA_clienteMultiplesPedidosActivos: Boolean,
+    val marcaB_abonoQuedoEstimadoTeniendoPedidos: Boolean,
+    val marcaC_diferenciaFlotanteSubCentavo: Boolean,
+    val marcaD_variosPedidosMismoClienteMismoTotal: Boolean
+)
+
+data class DiagnosticoVinculosReport(
+    val timestampMillis: Long = System.currentTimeMillis(),
+    val totalAbonosAnalizados: Int,
+    val countMarcaA_multiplesPedidosActivos: Int,
+    val countMarcaB_abonoEstimadoConPedidos: Int,
+    val countMarcaC_diferenciaSubCentavo: Int,
+    val countMarcaD_variosPedidosMismoTotal: Int,
+    val detallesAbonos: List<DataDetalleVinculoAbono>
+)
+
 object RadiografiaDebugExporter {
 
     suspend fun exportarBaselineRadiografiaJson(
@@ -225,6 +249,101 @@ object RadiografiaDebugExporter {
         try {
             val fileDir = context.getExternalFilesDir(null) ?: context.filesDir
             val destFile = File(fileDir, "radiografia_baseline_export.json")
+            destFile.writeText(jsonOutput)
+        } catch (e: Exception) {
+            // Manejo silencioso en caso de error I/O
+        }
+
+        return jsonOutput
+    }
+
+    suspend fun exportarDiagnosticoVinculosJson(
+        context: Context,
+        db: DeudaDataBase
+    ): String {
+        val deudas = db.deudaDao().obtenerTodasLasDeudas().first()
+        val deudores = db.deudorDao().obtenerDeudores().first()
+        val pedidos = db.pedidoDao().obtenerPedidosConCliente().first()
+        val distribuciones = db.distribucionAbonoDao().obtenerTodas().first()
+
+        val abonos = deudas.filter { it.tipo == "ABONO" }.sortedByDescending { obtenerFechaMillisValida(it) }
+        val cargosActivos = deudas.filter { it.tipo == "CARGO" && it.estado != "Cancelado" }
+
+        val detallesVinculos = mutableListOf<DataDetalleVinculoAbono>()
+
+        for (abono in abonos) {
+            val cliente = deudores.find { it.id == abono.idDeudor }
+            val clienteNombre = if (cliente != null) "${cliente.nombre} ${cliente.apellido}" else "Cliente ID ${abono.idDeudor}"
+            val montoAbono = Math.abs(abono.montoRestante).redondear2()
+            val distExistente = distribuciones.find { it.abonoId == abono.id }
+
+            val cargoOriginal = cargosActivos.find { it.idDeudor == abono.idDeudor && it.tipoDeuda != "Abono / Pago Parcial" }
+            val pedidoFotografia = pedidos.find { it.deudorId == abono.idDeudor && it.totalUsd == cargoOriginal?.montoInicial }
+
+            val origenResultante: String
+            val pedidoIdAsignado: Int?
+
+            if (distExistente != null && distExistente.tipoAbono == "NO_AFECTA") {
+                origenResultante = "NO_AFECTA"
+                pedidoIdAsignado = distExistente.pedidoId
+            } else if (pedidoFotografia != null && (pedidoFotografia.costoPiezaBaseUsd > 0.0 || pedidoFotografia.costoInsumosUsd > 0.0)) {
+                origenResultante = "EXACTO"
+                pedidoIdAsignado = pedidoFotografia.id
+            } else {
+                origenResultante = "ESTIMADO"
+                pedidoIdAsignado = pedidoFotografia?.id
+            }
+
+            val cargosDelCliente = cargosActivos.filter { it.idDeudor == abono.idDeudor }
+            val pedidosDelCliente = pedidos.filter { it.deudorId == abono.idDeudor }
+
+            // Marca (a): Cliente con más de un pedido o cargo activo
+            val marcaA = cargosDelCliente.size > 1 || pedidosDelCliente.size > 1
+
+            // Marca (b): Abono de un cliente con pedidos que quedó como ESTIMADO
+            val marcaB = origenResultante == "ESTIMADO" && pedidosDelCliente.isNotEmpty()
+
+            // Marca (c): totalUsd y montoInicial que difieren por menos de 0.005 pero no son iguales (float precision issue)
+            val marcaC = cargoOriginal != null && pedidosDelCliente.any { p ->
+                val dif = Math.abs(p.totalUsd - cargoOriginal.montoInicial)
+                dif > 0.0 && dif < 0.005
+            }
+
+            // Marca (d): Varios pedidos del mismo cliente con el mismo totalUsd
+            val marcaD = pedidosDelCliente.groupBy { it.totalUsd }.any { it.value.size > 1 }
+
+            detallesVinculos.add(
+                DataDetalleVinculoAbono(
+                    abonoId = abono.id,
+                    clienteId = abono.idDeudor,
+                    clienteNombre = clienteNombre,
+                    fechaStr = abono.fecha,
+                    montoAbonoUsd = montoAbono,
+                    pedidoIdAsignado = pedidoIdAsignado,
+                    origenResultante = origenResultante,
+                    marcaA_clienteMultiplesPedidosActivos = marcaA,
+                    marcaB_abonoQuedoEstimadoTeniendoPedidos = marcaB,
+                    marcaC_diferenciaFlotanteSubCentavo = marcaC,
+                    marcaD_variosPedidosMismoClienteMismoTotal = marcaD
+                )
+            )
+        }
+
+        val report = DiagnosticoVinculosReport(
+            totalAbonosAnalizados = abonos.size,
+            countMarcaA_multiplesPedidosActivos = detallesVinculos.count { it.marcaA_clienteMultiplesPedidosActivos },
+            countMarcaB_abonoEstimadoConPedidos = detallesVinculos.count { it.marcaB_abonoQuedoEstimadoTeniendoPedidos },
+            countMarcaC_diferenciaSubCentavo = detallesVinculos.count { it.marcaC_diferenciaFlotanteSubCentavo },
+            countMarcaD_variosPedidosMismoTotal = detallesVinculos.count { it.marcaD_variosPedidosMismoClienteMismoTotal },
+            detallesAbonos = detallesVinculos
+        )
+
+        val gson = GsonBuilder().setPrettyPrinting().create()
+        val jsonOutput = gson.toJson(report)
+
+        try {
+            val fileDir = context.getExternalFilesDir(null) ?: context.filesDir
+            val destFile = File(fileDir, "diagnostico_vinculos_export.json")
             destFile.writeText(jsonOutput)
         } catch (e: Exception) {
             // Manejo silencioso en caso de error I/O
