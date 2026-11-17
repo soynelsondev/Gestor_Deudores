@@ -35,4 +35,12 @@ interface DistribucionAbonoDao {
 
     @Query("SELECT * FROM distribucion_abonos ORDER BY fechaMillis ASC")
     suspend fun obtenerTodasSync(): List<DistribucionAbono>
+
+    @Query("SELECT abonoId, COUNT(*) AS cantidad FROM distribucion_abonos GROUP BY abonoId HAVING COUNT(*) > 1")
+    suspend fun obtenerDuplicadosAbonoId(): List<AbonoDuplicadoInfo>
 }
+
+data class AbonoDuplicadoInfo(
+    val abonoId: Int,
+    val cantidad: Int
+)
